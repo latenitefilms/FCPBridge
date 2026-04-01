@@ -6,6 +6,25 @@
     <description>FCPBridge Patcher release updates</description>
     <language>en</language>
     <item>
+      <title>FCPBridge v2.6.1 — Fix Parakeet in release patcher</title>
+      <sparkle:version>2.6.1</sparkle:version>
+      <sparkle:shortVersionString>2.6.1</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <pubDate>Tue, 01 Apr 2026 23:15:00 +0000</pubDate>
+      <description><![CDATA[
+        <h2>What's New in 2.6.1</h2>
+        <ul>
+          <li><b>Fix Parakeet in Release Patcher</b> — Parakeet transcriber source is now embedded in the patcher app bundle, fixing "Failed to build Parakeet transcriber" for users without the repo cloned locally</li>
+          <li><b>Read-only Bundle Handling</b> — Patcher copies source to a writable temp directory before building when running from the app bundle</li>
+        </ul>
+      ]]></description>
+      <enclosure
+        url="https://github.com/elliotttate/FCPBridge/releases/download/v2.6.1/FCPBridgePatcher-v2.6.1.zip"
+        sparkle:edSignature="r3e5fpUXgDReqTzDWG5M/yhqiKTLgKenh9/u22nZiOixQqnq6RgP1S+Q63RTwXPsYiFY7aOu8iYsJRdQxAJVBA=="
+        length="2325654"
+        type="application/octet-stream" />
+    </item>
+    <item>
       <title>FCPBridge v2.6.0 — Parakeet v3 Multilingual, Batch Transcription</title>
       <sparkle:version>2.6.0</sparkle:version>
       <sparkle:shortVersionString>2.6.0</sparkle:shortVersionString>

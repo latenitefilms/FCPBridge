@@ -10,7 +10,7 @@
 		</data>
 		<key>Resources/Sources/FCPBridge.h</key>
 		<data>
-		XAU9mdRgBxVx2f4RJTl3PwSqkcw=
+		8LdZd+UxryOC3b2gnCd3WSRdwy8=
 		</data>
 		<key>Resources/Sources/FCPBridge.m</key>
 		<data>
@@ -48,6 +48,18 @@
 		<data>
 		+4jF9i8sk3gJCm2K8twtjrk6rgU=
 		</data>
+		<key>Resources/tools/parakeet-transcriber/Package.resolved</key>
+		<data>
+		2z5g6SS0vzYuLi+dyXxNq9u2+5o=
+		</data>
+		<key>Resources/tools/parakeet-transcriber/Package.swift</key>
+		<data>
+		81MR0/LOPxjtSn5U+kJv2QIeHbM=
+		</data>
+		<key>Resources/tools/parakeet-transcriber/Sources/main.swift</key>
+		<data>
+		BuhbST/SxDP7JuIU4qEV2/dyLj8=
+		</data>
 		<key>Resources/tools/silence-detector</key>
 		<data>
 		voIaUPbsMKYfY+JwoRQuS5s1cUs=
@@ -79,7 +91,7 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			wLPyRjPdAQp/x+VX7GOo9zWqzRN2JA9mF+jxQ7bbttI=
+			taRZQiicVxFv8cFu07FFuySY6fzEqA8qpud+Avaycfo=
 			</data>
 		</dict>
 		<key>Resources/Sources/FCPBridge.m</key>
@@ -143,6 +155,27 @@
 			<key>hash2</key>
 			<data>
 			NsqBpWQoh7RPUG4CwzzfmM2O8XQ0JF6oMLpFOLboxL4=
+			</data>
+		</dict>
+		<key>Resources/tools/parakeet-transcriber/Package.resolved</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			Ciq7BpneWyvj65hRo7p22eU9H0yFOi5SeiXIhfKUc8E=
+			</data>
+		</dict>
+		<key>Resources/tools/parakeet-transcriber/Package.swift</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			D/xKlqqxOUkq5Vjq03Leu+sDtL73c91dV5+c0iL8NP4=
+			</data>
+		</dict>
+		<key>Resources/tools/parakeet-transcriber/Sources/main.swift</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			Zu0kXPGrZG2ERlDkV+e+z6Ohux2OgZxK0wM1KQIg6Tw=
 			</data>
 		</dict>
 		<key>Resources/tools/silence-detector</key>
