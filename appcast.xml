@@ -14,6 +14,7 @@
       <description><![CDATA[
         <h2>What's New in 2.8.4</h2>
         <ul>
+          <li><b>Effect Browser Favorites</b> — Right-click any effect to Add/Remove from Favorites using FCP's built-in favorites API</li>
           <li><b>FCP Debug & Diagnostics</b> — Expose FCP's internal developer tools: timeline visual overlays, performance monitoring, structured logging, framerate monitor</li>
           <li><b>Patcher Signing Fix</b> — Ad-hoc signing preserves Apple framework signatures (fixes ProAppSupport crash)</li>
           <li><b>Crash Prevention</b> — Block unsafe trim selectors with nil error pointers</li>
