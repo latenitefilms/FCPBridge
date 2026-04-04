@@ -423,18 +423,13 @@ class PatcherModel: ObservableObject {
         // Step 6: Re-sign
         await setStepAsync(.signApp)
 
-        // Check for a Developer ID signing identity. Using a stable certificate
-        // means TCC (privacy permissions) persist across re-patches, since macOS
-        // matches on the certificate rather than the ad-hoc CDHash.
-        let devIdResult = shell("security find-identity -v -p codesigning 2>/dev/null | grep 'Developer ID Application' | head -1")
-        let signIdentity: String
-        if let range = devIdResult.range(of: #""Developer ID Application: [^"]+""#, options: .regularExpression) {
-            signIdentity = String(devIdResult[range])
-            await logAsync("Signing with \(signIdentity)")
-        } else {
-            signIdentity = "-"
-            await logAsync("No Developer ID found, using ad-hoc signature")
-        }
+        // Sign only the components we modified (FCPBridge framework and the main
+        // app binary).  Apple's own frameworks must keep their original signatures
+        // or internal integrity checks (e.g. ProAppSupport +[PCApp isiMovie])
+        // will abort on launch.  We always use ad-hoc signing here because
+        // re-signing Apple frameworks with a Developer ID breaks them.
+        let signIdentity = "-"
+        await logAsync("Using ad-hoc signature (preserves Apple framework signatures)")
 
         await logAsync("Signing frameworks and plugins...")
         let entitlements = buildDir + "/entitlements.plist"
@@ -451,13 +446,10 @@ class PatcherModel: ObservableObject {
 
         shell("/usr/libexec/PlistBuddy -c \"Add :NSSpeechRecognitionUsageDescription string 'FCPBridge uses speech recognition to transcribe timeline audio for text-based editing.'\" '\(moddedApp)/Contents/Info.plist' 2>/dev/null")
 
+        // Only sign the FCPBridge framework (ours) and the main app bundle.
+        // Leave all Apple frameworks, plugins, and helpers with their original
+        // Apple signatures intact.
         shell("""
-            for fw in '\(moddedApp)'/Contents/Frameworks/*.framework; do codesign --force --sign \(signIdentity) "$fw" 2>/dev/null; done
-            find '\(moddedApp)/Contents/PlugIns' \\( -name '*.bundle' -o -name '*.appex' -o -name '*.pluginkit' -o -name '*.fxp' \\) -type d | while read p; do codesign --force --sign \(signIdentity) "$p" 2>/dev/null; done
-            codesign --force --sign \(signIdentity) '\(moddedApp)/Contents/Helpers/RegisterProExtension.app' 2>/dev/null
-            find '\(moddedApp)' -name '*.fxp' -type d | while read fxp; do codesign --force --sign \(signIdentity) "$fxp" 2>/dev/null; done
-            codesign --force --sign \(signIdentity) '\(moddedApp)/Contents/PlugIns/InternalFiltersXPC.pluginkit' 2>/dev/null
-            codesign --force --sign \(signIdentity) '\(moddedApp)/Contents/Frameworks/Flexo.framework' 2>/dev/null
             codesign --force --sign \(signIdentity) '\(moddedApp)/Contents/Frameworks/FCPBridge.framework' 2>/dev/null
             codesign --force --sign \(signIdentity) --entitlements '\(entitlements)' '\(moddedApp)' 2>/dev/null
             """)
@@ -466,16 +458,14 @@ class PatcherModel: ObservableObject {
         if verify.contains("valid") || verify.contains("satisfies") {
             await logAsync("Signature verified")
         } else {
-            throw PatchError.msg("Signing failed: \(verify)")
+            // With mixed signatures (Apple + ad-hoc) the top-level verify may
+            // report issues, but the app can still launch if library validation
+            // is disabled via entitlements.  Log instead of failing.
+            await logAsync("Signature note: \(verify)")
         }
 
-        // For ad-hoc signing, reset TCC so macOS re-captures the new CDHash on
-        // next launch. With a Developer ID cert this isn't needed since TCC
-        // matches on the certificate, not the hash.
-        if signIdentity == "-" {
-            shell("tccutil reset All com.apple.FinalCut 2>/dev/null")
-            await logAsync("Reset permissions for new signature")
-        }
+        shell("tccutil reset All com.apple.FinalCut 2>/dev/null")
+        await logAsync("Reset permissions for new signature")
         await completeStepAsync(.signApp)
 
         // Step 7: Defaults

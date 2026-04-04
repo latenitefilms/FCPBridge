@@ -140,6 +140,7 @@ static void FCPBridge_checkCompatibility(void) {
 - (void)toggleCommandPalette:(id)sender;
 - (void)toggleEffectDragAsAdjustmentClip:(id)sender;
 - (void)toggleViewerPinchZoom:(id)sender;
+- (void)toggleVideoOnlyKeepsAudioDisabled:(id)sender;
 @property (nonatomic, weak) NSButton *toolbarButton;
 @property (nonatomic, weak) NSButton *paletteToolbarButton;
 @end
@@ -186,6 +187,14 @@ static void FCPBridge_checkCompatibility(void) {
 - (void)toggleViewerPinchZoom:(id)sender {
     BOOL newState = !FCPBridge_isViewerPinchZoomEnabled();
     FCPBridge_setViewerPinchZoomEnabled(newState);
+    if ([sender isKindOfClass:[NSMenuItem class]]) {
+        [(NSMenuItem *)sender setState:newState ? NSControlStateValueOn : NSControlStateValueOff];
+    }
+}
+
+- (void)toggleVideoOnlyKeepsAudioDisabled:(id)sender {
+    BOOL newState = !FCPBridge_isVideoOnlyKeepsAudioDisabledEnabled();
+    FCPBridge_setVideoOnlyKeepsAudioDisabledEnabled(newState);
     if ([sender isKindOfClass:[NSMenuItem class]]) {
         [(NSMenuItem *)sender setState:newState ? NSControlStateValueOn : NSControlStateValueOff];
     }
@@ -254,6 +263,15 @@ static void FCPBridge_installMenu(void) {
     pinchZoomItem.target = [FCPBridgeMenuController shared];
     pinchZoomItem.state = FCPBridge_isViewerPinchZoomEnabled() ? NSControlStateValueOn : NSControlStateValueOff;
     [optionsMenu addItem:pinchZoomItem];
+
+    NSMenuItem *videoOnlyKeepsAudioItem = [[NSMenuItem alloc]
+        initWithTitle:@"Video-Only Edit Keeps Audio (Disabled)"
+               action:@selector(toggleVideoOnlyKeepsAudioDisabled:)
+        keyEquivalent:@""];
+    videoOnlyKeepsAudioItem.target = [FCPBridgeMenuController shared];
+    videoOnlyKeepsAudioItem.state = FCPBridge_isVideoOnlyKeepsAudioDisabledEnabled()
+        ? NSControlStateValueOn : NSControlStateValueOff;
+    [optionsMenu addItem:videoOnlyKeepsAudioItem];
 
     NSMenuItem *optionsMenuItem = [[NSMenuItem alloc] initWithTitle:@"Options" action:nil keyEquivalent:@""];
     optionsMenuItem.submenu = optionsMenu;
@@ -491,6 +509,14 @@ static void FCPBridge_appDidLaunch(void) {
     if (FCPBridge_isViewerPinchZoomEnabled()) {
         FCPBridge_installViewerPinchZoom();
     }
+
+    // Install video-only-keeps-audio-disabled swizzle if previously enabled
+    if (FCPBridge_isVideoOnlyKeepsAudioDisabledEnabled()) {
+        FCPBridge_installVideoOnlyKeepsAudioDisabled();
+    }
+
+    // Install effect browser favorites context menu (always on)
+    FCPBridge_installEffectFavoritesSwizzle();
 
     // Start the control server on a background thread
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{

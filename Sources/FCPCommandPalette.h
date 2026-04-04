@@ -7,6 +7,7 @@
 #define FCPCommandPalette_h
 
 #import <Foundation/Foundation.h>
+#import <AppKit/AppKit.h>
 
 // Command categories
 typedef NS_ENUM(NSInteger, FCPCommandCategory) {
@@ -34,6 +35,8 @@ typedef NS_ENUM(NSInteger, FCPCommandCategory) {
 @property (nonatomic, strong) NSString *detail;         // Short description
 @property (nonatomic, strong) NSArray<NSString *> *keywords; // Extra search terms
 @property (nonatomic, assign) CGFloat score;            // Fuzzy match score (transient)
+@property (nonatomic, assign) BOOL isFavoritedItem;     // transient: star indicator
+@property (nonatomic, assign) BOOL isSeparatorRow;       // transient: section divider
 @end
 
 @interface FCPCommandPalette : NSObject
@@ -51,6 +54,12 @@ typedef NS_ENUM(NSInteger, FCPCommandCategory) {
 
 // Search commands
 - (NSArray<FCPCommand *> *)searchCommands:(NSString *)query;
+
+// Get command at display row (accounting for AI row offset)
+- (FCPCommand *)commandForDisplayRow:(NSInteger)row;
+
+// Context menu for right-click in browse mode
+- (NSMenu *)contextMenuForRow:(NSInteger)row;
 
 // AI natural language (async, calls completion on main thread)
 - (void)executeNaturalLanguage:(NSString *)query completion:(void(^)(NSArray<NSDictionary *> *actions, NSString *error))completion;

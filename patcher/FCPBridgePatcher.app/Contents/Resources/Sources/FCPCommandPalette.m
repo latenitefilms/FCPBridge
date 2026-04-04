@@ -74,20 +74,27 @@ static CGFloat FCPFuzzyScore(NSString *query, NSString *target) {
 @implementation FCPCommandSearchField
 
 - (BOOL)performKeyEquivalent:(NSEvent *)event {
-    // Forward up/down arrows to the table view
+    // Forward up/down arrows to the table view (skip separator rows)
     if (event.type == NSEventTypeKeyDown) {
         unsigned short keyCode = event.keyCode;
         if (keyCode == 126 || keyCode == 125) { // Up or Down
+            FCPCommandPalette *palette = [FCPCommandPalette sharedPalette];
             NSInteger row = self.targetTableView.selectedRow;
             NSInteger maxRow = self.targetTableView.numberOfRows - 1;
             if (keyCode == 126 && row > 0) { // Up
-                [self.targetTableView selectRowIndexes:[NSIndexSet indexSetWithIndex:row - 1]
+                NSInteger newRow = row - 1;
+                FCPCommand *cmd = [palette commandForDisplayRow:newRow];
+                if (cmd && cmd.isSeparatorRow && newRow > 0) newRow--;
+                [self.targetTableView selectRowIndexes:[NSIndexSet indexSetWithIndex:newRow]
                                   byExtendingSelection:NO];
-                [self.targetTableView scrollRowToVisible:row - 1];
+                [self.targetTableView scrollRowToVisible:newRow];
             } else if (keyCode == 125 && row < maxRow) { // Down
-                [self.targetTableView selectRowIndexes:[NSIndexSet indexSetWithIndex:row + 1]
+                NSInteger newRow = row + 1;
+                FCPCommand *cmd = [palette commandForDisplayRow:newRow];
+                if (cmd && cmd.isSeparatorRow && newRow < maxRow) newRow++;
+                [self.targetTableView selectRowIndexes:[NSIndexSet indexSetWithIndex:newRow]
                                   byExtendingSelection:NO];
-                [self.targetTableView scrollRowToVisible:row + 1];
+                [self.targetTableView scrollRowToVisible:newRow];
             }
             return YES;
         }
@@ -100,6 +107,7 @@ static CGFloat FCPFuzzyScore(NSString *query, NSString *target) {
 #pragma mark - Command Row View
 
 @interface FCPCommandRowView : NSTableCellView
+@property (nonatomic, strong) NSTextField *starLabel;
 @property (nonatomic, strong) NSTextField *nameLabel;
 @property (nonatomic, strong) NSTextField *detailLabel;
 @property (nonatomic, strong) NSTextField *categoryLabel;
@@ -111,6 +119,13 @@ static CGFloat FCPFuzzyScore(NSString *query, NSString *target) {
 - (instancetype)initWithFrame:(NSRect)frame {
     self = [super initWithFrame:frame];
     if (self) {
+        // Star indicator for favorites
+        _starLabel = [NSTextField labelWithString:@""];
+        _starLabel.font = [NSFont systemFontOfSize:12];
+        _starLabel.textColor = [NSColor systemYellowColor];
+        _starLabel.translatesAutoresizingMaskIntoConstraints = NO;
+        [_starLabel setContentHuggingPriority:NSLayoutPriorityRequired forOrientation:NSLayoutConstraintOrientationHorizontal];
+
         // Command name
         _nameLabel = [NSTextField labelWithString:@""];
         _nameLabel.font = [NSFont systemFontOfSize:13 weight:NSFontWeightMedium];
@@ -137,17 +152,22 @@ static CGFloat FCPFuzzyScore(NSString *query, NSString *target) {
         _shortcutLabel.translatesAutoresizingMaskIntoConstraints = NO;
         _shortcutLabel.alignment = NSTextAlignmentRight;
 
+        [self addSubview:_starLabel];
         [self addSubview:_nameLabel];
         [self addSubview:_detailLabel];
         [self addSubview:_categoryLabel];
         [self addSubview:_shortcutLabel];
 
         [NSLayoutConstraint activateConstraints:@[
-            [_nameLabel.leadingAnchor constraintEqualToAnchor:self.leadingAnchor constant:12],
+            [_starLabel.leadingAnchor constraintEqualToAnchor:self.leadingAnchor constant:12],
+            [_starLabel.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+            [_starLabel.widthAnchor constraintEqualToConstant:14],
+
+            [_nameLabel.leadingAnchor constraintEqualToAnchor:_starLabel.trailingAnchor constant:2],
             [_nameLabel.topAnchor constraintEqualToAnchor:self.topAnchor constant:4],
             [_nameLabel.trailingAnchor constraintLessThanOrEqualToAnchor:_categoryLabel.leadingAnchor constant:-8],
 
-            [_detailLabel.leadingAnchor constraintEqualToAnchor:self.leadingAnchor constant:12],
+            [_detailLabel.leadingAnchor constraintEqualToAnchor:_starLabel.trailingAnchor constant:2],
             [_detailLabel.topAnchor constraintEqualToAnchor:_nameLabel.bottomAnchor constant:1],
             [_detailLabel.trailingAnchor constraintLessThanOrEqualToAnchor:_shortcutLabel.leadingAnchor constant:-8],
 
@@ -163,11 +183,12 @@ static CGFloat FCPFuzzyScore(NSString *query, NSString *target) {
     return self;
 }
 
-- (void)configureWithCommand:(FCPCommand *)cmd {
+- (void)configureWithCommand:(FCPCommand *)cmd isFavorited:(BOOL)favorited {
     self.nameLabel.stringValue = cmd.name ?: @"";
     self.detailLabel.stringValue = cmd.detail ?: @"";
     self.categoryLabel.stringValue = cmd.categoryName ?: @"";
     self.shortcutLabel.stringValue = cmd.shortcut ?: @"";
+    self.starLabel.stringValue = favorited ? @"\u2605" : @"";
 }
 
 @end
@@ -210,13 +231,36 @@ static CGFloat FCPFuzzyScore(NSString *query, NSString *target) {
 
 @end
 
+#pragma mark - Separator Row View
+
+@interface FCPSeparatorRowView : NSTableCellView
+@end
+
+@implementation FCPSeparatorRowView
+- (instancetype)initWithFrame:(NSRect)frame {
+    self = [super initWithFrame:frame];
+    if (self) {
+        NSBox *line = [[NSBox alloc] initWithFrame:NSZeroRect];
+        line.boxType = NSBoxSeparator;
+        line.translatesAutoresizingMaskIntoConstraints = NO;
+        [self addSubview:line];
+        [NSLayoutConstraint activateConstraints:@[
+            [line.leadingAnchor constraintEqualToAnchor:self.leadingAnchor constant:12],
+            [line.trailingAnchor constraintEqualToAnchor:self.trailingAnchor constant:-12],
+            [line.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+        ]];
+    }
+    return self;
+}
+@end
+
 #pragma mark - FCPCommandPalette
 
 static NSString * const kCommandRowID = @"FCPCommandRow";
 static NSString * const kAIRowID = @"FCPAIRow";
 
 @interface FCPCommandPalette () <NSTableViewDelegate, NSTableViewDataSource,
-                                  NSTextFieldDelegate, NSWindowDelegate>
+                                  NSTextFieldDelegate, NSWindowDelegate, NSMenuDelegate>
 @property (nonatomic, strong) NSPanel *panel;
 @property (nonatomic, strong) NSTextField *searchField;
 @property (nonatomic, strong) NSTableView *tableView;
@@ -236,7 +280,14 @@ static NSString * const kAIRowID = @"FCPAIRow";
 @property (nonatomic, strong) NSTimer *aiDebounceTimer;
 
 @property (nonatomic, strong) id localEventMonitor;
+
+// Favorites
+@property (nonatomic, strong) NSMutableSet<NSString *> *favoriteKeys; // "type::action" for O(1) lookup
+@property (nonatomic, strong) NSArray<FCPCommand *> *rawBrowseCommands; // pre-injection list
 @end
+
+static NSString * const kFCPBridgeFavoritesKey = @"FCPBridgeCommandPaletteFavorites";
+static NSString * const kSeparatorRowID = @"FCPSeparatorRow";
 
 @implementation FCPCommandPalette
 
@@ -252,6 +303,7 @@ static NSString * const kAIRowID = @"FCPAIRow";
     if (self) {
         [self registerCommands];
         _filteredCommands = _allCommands;
+        [self loadFavorites];
     }
     return self;
 }
@@ -348,6 +400,7 @@ static NSString * const kAIRowID = @"FCPAIRow";
     add(@"Browse Effects...", @"browseEffects", @"effect_browse", FCPCommandCategoryEffects, @"Effects", nil, @"Search and apply an effect by name", @[@"find effect", @"filter", @"plugin"]);
     add(@"Browse Generators...", @"browseGenerators", @"generator_browse", FCPCommandCategoryEffects, @"Generators", nil, @"Search and apply a generator", @[@"background", @"solid"]);
     add(@"Browse Titles...", @"browseTitles", @"title_browse", FCPCommandCategoryTitles, @"Titles", nil, @"Search and apply a title template", @[@"text", @"lower third"]);
+    add(@"Browse Favorites...", @"browseFavorites", @"favorites_browse", FCPCommandCategoryEffects, @"Favorites", nil, @"View all favorited effects, transitions, and generators", @[@"starred", @"pinned", @"bookmarks"]);
 
     // --- Titles ---
     add(@"Add Basic Title", @"addBasicTitle", @"timeline", FCPCommandCategoryTitles, @"Titles", nil, @"Insert basic title at playhead", @[@"text"]);
@@ -757,6 +810,12 @@ static NSString * const kAIRowID = @"FCPAIRow";
     tableView.dataSource = self;
     tableView.doubleAction = @selector(executeSelectedCommand:);
     tableView.target = self;
+
+    // Context menu for right-click favorites
+    NSMenu *contextMenu = [[NSMenu alloc] initWithTitle:@""];
+    contextMenu.delegate = self;
+    tableView.menu = contextMenu;
+
     self.tableView = tableView;
     searchField.targetTableView = tableView;
 
@@ -880,13 +939,16 @@ static NSString * const kAIRowID = @"FCPAIRow";
                     [weakSelf executeSelectedCommand:nil];
                     return nil;
                 }
-                // Up/Down arrow -> navigate table
+                // Up/Down arrow -> navigate table (skip separator rows)
                 if (event.keyCode == 126) { // Up
                     NSInteger row = weakSelf.tableView.selectedRow;
                     if (row > 0) {
-                        [weakSelf.tableView selectRowIndexes:[NSIndexSet indexSetWithIndex:row - 1]
+                        NSInteger newRow = row - 1;
+                        FCPCommand *cmd = [weakSelf commandForDisplayRow:newRow];
+                        if (cmd && cmd.isSeparatorRow && newRow > 0) newRow--;
+                        [weakSelf.tableView selectRowIndexes:[NSIndexSet indexSetWithIndex:newRow]
                                         byExtendingSelection:NO];
-                        [weakSelf.tableView scrollRowToVisible:row - 1];
+                        [weakSelf.tableView scrollRowToVisible:newRow];
                     }
                     return nil;
                 }
@@ -894,9 +956,12 @@ static NSString * const kAIRowID = @"FCPAIRow";
                     NSInteger row = weakSelf.tableView.selectedRow;
                     NSInteger max = weakSelf.tableView.numberOfRows - 1;
                     if (row < max) {
-                        [weakSelf.tableView selectRowIndexes:[NSIndexSet indexSetWithIndex:row + 1]
+                        NSInteger newRow = row + 1;
+                        FCPCommand *cmd = [weakSelf commandForDisplayRow:newRow];
+                        if (cmd && cmd.isSeparatorRow && newRow < max) newRow++;
+                        [weakSelf.tableView selectRowIndexes:[NSIndexSet indexSetWithIndex:newRow]
                                         byExtendingSelection:NO];
-                        [weakSelf.tableView scrollRowToVisible:row + 1];
+                        [weakSelf.tableView scrollRowToVisible:newRow];
                     }
                     return nil;
                 }
@@ -963,9 +1028,12 @@ static NSString * const kAIRowID = @"FCPAIRow";
     if (commandSelector == @selector(moveUp:)) {
         NSInteger row = self.tableView.selectedRow;
         if (row > 0) {
-            [self.tableView selectRowIndexes:[NSIndexSet indexSetWithIndex:row - 1]
+            NSInteger newRow = row - 1;
+            FCPCommand *cmd = [self commandForDisplayRow:newRow];
+            if (cmd && cmd.isSeparatorRow && newRow > 0) newRow--;
+            [self.tableView selectRowIndexes:[NSIndexSet indexSetWithIndex:newRow]
                         byExtendingSelection:NO];
-            [self.tableView scrollRowToVisible:row - 1];
+            [self.tableView scrollRowToVisible:newRow];
         }
         return YES;
     }
@@ -973,9 +1041,12 @@ static NSString * const kAIRowID = @"FCPAIRow";
         NSInteger row = self.tableView.selectedRow;
         NSInteger maxRow = self.tableView.numberOfRows - 1;
         if (row < maxRow) {
-            [self.tableView selectRowIndexes:[NSIndexSet indexSetWithIndex:row + 1]
+            NSInteger newRow = row + 1;
+            FCPCommand *cmd = [self commandForDisplayRow:newRow];
+            if (cmd && cmd.isSeparatorRow && newRow < maxRow) newRow++;
+            [self.tableView selectRowIndexes:[NSIndexSet indexSetWithIndex:newRow]
                         byExtendingSelection:NO];
-            [self.tableView scrollRowToVisible:row + 1];
+            [self.tableView scrollRowToVisible:newRow];
         }
         return YES;
     }
@@ -1032,7 +1103,17 @@ static NSString * const kAIRowID = @"FCPAIRow";
 
 - (void)controlTextDidChange:(NSNotification *)notification {
     NSString *query = self.searchField.stringValue;
-    self.filteredCommands = [self searchCommands:query];
+    if (self.inBrowseMode && self.rawBrowseCommands) {
+        if (query.length > 0) {
+            // Search raw list (no favorites section) to avoid duplicates
+            self.filteredCommands = [self searchCommandsInArray:self.rawBrowseCommands query:query];
+        } else {
+            // Restore favorites section when search is cleared
+            [self injectFavoritesIntoCurrentList];
+        }
+    } else {
+        self.filteredCommands = [self searchCommands:query];
+    }
     // Only clear AI state if the query actually changed from what AI answered
     BOOL queryChanged = ![query isEqualToString:self.aiCompletedQuery ?: @""];
     if (queryChanged) {
@@ -1113,10 +1194,18 @@ static NSString * const kAIRowID = @"FCPAIRow";
         return cell;
     }
 
-    NSInteger cmdIdx = row;
-    if (self.aiLoading || self.aiResults.count > 0) cmdIdx -= 1;
+    FCPCommand *cmd = [self commandForDisplayRow:row];
+    if (!cmd) return nil;
 
-    if (cmdIdx < 0 || cmdIdx >= (NSInteger)self.filteredCommands.count) return nil;
+    // Separator row
+    if (cmd.isSeparatorRow) {
+        FCPSeparatorRowView *cell = [tableView makeViewWithIdentifier:kSeparatorRowID owner:nil];
+        if (!cell) {
+            cell = [[FCPSeparatorRowView alloc] initWithFrame:NSMakeRect(0, 0, 500, 20)];
+            cell.identifier = kSeparatorRowID;
+        }
+        return cell;
+    }
 
     FCPCommandRowView *cell = [tableView makeViewWithIdentifier:kCommandRowID owner:nil];
     if (!cell) {
@@ -1124,12 +1213,20 @@ static NSString * const kAIRowID = @"FCPAIRow";
         cell.identifier = kCommandRowID;
     }
 
-    [cell configureWithCommand:self.filteredCommands[cmdIdx]];
+    [cell configureWithCommand:cmd isFavorited:cmd.isFavoritedItem];
     return cell;
 }
 
 - (CGFloat)tableView:(NSTableView *)tableView heightOfRow:(NSInteger)row {
+    FCPCommand *cmd = [self commandForDisplayRow:row];
+    if (cmd && cmd.isSeparatorRow) return 20;
     return 40;
+}
+
+- (BOOL)tableView:(NSTableView *)tableView shouldSelectRow:(NSInteger)row {
+    FCPCommand *cmd = [self commandForDisplayRow:row];
+    if (cmd && cmd.isSeparatorRow) return NO;
+    return YES;
 }
 
 #pragma mark - Execute
@@ -1147,12 +1244,9 @@ static NSString * const kAIRowID = @"FCPAIRow";
         return;
     }
 
-    NSInteger cmdIdx = row;
-    if (self.aiLoading || self.aiResults.count > 0) cmdIdx -= 1;
+    FCPCommand *cmd = [self commandForDisplayRow:row];
+    if (!cmd || cmd.isSeparatorRow) return;
 
-    if (cmdIdx < 0 || cmdIdx >= (NSInteger)self.filteredCommands.count) return;
-
-    FCPCommand *cmd = self.filteredCommands[cmdIdx];
     // Don't hide palette for browse commands — they repopulate it
     if ([cmd.type isEqualToString:@"transition_browse"]) {
         [self enterTransitionBrowseMode];
@@ -1168,6 +1262,10 @@ static NSString * const kAIRowID = @"FCPAIRow";
     }
     if ([cmd.type isEqualToString:@"title_browse"]) {
         [self enterEffectBrowseMode:@"title"];
+        return;
+    }
+    if ([cmd.type isEqualToString:@"favorites_browse"]) {
+        [self enterFavoritesBrowseMode];
         return;
     }
     [self hidePalette];
@@ -1756,8 +1854,221 @@ static NSString * const kAIRowID = @"FCPAIRow";
     });
 }
 
+#pragma mark - Favorites
+
+static NSString *FCPFavoriteKey(NSString *type, NSString *action) {
+    return [NSString stringWithFormat:@"%@::%@", type, action];
+}
+
+- (void)loadFavorites {
+    NSArray *dicts = [[NSUserDefaults standardUserDefaults] arrayForKey:kFCPBridgeFavoritesKey];
+    _favoriteKeys = [NSMutableSet set];
+    for (NSDictionary *d in dicts) {
+        NSString *key = FCPFavoriteKey(d[@"type"], d[@"action"]);
+        if (key) [_favoriteKeys addObject:key];
+    }
+}
+
+- (void)saveFavorites {
+    // favoriteKeys is the source of truth for membership; rebuild dicts from stored array + any additions
+    // We keep the full dicts in NSUserDefaults for name/category metadata
+    [[NSUserDefaults standardUserDefaults] synchronize];
+}
+
+- (NSArray<NSDictionary *> *)allFavoriteDicts {
+    return [[NSUserDefaults standardUserDefaults] arrayForKey:kFCPBridgeFavoritesKey] ?: @[];
+}
+
+- (BOOL)isFavorite:(FCPCommand *)cmd {
+    if (!cmd.type || !cmd.action) return NO;
+    return [self.favoriteKeys containsObject:FCPFavoriteKey(cmd.type, cmd.action)];
+}
+
+- (void)addFavorite:(FCPCommand *)cmd {
+    NSString *key = FCPFavoriteKey(cmd.type, cmd.action);
+    if ([self.favoriteKeys containsObject:key]) return; // already favorited
+    [self.favoriteKeys addObject:key];
+
+    NSMutableArray *dicts = [[self allFavoriteDicts] mutableCopy];
+    [dicts addObject:@{
+        @"type": cmd.type ?: @"",
+        @"action": cmd.action ?: @"",
+        @"name": cmd.name ?: @"",
+        @"categoryName": cmd.categoryName ?: @"",
+    }];
+    [[NSUserDefaults standardUserDefaults] setObject:dicts forKey:kFCPBridgeFavoritesKey];
+}
+
+- (void)removeFavorite:(FCPCommand *)cmd {
+    NSString *key = FCPFavoriteKey(cmd.type, cmd.action);
+    [self.favoriteKeys removeObject:key];
+
+    NSMutableArray *dicts = [[self allFavoriteDicts] mutableCopy];
+    NSIndexSet *toRemove = [dicts indexesOfObjectsPassingTest:^BOOL(NSDictionary *d, NSUInteger idx, BOOL *stop) {
+        return [FCPFavoriteKey(d[@"type"], d[@"action"]) isEqualToString:key];
+    }];
+    [dicts removeObjectsAtIndexes:toRemove];
+    [[NSUserDefaults standardUserDefaults] setObject:dicts forKey:kFCPBridgeFavoritesKey];
+}
+
+- (FCPCommand *)commandForDisplayRow:(NSInteger)row {
+    NSInteger cmdIdx = row;
+    if (self.aiLoading || self.aiResults.count > 0) cmdIdx -= 1;
+    if (cmdIdx < 0 || cmdIdx >= (NSInteger)self.filteredCommands.count) return nil;
+    return self.filteredCommands[cmdIdx];
+}
+
+- (NSMenu *)contextMenuForRow:(NSInteger)row {
+    // Only show context menu in browse mode for apply-type commands
+    if (!self.inBrowseMode) return nil;
+
+    FCPCommand *cmd = [self commandForDisplayRow:row];
+    if (!cmd || cmd.isSeparatorRow) return nil;
+
+    static NSSet *favoritableTypes = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        favoritableTypes = [NSSet setWithArray:@[
+            @"effect_apply", @"transition_apply", @"generator_apply", @"title_apply"
+        ]];
+    });
+    if (![favoritableTypes containsObject:cmd.type]) return nil;
+
+    return cmd; // non-nil signals valid target
+}
+
+#pragma mark - NSMenuDelegate (right-click context menu)
+
+- (void)menuNeedsUpdate:(NSMenu *)menu {
+    [menu removeAllItems];
+
+    NSInteger row = self.tableView.clickedRow;
+    if (row < 0) return;
+
+    FCPCommand *cmd = [self commandForDisplayRow:row];
+    if (!cmd || cmd.isSeparatorRow) return;
+    if (!self.inBrowseMode) return;
+
+    static NSSet *favoritableTypes = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        favoritableTypes = [NSSet setWithArray:@[
+            @"effect_apply", @"transition_apply", @"generator_apply", @"title_apply"
+        ]];
+    });
+    if (![favoritableTypes containsObject:cmd.type]) return;
+
+    BOOL isFav = [self isFavorite:cmd];
+    NSMenuItem *item = [[NSMenuItem alloc]
+        initWithTitle:isFav ? @"Remove from Favorites" : @"Add to Favorites"
+               action:@selector(toggleFavoriteFromMenu:)
+        keyEquivalent:@""];
+    item.target = self;
+    item.representedObject = cmd;
+    [menu addItem:item];
+}
+
+- (void)toggleFavoriteFromMenu:(NSMenuItem *)sender {
+    FCPCommand *cmd = sender.representedObject;
+    if ([self isFavorite:cmd]) {
+        [self removeFavorite:cmd];
+    } else {
+        [self addFavorite:cmd];
+    }
+    [self rebuildBrowseModeListWithFavorites];
+}
+
+- (void)injectFavoritesIntoCurrentList {
+    if (!self.rawBrowseCommands || self.rawBrowseCommands.count == 0) return;
+
+    NSMutableArray<FCPCommand *> *favoriteCmds = [NSMutableArray array];
+    NSMutableArray<FCPCommand *> *regularCmds = [NSMutableArray array];
+
+    for (FCPCommand *cmd in self.rawBrowseCommands) {
+        BOOL isFav = [self isFavorite:cmd];
+        if (isFav) {
+            // Create a copy for the favorites section
+            FCPCommand *favCopy = [[FCPCommand alloc] init];
+            favCopy.name = cmd.name;
+            favCopy.action = cmd.action;
+            favCopy.type = cmd.type;
+            favCopy.category = cmd.category;
+            favCopy.categoryName = cmd.categoryName;
+            favCopy.shortcut = cmd.shortcut;
+            favCopy.detail = cmd.detail;
+            favCopy.keywords = cmd.keywords;
+            favCopy.isFavoritedItem = YES;
+            [favoriteCmds addObject:favCopy];
+        }
+        // Mark the original too so the star shows in the main list
+        cmd.isFavoritedItem = isFav;
+        [regularCmds addObject:cmd];
+    }
+
+    if (favoriteCmds.count > 0) {
+        NSMutableArray *combined = [NSMutableArray array];
+        [combined addObjectsFromArray:favoriteCmds];
+
+        // Add separator
+        FCPCommand *separator = [[FCPCommand alloc] init];
+        separator.isSeparatorRow = YES;
+        separator.name = @"";
+        [combined addObject:separator];
+
+        [combined addObjectsFromArray:regularCmds];
+        self.allCommands = combined;
+    } else {
+        self.allCommands = regularCmds;
+    }
+    self.filteredCommands = self.allCommands;
+}
+
+- (void)rebuildBrowseModeListWithFavorites {
+    [self injectFavoritesIntoCurrentList];
+    NSString *query = self.searchField.stringValue;
+    if (query.length > 0) {
+        // When searching, use raw list (no favorites section) to avoid duplicates
+        self.filteredCommands = [self searchCommandsInArray:self.rawBrowseCommands query:query];
+    }
+    [self.tableView reloadData];
+    if (self.filteredCommands.count > 0) {
+        [self.tableView selectRowIndexes:[NSIndexSet indexSetWithIndex:0]
+                    byExtendingSelection:NO];
+    }
+}
+
+- (NSArray<FCPCommand *> *)searchCommandsInArray:(NSArray<FCPCommand *> *)commands query:(NSString *)query {
+    if (query.length == 0) return commands;
+
+    NSMutableArray<FCPCommand *> *results = [NSMutableArray array];
+    for (FCPCommand *cmd in commands) {
+        if (cmd.isSeparatorRow) continue;
+        CGFloat nameScore = FCPFuzzyScore(query, cmd.name);
+        CGFloat keywordScore = 0;
+        for (NSString *kw in cmd.keywords) {
+            CGFloat s = FCPFuzzyScore(query, kw);
+            if (s > keywordScore) keywordScore = s;
+        }
+        CGFloat catScore = FCPFuzzyScore(query, cmd.categoryName) * 0.5;
+        CGFloat detailScore = FCPFuzzyScore(query, cmd.detail) * 0.3;
+        CGFloat best = MAX(MAX(nameScore, keywordScore), MAX(catScore, detailScore));
+        if (best > 0.2) {
+            cmd.score = best;
+            cmd.isFavoritedItem = [self isFavorite:cmd];
+            [results addObject:cmd];
+        }
+    }
+    [results sortUsingComparator:^NSComparisonResult(FCPCommand *a, FCPCommand *b) {
+        if (a.score > b.score) return NSOrderedAscending;
+        if (a.score < b.score) return NSOrderedDescending;
+        return [a.name compare:b.name];
+    }];
+    return results;
+}
+
 - (void)exitBrowseMode {
     self.inBrowseMode = NO;
+    self.rawBrowseCommands = nil;
     self.allCommands = self.masterCommands;
     self.searchField.stringValue = @"";
     self.searchField.placeholderString = @"Type a command or describe what you want to do...";
@@ -1883,14 +2194,14 @@ static NSString * const kAIRowID = @"FCPAIRow";
                         [cmds addObject:cmd];
                     }
 
-                    self.allCommands = cmds;
+                    self.rawBrowseCommands = cmds;
+                    [self injectFavoritesIntoCurrentList];
                     self.searchField.placeholderString = @"Search transitions...";
-                    self.filteredCommands = cmds;
                     [self.tableView reloadData];
                     self.statusLabel.stringValue = [NSString stringWithFormat:
-                        @"%lu transitions | Type to filter | Esc to go back", (unsigned long)cmds.count];
+                        @"%lu transitions | Type to filter | Right-click to favorite | Esc to go back", (unsigned long)cmds.count];
 
-                    if (cmds.count > 0) {
+                    if (self.filteredCommands.count > 0) {
                         [self.tableView selectRowIndexes:[NSIndexSet indexSetWithIndex:0]
                                     byExtendingSelection:NO];
                     }
@@ -1964,14 +2275,14 @@ static NSString * const kAIRowID = @"FCPAIRow";
                         [cmds addObject:cmd];
                     }
 
-                    self.allCommands = cmds;
+                    self.rawBrowseCommands = cmds;
+                    [self injectFavoritesIntoCurrentList];
                     self.searchField.placeholderString = [NSString stringWithFormat:@"Search %@...", label];
-                    self.filteredCommands = cmds;
                     [self.tableView reloadData];
                     self.statusLabel.stringValue = [NSString stringWithFormat:
-                        @"%lu %@ | Type to filter | Esc to go back", (unsigned long)cmds.count, label];
+                        @"%lu %@ | Type to filter | Right-click to favorite | Esc to go back", (unsigned long)cmds.count, label];
 
-                    if (cmds.count > 0) {
+                    if (self.filteredCommands.count > 0) {
                         [self.tableView selectRowIndexes:[NSIndexSet indexSetWithIndex:0]
                                     byExtendingSelection:NO];
                     }
@@ -1987,6 +2298,36 @@ static NSString * const kAIRowID = @"FCPAIRow";
             });
         }
     });
+}
+
+- (void)enterFavoritesBrowseMode {
+    self.inBrowseMode = YES;
+    self.searchField.stringValue = @"";
+    self.searchField.placeholderString = @"Search favorites...";
+
+    NSMutableArray<FCPCommand *> *cmds = [NSMutableArray array];
+    for (FCPCommand *cmd in self.masterCommands ?: self.allCommands) {
+        if (!cmd || cmd.isSeparatorRow) continue;
+        if ([self isFavorite:cmd]) {
+            [cmds addObject:cmd];
+        }
+    }
+
+    self.rawBrowseCommands = cmds;
+    [self injectFavoritesIntoCurrentList];
+    [self.tableView reloadData];
+
+    if (cmds.count == 0) {
+        self.statusLabel.stringValue = @"No favorites yet";
+        self.searchField.placeholderString = @"No favorites yet. Esc to go back.";
+        return;
+    }
+
+    self.statusLabel.stringValue = [NSString stringWithFormat:
+        @"%lu favorites | Type to filter | Right-click to unfavorite | Esc to go back",
+        (unsigned long)cmds.count];
+    [self.tableView selectRowIndexes:[NSIndexSet indexSetWithIndex:0]
+                    byExtendingSelection:NO];
 }
 
 - (NSString *)extractKeywordFromQuery:(NSString *)query {
@@ -2051,8 +2392,8 @@ static NSString * const kAIRowID = @"FCPAIRow";
                     [cmds addObject:cmd];
                 }
 
-                self.allCommands = cmds;
-                self.filteredCommands = cmds;
+                self.rawBrowseCommands = cmds;
+                [self injectFavoritesIntoCurrentList];
                 self.aiResults = nil;
                 self.aiError = nil;
                 self.searchField.placeholderString = [NSString stringWithFormat:@"Showing %@s matching '%@'... Esc to go back", effectType, keyword];
@@ -2061,7 +2402,7 @@ static NSString * const kAIRowID = @"FCPAIRow";
                     @"%lu match%@ for '%@' | Return to apply | Esc to go back",
                     (unsigned long)cmds.count, cmds.count == 1 ? @"" : @"es", keyword];
 
-                if (cmds.count > 0) {
+                if (self.filteredCommands.count > 0) {
                     [self.tableView selectRowIndexes:[NSIndexSet indexSetWithIndex:0]
                                 byExtendingSelection:NO];
                 }

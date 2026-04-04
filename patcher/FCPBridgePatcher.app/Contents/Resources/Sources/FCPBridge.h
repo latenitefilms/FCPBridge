@@ -72,6 +72,16 @@ void FCPBridge_removeViewerPinchZoom(void);
 void FCPBridge_setViewerPinchZoomEnabled(BOOL enabled);
 BOOL FCPBridge_isViewerPinchZoomEnabled(void);
 
+#pragma mark - Effect Browser Favorites
+
+void FCPBridge_installEffectFavoritesSwizzle(void);
+
+#pragma mark - Video-Only Keeps Audio Disabled
+
+void FCPBridge_installVideoOnlyKeepsAudioDisabled(void);
+void FCPBridge_setVideoOnlyKeepsAudioDisabledEnabled(BOOL enabled);
+BOOL FCPBridge_isVideoOnlyKeepsAudioDisabledEnabled(void);
+
 #pragma mark - Cached Class References
 
 extern Class FCPBridge_FFAnchoredTimelineModule;

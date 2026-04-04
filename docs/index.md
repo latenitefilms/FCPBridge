@@ -5,6 +5,10 @@ title: FCPBridge Documentation
 
 # FCPBridge Documentation
 
+## Guides
+
+- [FlexMusic & Montage Maker Guide](FLEXMUSIC_AND_MONTAGE_GUIDE.md) — Dynamic soundtracks and auto-edit-to-beat montage creation: browse songs, get beat timing, render audio, and assemble montages
+
 ## Reports
 
 - [FCP Application Internals](FCP_APPLICATION_INTERNALS.md) — Comprehensive technical reference to FCP's internal architecture: all 53 binaries, 303K+ functions, frameworks, ML pipeline, render engine, and data model

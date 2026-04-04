@@ -372,6 +372,173 @@ search_methods("FFAnchoredTimelineModule", "blade")    # find methods
 get_methods("FFEffectStack")                           # all methods
 ```
 
+## Debug & Diagnostics (FCP Internal Developer Tools)
+
+FCPBridge exposes FCP's internal developer logging, debug overlays, and performance
+monitoring tools that are normally hidden. These are built into FCP's own frameworks
+(ProAppSupport, TimelineKit, Helium, ProCore) and controlled via NSUserDefaults and
+CFPreferences keys.
+
+### Quick Start
+```
+debug_get_config()                              # see all current debug settings
+debug_enable_preset("timeline_visual")          # turn on visual debug overlays
+debug_enable_preset("all_off")                  # reset everything to normal
+```
+
+### Get Current State
+```
+debug_get_config()
+```
+Returns the current value of every debug flag organized into four groups:
+- **timeline_debug**: 35 TLKUserDefaults keys (visual overlays, logging, rendering)
+- **cfpreferences_debug**: 6 CFPreferences keys (video decoder, frame drops, GPU)
+- **proapp_log**: ProAppSupport structured log system (level, categories, UI, threads)
+- **fcp_flags**: FCP behavioral overrides (gap coalescing, snapping, skimming)
+
+### Set Individual Flags
+```
+debug_set_config("TLKShowHiddenGapItems", "true")       # show hidden gaps in timeline
+debug_set_config("TLKPerformanceMonitorEnabled", "true") # enable perf monitor
+debug_set_config("LogLevel", "trace")                    # most verbose logging
+debug_set_config("VideoDecoderLogLevelInNLE", "3")       # video decoder verbosity
+debug_set_config("GPU_LOGGING", "true")                  # GPU/FxPlug logging
+debug_set_config("TLKShowHiddenGapItems", "false")       # turn it back off
+```
+
+TLK flags take effect immediately (TLKUserDefaults is reloaded live).
+CFPreferences flags may require FCP restart for some subsystems.
+
+### Presets (Enable Groups of Flags)
+```
+debug_enable_preset("timeline_visual")     # visual debug overlays
+debug_enable_preset("timeline_logging")    # timeline subsystem logging
+debug_enable_preset("performance")         # perf monitor + decoder/frame drop logging
+debug_enable_preset("render_debug")        # disable rendering layers + GPU logging
+debug_enable_preset("verbose_logging")     # trace-level logging + log UI + thread info
+debug_enable_preset("all_off")             # reset all debug flags to defaults
+```
+
+**Preset details:**
+
+| Preset | What it enables |
+|--------|----------------|
+| `timeline_visual` | Lane indices, misaligned edges, render bar, hidden gaps, invalid layouts, color-highlight changed objects |
+| `timeline_logging` | Log layer changes, parts, reload requests, recycling, visible rect changes, segmentation stats |
+| `performance` | TLK performance monitor, VideoDecoderLogLevelInNLE=2, FrameDropLogLevel=2 |
+| `render_debug` | Disable filmstrip/background/waveform rendering, enable GPU logging (isolate render issues) |
+| `verbose_logging` | LogLevel=trace, LogUI=true, LogThread=true, EnableScheduledReadAudioLogging=true |
+| `all_off` | Remove all debug flags, reset CFPreferences, clear log settings |
+
+### Framerate Monitor
+```
+debug_start_framerate_monitor(2.0)   # log fps every 2 seconds
+debug_stop_framerate_monitor()       # stop monitoring
+```
+Uses FCP's built-in HMDFramerate (ProCore). Reports to system log:
+- Overall fps
+- Average getFrame() call time in ms
+- Min/max frame times
+
+View output: `log stream --process "Final Cut Pro"` or Console.app
+
+### Reset
+```
+debug_reset_config("all")       # reset everything
+debug_reset_config("tlk")       # reset timeline flags only
+debug_reset_config("cfprefs")   # reset CFPreferences only
+debug_reset_config("log")       # reset ProAppSupport log settings only
+```
+
+### All Available Debug Keys
+
+**Timeline visual overlays** (TLK*):
+| Key | Effect |
+|-----|--------|
+| TLKShowItemLaneIndex | Show lane index number on each timeline item |
+| TLKShowMisalignedEdges | Highlight misaligned edges between items |
+| TLKShowRenderBar | Show render status bar overlay |
+| TLKShowHiddenGapItems | Reveal hidden gap items in timeline |
+| TLKShowHiddenItemHeaders | Reveal hidden item headers |
+| TLKShowInvalidLayoutRects | Highlight invalid layout rectangles |
+| TLKShowContainerBounds | Show container bounds |
+| TLKShowContentLayers | Show content layer boundaries |
+| TLKShowRulerBounds | Show ruler bounds overlay |
+| TLKShowUsedRegion | Show used region overlay |
+| TLKShowZeroHeightSpineItems | Show zero-height spine items |
+
+**Timeline logging** (TLK*):
+| Key | What it logs |
+|-----|-------------|
+| TLKLogVisibleLayerChanges | Changes to visible layers |
+| TLKLogParts | Timeline parts lifecycle |
+| TLKLogReloadRequests | Reload/refresh requests |
+| TLKLogRecyclingLayerChanges | Layer recycling events |
+| TLKLogVisibleRectChanges | Visible rect geometry changes |
+| TLKLogSegmentationStatistics | Segmentation statistics |
+
+**Timeline performance/rendering** (TLK* and Debug*):
+| Key | Effect |
+|-----|--------|
+| TLKPerformanceMonitorEnabled | Enable timeline performance monitoring |
+| TLKDebugColorChangedObjects | Color-highlight changed objects after updates |
+| TLKDebugLayoutConstraints | Debug layout constraint resolution |
+| TLKDebugErrorsAndWarnings | Show errors and warnings visually |
+| TLKDisableItemContents | Disable all item content rendering |
+| DebugKeyItemVideoFilmstripsDisabled | Disable video filmstrip thumbnails |
+| DebugKeyItemBackgroundDisabled | Disable item background rendering |
+| DebugKeyItemAudioWaveformsDisabled | Disable audio waveform rendering |
+
+**Video/audio/GPU logging** (CFPreferences):
+| Key | Type | Effect |
+|-----|------|--------|
+| VideoDecoderLogLevelInNLE | int | Video decoder verbosity (0=off, higher=more) |
+| FrameDropLogLevel | int | Frame drop reporting (0=off, higher=more) |
+| GPU_LOGGING | bool | GPU/FxPlug pipeline logging |
+| EnableScheduledReadAudioLogging | bool | Audio scheduled read logging |
+| EnableLibraryUpdateHistoryValidation | bool | Library update history validation |
+| FFVAMLSaveTranscription | bool | Save transcription data to disk |
+
+**ProAppSupport log system**:
+| Key | Values | Effect |
+|-----|--------|--------|
+| LogLevel | trace, debug, info, warning, error, failure | Set minimum log level |
+| LogUI | bool | Toggle in-app log viewer panel |
+| LogThread | bool | Include thread info in log output |
+| LogCategory | bitmask | Filter by subsystem category |
+
+Log categories: dev, player, sequenceEditor, camera, inspector, director,
+voiceover, selection, network, theme, share, analysisKit, backgroundTasks,
+angleEditor, lessons, onboarding, userNotifications, ui, all
+
+**FCP behavior overrides**:
+| Key | Effect |
+|-----|--------|
+| FFDontCoalesceGaps | Prevent automatic gap coalescing in timeline |
+| FFDisableSnapping | Disable magnetic snapping |
+| FFDisableSkimming | Disable clip skimming |
+
+### How Debug Tools Help
+
+**Diagnosing timeline layout issues**: Enable `timeline_visual` preset to see lane
+indices, hidden gaps, misaligned edges, and invalid layout rects. This reveals
+structural problems invisible in the normal UI.
+
+**Performance troubleshooting**: Enable `performance` preset + `debug_start_framerate_monitor()`
+to measure actual rendering fps and identify bottlenecks. Video decoder and frame drop
+logging pinpoint decode pipeline issues.
+
+**Render pipeline isolation**: The `render_debug` preset disables filmstrips, backgrounds,
+and waveforms independently, letting you isolate which rendering subsystem is causing
+problems. GPU logging captures the FxPlug/shader pipeline.
+
+**Verbose logging for development**: The `verbose_logging` preset sets ProAppSupport to
+trace level with the log UI enabled, giving maximum visibility into FCP's internal
+operations. Useful when developing new FCPBridge features or investigating FCP behavior.
+
+**Understanding timeline internals**: `TLKShowHiddenGapItems` and `TLKShowZeroHeightSpineItems`
+reveal items FCP hides from the user, helping understand the true timeline data model.
+
 ## Full API Reference
 See `docs/FCP_API_REFERENCE.md` for comprehensive documentation of all key classes,
 methods, properties, notifications, and patterns. This reference is sufficient to use

@@ -14,11 +14,11 @@
 		</data>
 		<key>Resources/Sources/FCPBridge.h</key>
 		<data>
-		7dc4CQz7AGGUk7XbiwLOE/PBoOQ=
+		JwfIJDXp+lSzAtqsJKiIhlwYhok=
 		</data>
 		<key>Resources/Sources/FCPBridge.m</key>
 		<data>
-		8ck/dKW2cBYdhfByMRh9u9JLxGM=
+		X/Cl+HAJpkGIzSKqKQHLOUAVK5M=
 		</data>
 		<key>Resources/Sources/FCPBridgeRuntime.m</key>
 		<data>
@@ -26,7 +26,7 @@
 		</data>
 		<key>Resources/Sources/FCPBridgeServer.m</key>
 		<data>
-		jBPUR8gy/iJYtg6TLSmmMiIAOmY=
+		ipLlR0DaJWSeTC5W+JOPzPMPlJA=
 		</data>
 		<key>Resources/Sources/FCPBridgeSwizzle.m</key>
 		<data>
@@ -34,11 +34,11 @@
 		</data>
 		<key>Resources/Sources/FCPCommandPalette.h</key>
 		<data>
-		6JO6wMEVvJ6mmtOGtFwMhKkj3I8=
+		fh8m0dJCaD+dnsWNvFc9ArhGmEg=
 		</data>
 		<key>Resources/Sources/FCPCommandPalette.m</key>
 		<data>
-		eqO/lTJIqFjYimzQZr2Tgy+HhAI=
+		5uOUOaAYXaYH8YdhbOL8K0RNuqk=
 		</data>
 		<key>Resources/Sources/FCPTranscriptPanel.h</key>
 		<data>
@@ -48,9 +48,13 @@
 		<data>
 		nnH3HalhKJcEwu5xTN/ohac4GXY=
 		</data>
+		<key>Resources/mcp/__pycache__/server.cpython-312.pyc</key>
+		<data>
+		xGv6iNJ+KBwJUiJIk20jQkYRTSg=
+		</data>
 		<key>Resources/mcp/server.py</key>
 		<data>
-		UObvYaFJWSEzXs0qUyspwHO/NQE=
+		nD6PvZDZeDpgWHpU/pznsNbAS/M=
 		</data>
 		<key>Resources/tools/parakeet-transcriber/Package.resolved</key>
 		<data>
@@ -102,14 +106,14 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			450vcEbnTNHXpPD64YUcRm31MVdBqrJbFEUg3YoPwWs=
+			mCdoqB4nP7nXWl9mzpbofuCibcY1VRmg9zudtw5kpw8=
 			</data>
 		</dict>
 		<key>Resources/Sources/FCPBridge.m</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			NqMYyVvOzCjV200dLGyEvwF3la3xUj0gJkEx8GllNRY=
+			rnYDtv/UkHoHEJLXXeD4EJjpaqqDexa5y+VbgZx42Gs=
 			</data>
 		</dict>
 		<key>Resources/Sources/FCPBridgeRuntime.m</key>
@@ -123,7 +127,7 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			9IL0wDhvPgaqpNdTo+OdEjzipqk9JI5Jf7FyuOZNy+4=
+			kQh2AKDr5lQQ7jDIqpQehqELKUewHOQECM0d54It468=
 			</data>
 		</dict>
 		<key>Resources/Sources/FCPBridgeSwizzle.m</key>
@@ -137,14 +141,14 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			mLPWb1MT/GhKoNrH3TipN+UZvypJYk/36CFbvdWjBfQ=
+			4lyJxLGjueXUhC+CgF6wjsvT9enALBnZdKN8wQPYYnY=
 			</data>
 		</dict>
 		<key>Resources/Sources/FCPCommandPalette.m</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			d2dCzeoCvvr3HeFjlxq+50cei2WAf/L7czWdGp35l3Y=
+			IXugHbu0YU07I8YKVv9sHu1/twM5aMbtyo8qAswB1t8=
 			</data>
 		</dict>
 		<key>Resources/Sources/FCPTranscriptPanel.h</key>
@@ -161,11 +165,18 @@
 			cVH/8fJ2YaUKvNPRYIx4tWnXyu0MkgNaIDHrdIEDVq8=
 			</data>
 		</dict>
+		<key>Resources/mcp/__pycache__/server.cpython-312.pyc</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			tEvF52jIu7P+pB1szA+WQ5STbZPEE6q8N0WmTfqGizk=
+			</data>
+		</dict>
 		<key>Resources/mcp/server.py</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			mhC7ui6iRxRcvx5yBDm6ZNi/nRj46/hb4d1eXrfZgno=
+			FrM6B+ePeAiDJV6bHFL9vY3Ys3kf7Ho7xxKjKIppRyg=
 			</data>
 		</dict>
 		<key>Resources/tools/parakeet-transcriber/Package.resolved</key>

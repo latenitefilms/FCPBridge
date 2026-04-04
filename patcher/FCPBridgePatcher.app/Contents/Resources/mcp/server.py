@@ -84,6 +84,24 @@ FCP uses a spine model: sequence -> primaryObject (collection) -> items
 Items are FFAnchoredMediaComponent (clips), FFAnchoredTransition, etc.
 get_timeline_clips() handles this automatically and returns handles for each item.
 
+## Useful Findings
+- Transition requests at a cut often target the right-hand clip with before=YES and after=NO.
+  That still means "apply the transition on the cut before this clip", not "apply it to the
+  clip's leading edge as a one-sided effect".
+- The UI trim actions trimToPlayhead, trimStart, and trimEnd are coarse and mode-dependent.
+  They are fine for interactive edits but poor for building exact repro cases.
+- For model-level selection work, create NSArray handles explicitly. Example:
+  arr = call_method_with_args("NSArray", "arrayWithObject:",
+      '[{"type":"handle","value":"obj_7"}]', class_method=True, return_handle=True)
+  call_method_with_args("obj_timeline", "setSelectedItems:",
+      f'[{{"type":"handle","value":"{arr_handle}"}}]', class_method=False)
+- Be careful with selectors that expose out-pointers such as error:, askedRetry:, or similar.
+  call_method_with_args() passes raw pointers through NSInvocation. Passing nil is only safe if
+  the target selector tolerates a null out pointer.
+- Known hazard: FFAnchoredSequence actionTrimDuration:forEdits:isDelta:error: can crash Final Cut
+  when the trim is rejected and error: is null. Do not use it as a probing tool through
+  call_method_with_args() unless you have a safe wrapper that owns the NSError** path.
+
 ## FCPXML for Complex Edits
 For creating entire projects with gaps, titles, markers:
   xml = generate_fcpxml(items='[{"type":"gap","duration":5},{"type":"title","text":"Hello","duration":3}]')
@@ -94,6 +112,19 @@ For creating entire projects with gaps, titles, markers:
   # Returns {"handle": "obj_1", "class": "..."} -- pass handle to subsequent calls
   call_method_with_args("obj_1", "objectAtIndex:", '[{"type":"int","value":0}]', false, true)
   # Always release when done: manage_handles(action="release_all")
+
+## FlexMusic (Dynamic Soundtrack)
+flexmusic_list_songs() -- browse available songs
+flexmusic_get_song(song_uid) -- detailed song info
+flexmusic_get_timing(song_uid, duration_seconds) -- beat/bar/section timestamps
+flexmusic_render_to_file(song_uid, duration_seconds, output_path) -- render to audio
+flexmusic_add_to_timeline(song_uid) -- add music to timeline
+
+## Montage Maker
+montage_analyze_clips() -- score clips for montage
+montage_plan_edit(beats, clips, style) -- create edit plan from timing + clips
+montage_assemble(edit_plan, project_name, song_file) -- build timeline from plan
+montage_auto(song_uid, event_name, style) -- one-shot auto-montage
 """
 )
 
@@ -463,6 +494,15 @@ def call_method_with_args(target: str, selector: str, args: str = "[]",
       cmtime value: {"value": 30000, "timescale": 600}
     return_handle: if true, store the returned object and return its handle ID
 
+    Warnings:
+      - Selectors with out-parameters (error:, askedRetry:, etc.) are invoked with the raw pointer
+        bytes you pass in args. Passing [{"type":"nil"}] only works when the selector explicitly
+        tolerates a null out pointer.
+      - FFAnchoredSequence actionTrimDuration:forEdits:isDelta:error: is known to crash Final Cut
+        on a constrained trim if error: is null.
+      - If you need an NSArray argument, build it first via NSArray arrayWithObject: and pass the
+        returned handle into the real call.
+
     Examples:
       call_method_with_args("FFLibraryDocument", "copyActiveLibraries", return_handle=True)
       call_method_with_args("obj_3", "displayName", "[]", false)
@@ -471,6 +511,20 @@ def call_method_with_args(target: str, selector: str, args: str = "[]",
         parsed_args = json.loads(args)
     except json.JSONDecodeError as e:
         return f"Invalid args JSON: {e}"
+
+    unsafe_nil_error_selectors = {
+        "actionTrimDuration:forEdits:isDelta:error:",
+        "operationTrimDuration:forEdits:isDelta:error:",
+    }
+    if selector in unsafe_nil_error_selectors and parsed_args:
+        last_arg = parsed_args[-1] if isinstance(parsed_args[-1], dict) else {}
+        last_arg_type = last_arg.get("type", "nil")
+        if last_arg_type == "nil":
+            return (
+                f"Refusing {selector} with a nil error: pointer. "
+                "This selector is known to crash Final Cut when the trim is constrained. "
+                "Use a dedicated safe wrapper instead."
+            )
 
     r = bridge.call("system.callMethodWithArgs",
                     target=target, selector=selector, args=parsed_args,
@@ -1427,7 +1481,7 @@ def list_transitions(filter: str = "") -> str:
 
 
 @mcp.tool()
-def apply_transition(name: str = "", effectID: str = "", freeze_extend: bool = False) -> str:
+def apply_transition(name: str = "", effectID: str = "", freeze_extend: bool = True) -> str:
     """Apply a specific transition at the current edit point.
 
     You can specify the transition by display name or effectID.
@@ -1436,7 +1490,7 @@ def apply_transition(name: str = "", effectID: str = "", freeze_extend: bool = F
     Args:
         name: Display name of the transition (e.g. "Cross Dissolve", "Flow")
         effectID: The effect ID (e.g. "FxPlug:4731E73A-...")
-        freeze_extend: If True, automatically extend clip edges with freeze frames
+        freeze_extend: If True, automatically resolve missing-media transitions with freeze frames
             when there isn't enough media for the transition. This avoids the
             "not enough extra media" dialog and prevents ripple trimming.
 
@@ -1461,7 +1515,7 @@ def apply_transition(name: str = "", effectID: str = "", freeze_extend: bool = F
 
     msg = f"Applied transition: {r.get('transition', '?')} ({r.get('effectID', '')})"
     if r.get("freezeExtended"):
-        msg += " (clip edges extended with freeze frames)"
+        msg += " (missing-media fixed with freeze frames)"
     return msg
 
 
@@ -1980,7 +2034,7 @@ def get_bridge_options() -> str:
     """Get the current FCPBridge option settings.
 
     Returns the state of all configurable options
-    (e.g. effectDragAsAdjustmentClip, viewerPinchZoom).
+    (e.g. effectDragAsAdjustmentClip, viewerPinchZoom, videoOnlyKeepsAudioDisabled).
     """
     r = bridge.call("options.get")
     if _err(r):
@@ -1996,9 +2050,457 @@ def set_bridge_option(option: str, enabled: bool) -> str:
         option: Option name. Currently supported:
                 "effectDragAsAdjustmentClip" - enable/disable dragging effects to empty timeline space to create adjustment clips
                 "viewerPinchZoom" - enable/disable trackpad pinch-to-zoom on the viewer
+                "videoOnlyKeepsAudioDisabled" - when Video-Only AV edit mode adds clips, keep audio+video but with audio disabled in inspector
         enabled: True to enable, False to disable
     """
     r = bridge.call("options.set", option=option, enabled=enabled)
+    if _err(r):
+        return f"Error: {r.get('error', r)}"
+    return _fmt(r)
+
+
+# ============================================================
+# FlexMusic (Dynamic Soundtrack)
+# ============================================================
+
+@mcp.tool()
+def flexmusic_list_songs(filter: str = "") -> str:
+    """List available FlexMusic songs that can dynamically fit any project duration.
+
+    Args:
+        filter: Optional search filter for song name, mood, or genre.
+
+    Returns list of songs with uid, name, artist, mood, pace, and genres.
+    Songs dynamically adjust their arrangement to match any target duration.
+    """
+    r = bridge.call("flexmusic.listSongs", filter=filter)
+    if _err(r):
+        return f"Error: {r.get('error', r)}"
+    return _fmt(r)
+
+
+@mcp.tool()
+def flexmusic_get_song(song_uid: str) -> str:
+    """Get detailed info about a specific FlexMusic song.
+
+    Args:
+        song_uid: The unique identifier of the song.
+
+    Returns metadata (mood, pace, genres, arousal, valence),
+    natural duration, minimum duration, and ideal durations.
+    """
+    r = bridge.call("flexmusic.getSong", songUID=song_uid)
+    if _err(r):
+        return f"Error: {r.get('error', r)}"
+    return _fmt(r)
+
+
+@mcp.tool()
+def flexmusic_get_timing(song_uid: str, duration_seconds: float) -> str:
+    """Get beat, bar, and section timing for a FlexMusic song fitted to a specific duration.
+
+    The song's arrangement is dynamically computed to fit the requested duration.
+    Returns precise timestamps for every beat, bar, and section boundary.
+    These timestamps can be used to cut video clips to the rhythm.
+
+    Args:
+        song_uid: The unique identifier of the song.
+        duration_seconds: Target duration in seconds to fit the song to.
+
+    Returns arrays of beat timestamps, bar timestamps, section timestamps,
+    and the actual fitted duration.
+    """
+    r = bridge.call("flexmusic.getTiming", songUID=song_uid, durationSeconds=duration_seconds)
+    if _err(r):
+        return f"Error: {r.get('error', r)}"
+    return _fmt(r)
+
+
+@mcp.tool()
+def flexmusic_render_to_file(song_uid: str, duration_seconds: float, output_path: str, format: str = "m4a") -> str:
+    """Render a FlexMusic song fitted to a specific duration as an audio file.
+
+    The song arrangement is dynamically computed to perfectly fill the duration,
+    then rendered to a standard audio file that can be imported into any project.
+
+    Args:
+        song_uid: The unique identifier of the song.
+        duration_seconds: Target duration in seconds.
+        output_path: Where to save the rendered audio file.
+        format: Audio format - "m4a" (AAC, default) or "wav".
+    """
+    r = bridge.call("flexmusic.renderToFile", songUID=song_uid,
+                     durationSeconds=duration_seconds, outputPath=output_path, format=format)
+    if _err(r):
+        return f"Error: {r.get('error', r)}"
+    return _fmt(r)
+
+
+@mcp.tool()
+def flexmusic_add_to_timeline(song_uid: str, duration_seconds: float = 0) -> str:
+    """Add a FlexMusic song to the current timeline as background music.
+
+    The song dynamically fits to the specified duration (or the timeline duration
+    if not specified). It will automatically re-arrange if the project length changes.
+
+    Args:
+        song_uid: The unique identifier of the song.
+        duration_seconds: Target duration (0 = use current timeline duration).
+    """
+    r = bridge.call("flexmusic.addToTimeline", songUID=song_uid,
+                     durationSeconds=duration_seconds)
+    if _err(r):
+        return f"Error: {r.get('error', r)}"
+    return _fmt(r)
+
+
+# ============================================================
+# Montage Maker (Auto-Edit to Beat)
+# ============================================================
+
+@mcp.tool()
+def montage_analyze_clips(event_name: str = "") -> str:
+    """Analyze clips in the browser for montage creation.
+
+    Scans clips in the specified event (or all events), scores them
+    based on duration, type (video/photo), and available metadata.
+    Returns a ranked list of clips suitable for montage assembly.
+
+    Args:
+        event_name: Event name to scan (empty = all events).
+    """
+    r = bridge.call("montage.analyzeClips", eventName=event_name)
+    if _err(r):
+        return f"Error: {r.get('error', r)}"
+    return _fmt(r)
+
+
+@mcp.tool()
+def montage_plan_edit(beats: str, clips: str, style: str = "bar", total_duration: float = 0) -> str:
+    """Create an edit decision list (EDL) that maps clips to musical beats.
+
+    Takes beat/bar timing data and scored clips, then creates a plan
+    that assigns the best clips to each musical segment.
+
+    Args:
+        beats: JSON array of beat timestamps in seconds (from flexmusic_get_timing).
+        clips: JSON array of clip objects with handle, duration, score (from montage_analyze_clips).
+        style: Cut rhythm - "beat" (every beat), "bar" (every bar/measure), "section" (at sections).
+        total_duration: Total montage duration in seconds (0 = sum of available clips).
+
+    Returns an edit decision list with clip assignments, in/out points, and timeline positions.
+    """
+    import json as _json
+    beats_arr = _json.loads(beats) if isinstance(beats, str) else beats
+    clips_arr = _json.loads(clips) if isinstance(clips, str) else clips
+    r = bridge.call("montage.planEdit", beats=beats_arr, clips=clips_arr,
+                     style=style, totalDuration=total_duration)
+    if _err(r):
+        return f"Error: {r.get('error', r)}"
+    return _fmt(r)
+
+
+@mcp.tool()
+def montage_assemble(edit_plan: str, project_name: str = "Montage", song_file: str = "") -> str:
+    """Assemble a montage on the timeline from an edit plan.
+
+    Takes the edit decision list and creates the actual timeline:
+    places clips at their assigned positions, adds transitions,
+    and includes the background music track.
+
+    Uses FCPXML import for reliable, atomic timeline construction.
+
+    Args:
+        edit_plan: JSON string of the edit decision list (from montage_plan_edit).
+        project_name: Name for the new project.
+        song_file: Path to rendered FlexMusic audio file (from flexmusic_render_to_file).
+    """
+    import json as _json
+    plan = _json.loads(edit_plan) if isinstance(edit_plan, str) else edit_plan
+    r = bridge.call("montage.assemble", editPlan=plan, projectName=project_name, songFile=song_file)
+    if _err(r):
+        return f"Error: {r.get('error', r)}"
+    return _fmt(r)
+
+
+@mcp.tool()
+def montage_auto(song_uid: str = "", event_name: str = "", style: str = "bar", project_name: str = "Montage") -> str:
+    """One-shot automatic montage creation.
+
+    Analyzes clips, selects a song, gets beat timing, plans the edit,
+    renders the music, and assembles everything into a new timeline.
+
+    This is the high-level convenience function that orchestrates the
+    entire montage creation pipeline in a single call.
+
+    Args:
+        song_uid: FlexMusic song UID (empty = auto-select based on clip mood).
+        event_name: Event to pull clips from (empty = all events).
+        style: Cut rhythm - "beat", "bar" (default), or "section".
+        project_name: Name for the new project.
+    """
+    r = bridge.call("montage.auto", songUID=song_uid, eventName=event_name,
+                     style=style, projectName=project_name)
+    if _err(r):
+        return f"Error: {r.get('error', r)}"
+    return _fmt(r)
+
+
+# ============================================================
+# Debug & Diagnostics
+# ============================================================
+
+@mcp.tool()
+def debug_get_config() -> str:
+    """Get current state of all FCP internal debug/logging settings.
+
+    Returns the current values of:
+    - Timeline debug flags (TLK*): visual overlays, logging, performance monitors
+    - CFPreferences debug flags: video decoder log level, frame drop logging, GPU logging
+    - ProAppSupport log settings: log level, categories, UI toggle, thread info
+    - FCP behavior flags: gap coalescing, snapping, skimming overrides
+
+    Use this to see what debug options are currently active before changing them.
+    """
+    r = bridge.call("debug.getConfig")
+    if _err(r):
+        return f"Error: {r.get('error', r)}"
+    return _fmt(r)
+
+
+@mcp.tool()
+def debug_set_config(key: str, value: str = "true") -> str:
+    """Set a single FCP internal debug/logging flag.
+
+    Args:
+        key: The debug key to set. Common keys:
+
+            Timeline visual overlays:
+              TLKShowItemLaneIndex, TLKShowMisalignedEdges, TLKShowRenderBar,
+              TLKShowHiddenGapItems, TLKShowHiddenItemHeaders,
+              TLKShowInvalidLayoutRects, TLKShowContainerBounds,
+              TLKShowContentLayers, TLKShowRulerBounds, TLKShowUsedRegion,
+              TLKShowZeroHeightSpineItems
+
+            Timeline logging:
+              TLKLogVisibleLayerChanges, TLKLogParts, TLKLogReloadRequests,
+              TLKLogRecyclingLayerChanges, TLKLogVisibleRectChanges,
+              TLKLogSegmentationStatistics
+
+            Performance/rendering:
+              TLKPerformanceMonitorEnabled, TLKDebugColorChangedObjects,
+              TLKDebugLayoutConstraints, TLKDebugErrorsAndWarnings,
+              TLKDisableItemContents,
+              DebugKeyItemVideoFilmstripsDisabled,
+              DebugKeyItemBackgroundDisabled,
+              DebugKeyItemAudioWaveformsDisabled
+
+            Video/audio logging (integer values, higher = more verbose):
+              VideoDecoderLogLevelInNLE, FrameDropLogLevel
+
+            GPU/effects logging:
+              GPU_LOGGING, EnableScheduledReadAudioLogging
+
+            Library debugging:
+              EnableLibraryUpdateHistoryValidation
+
+            Transcription:
+              FFVAMLSaveTranscription
+
+            ProAppSupport log system:
+              LogLevel (trace/debug/info/warning/error/failure),
+              LogUI (shows in-app log viewer),
+              LogThread (include thread info),
+              LogCategory (bitmask)
+
+            FCP behavior overrides:
+              FFDontCoalesceGaps, FFDisableSnapping, FFDisableSkimming
+
+        value: Value to set. "true"/"false" for bools, integer string for int keys,
+               or level name for LogLevel (trace/debug/info/warning/error/failure).
+    """
+    # Parse value
+    if value.lower() in ("true", "yes", "1"):
+        parsed = True
+    elif value.lower() in ("false", "no", "0"):
+        parsed = False
+    else:
+        try:
+            parsed = int(value)
+        except ValueError:
+            parsed = value  # pass as string (for LogLevel names etc.)
+
+    r = bridge.call("debug.setConfig", key=key, value=parsed)
+    if _err(r):
+        return f"Error: {r.get('error', r)}"
+    return _fmt(r)
+
+
+@mcp.tool()
+def debug_reset_config(scope: str = "all") -> str:
+    """Reset debug/logging settings to defaults.
+
+    Args:
+        scope: What to reset:
+          "all" - reset everything
+          "tlk" - reset timeline debug flags only
+          "cfprefs" - reset CFPreferences debug flags only
+          "log" - reset ProAppSupport log settings only
+    """
+    r = bridge.call("debug.resetConfig", scope=scope)
+    if _err(r):
+        return f"Error: {r.get('error', r)}"
+    return _fmt(r)
+
+
+@mcp.tool()
+def debug_enable_preset(preset: str) -> str:
+    """Enable a preset group of debug settings.
+
+    Args:
+        preset: One of:
+          "timeline_visual" - Show lane indices, misaligned edges, render bar,
+                              hidden gaps, invalid layouts, color-highlight changes
+          "timeline_logging" - Log layer changes, parts, reload requests,
+                               recycling, visible rect changes, segmentation stats
+          "performance" - Enable TLK performance monitor, video decoder logging,
+                          frame drop logging
+          "render_debug" - Disable filmstrips/backgrounds/waveforms rendering,
+                           enable GPU logging (isolates render issues)
+          "verbose_logging" - Set ProAppSupport log level to trace, enable log UI,
+                              thread info, and audio logging
+          "all_off" - Disable all debug flags and reset to defaults
+    """
+    r = bridge.call("debug.enablePreset", preset=preset)
+    if _err(r):
+        return f"Error: {r.get('error', r)}"
+    return _fmt(r)
+
+
+@mcp.tool()
+def debug_start_framerate_monitor(interval: float = 2.0) -> str:
+    """Start FCP's built-in HMD framerate monitor.
+
+    Logs FPS and frame timing statistics to the system log at regular intervals.
+    View output in Console.app or via: log stream --process "Final Cut Pro"
+
+    Reports: overall fps, average getFrame() time, min/max frame times in ms.
+
+    Args:
+        interval: Seconds between measurements (default 2.0).
+    """
+    r = bridge.call("debug.startFramerateMonitor", interval=interval)
+    if _err(r):
+        return f"Error: {r.get('error', r)}"
+    return _fmt(r)
+
+
+@mcp.tool()
+def debug_stop_framerate_monitor() -> str:
+    """Stop the HMD framerate monitor."""
+    r = bridge.call("debug.stopFramerateMonitor")
+    if _err(r):
+        return f"Error: {r.get('error', r)}"
+    return _fmt(r)
+
+
+@mcp.tool()
+def dump_runtime_metadata(binary: str = "", classes_only: bool = False) -> str:
+    """Bulk-export ObjC runtime metadata from a running FCP process for IDA Pro import.
+
+    Returns loaded images (with ASLR slides and base addresses) and full class metadata
+    including instance/class methods with IMP addresses, ivars with offsets, properties,
+    protocols, and superchains.
+
+    Args:
+        binary: Optional filter — match binary/framework name (e.g. "Flexo", "TLKit")
+        classes_only: If true, return just class names per image (fast overview)
+    """
+    params = {}
+    if binary:
+        params["binary"] = binary
+    if classes_only:
+        params["classesOnly"] = True
+    r = bridge.call("debug.dumpRuntimeMetadata", params)
+    if _err(r):
+        return f"Error: {r.get('error', r)}"
+    return _fmt(r)
+
+
+@mcp.tool()
+def list_loaded_images(filter: str = "") -> str:
+    """List all Mach-O images loaded in FCP's process with base addresses and ASLR slides.
+
+    Use this to see which frameworks/dylibs are loaded and their address information
+    needed for mapping runtime IMP addresses to static IDA addresses.
+
+    Args:
+        filter: Optional filter string to match image name/path
+    """
+    params = {}
+    if filter:
+        params["filter"] = filter
+    r = bridge.call("debug.listLoadedImages", params)
+    if _err(r):
+        return f"Error: {r.get('error', r)}"
+    return _fmt(r)
+
+
+@mcp.tool()
+def get_image_sections(binary: str) -> str:
+    """Get ObjC section data for a loaded binary: selector refs, class refs, superclass refs.
+
+    Returns the selectors referenced by this binary (which methods it calls),
+    the classes it references, and superclass references. Essential for
+    understanding cross-binary dependencies and building call graphs.
+
+    Args:
+        binary: Binary/framework name to inspect (e.g. "Flexo", "TLKit")
+    """
+    r = bridge.call("debug.getImageSections", {"binary": binary})
+    if _err(r):
+        return f"Error: {r.get('error', r)}"
+    return _fmt(r)
+
+
+@mcp.tool()
+def get_image_symbols(binary: str, filter: str = "", demangle: bool = True) -> str:
+    """Get exported symbols from a loaded binary's symbol table.
+
+    Returns all exported defined symbols including C functions, ObjC class symbols,
+    global variables, and Swift symbols (with automatic demangling).
+
+    Args:
+        binary: Binary/framework name to inspect
+        filter: Optional filter to match symbol names
+        demangle: Whether to demangle Swift symbols (default True)
+    """
+    params = {"binary": binary}
+    if filter:
+        params["filter"] = filter
+    if not demangle:
+        params["demangle"] = False
+    r = bridge.call("debug.getImageSymbols", params)
+    if _err(r):
+        return f"Error: {r.get('error', r)}"
+    return _fmt(r)
+
+
+@mcp.tool()
+def get_notification_names(binary: str = "") -> str:
+    """Enumerate NSNotification name constants from exported symbols.
+
+    Finds all exported symbols containing 'Notification' and resolves their
+    actual NSString values. These are the notification names used in
+    NSNotificationCenter postNotificationName: calls.
+
+    Args:
+        binary: Optional filter to a specific binary/framework
+    """
+    params = {}
+    if binary:
+        params["binary"] = binary
+    r = bridge.call("debug.getNotificationNames", params)
     if _err(r):
         return f"Error: {r.get('error', r)}"
     return _fmt(r)
