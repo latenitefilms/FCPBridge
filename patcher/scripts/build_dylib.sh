@@ -13,6 +13,7 @@ SOURCES=(
     "$REPO_DIR/Sources/SpliceKitServer.m"
     "$REPO_DIR/Sources/SpliceKitTranscriptPanel.m"
     "$REPO_DIR/Sources/SpliceKitCommandPalette.m"
+    "$REPO_DIR/Sources/SpliceKitDebugUI.m"
 )
 
 echo "Building SpliceKit dylib..."

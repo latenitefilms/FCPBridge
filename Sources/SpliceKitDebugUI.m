@@ -130,7 +130,7 @@ static void SKDebug_reloadTLKIfPossible(void) {
 @interface SpliceKitDebugController : NSObject <NSMenuDelegate>
 + (instancetype)shared;
 @property (nonatomic, weak) NSMenuItem *debugMenuItem;  // the top-level bar item
-@property (nonatomic, weak) id debugPrefsModule;        // PEAppDebugPreferencesModule instance
+@property (nonatomic, strong) id debugPrefsModule;      // PEAppDebugPreferencesModule instance
 @property (nonatomic, strong) NSView *debugPrefsView;   // our programmatic view
 @end
 
@@ -216,8 +216,13 @@ static void SKDebug_reloadTLKIfPossible(void) {
         for (NSString *k in SKDebug_tlkLoggingFlags()) set(k, YES);
     } else if ([preset isEqualToString:@"performance"]) {
         set(@"TLKPerformanceMonitorEnabled", YES);
-        [d setInteger:2 forKey:@"VideoDecoderLogLevelInNLE"];
-        [d setInteger:2 forKey:@"FrameDropLogLevel"];
+        CFPreferencesSetAppValue(CFSTR("VideoDecoderLogLevelInNLE"),
+                                 (__bridge CFPropertyListRef)@(2),
+                                 kCFPreferencesCurrentApplication);
+        CFPreferencesSetAppValue(CFSTR("FrameDropLogLevel"),
+                                 (__bridge CFPropertyListRef)@(2),
+                                 kCFPreferencesCurrentApplication);
+        CFPreferencesAppSynchronize(kCFPreferencesCurrentApplication);
     } else if ([preset isEqualToString:@"render_debug"]) {
         set(@"DebugKeyItemVideoFilmstripsDisabled", YES);
         set(@"DebugKeyItemBackgroundDisabled", YES);
@@ -239,9 +244,14 @@ static void SKDebug_reloadTLKIfPossible(void) {
         [d removeObjectForKey:@"LogThread"];
         [d removeObjectForKey:@"LogCategory"];
         [d removeObjectForKey:@"EnableScheduledReadAudioLogging"];
-        // Clear integer CFPreferences keys set by the performance preset
-        [d removeObjectForKey:@"VideoDecoderLogLevelInNLE"];
-        [d removeObjectForKey:@"FrameDropLogLevel"];
+        // Clear CFPreferences keys set by the performance preset and popup UI
+        CFPreferencesSetAppValue(CFSTR("VideoDecoderLogLevelInNLE"), NULL,
+                                 kCFPreferencesCurrentApplication);
+        CFPreferencesSetAppValue(CFSTR("FrameDropLogLevel"), NULL,
+                                 kCFPreferencesCurrentApplication);
+        CFPreferencesSetAppValue(CFSTR("GPU_LOGGING"), NULL,
+                                 kCFPreferencesCurrentApplication);
+        CFPreferencesAppSynchronize(kCFPreferencesCurrentApplication);
     }
 
     [d synchronize];
@@ -292,6 +302,8 @@ static void SKDebug_reloadTLKIfPossible(void) {
     }
 }
 
+static const char kFramerateMonitorKey = '\0';
+
 #pragma mark Framerate monitor
 
 - (void)startFramerateMonitor:(id)sender {
@@ -305,20 +317,20 @@ static void SKDebug_reloadTLKIfPossible(void) {
     if ([monitor respondsToSelector:startSel]) {
         ((void (*)(id, SEL, float))objc_msgSend)(monitor, startSel, 2.0f);
         // Retain the monitor in an associated object so it's not deallocated.
-        objc_setAssociatedObject(self, "skFramerateMonitor", monitor,
+        objc_setAssociatedObject(self, &kFramerateMonitorKey, monitor,
                                  OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         SpliceKit_log(@"Framerate monitor started (2.0s interval)");
     }
 }
 
 - (void)stopFramerateMonitor:(id)sender {
-    id monitor = objc_getAssociatedObject(self, "skFramerateMonitor");
+    id monitor = objc_getAssociatedObject(self, &kFramerateMonitorKey);
     if (!monitor) return;
     SEL stopSel = NSSelectorFromString(@"stopLogging");
     if ([monitor respondsToSelector:stopSel]) {
         ((void (*)(id, SEL))objc_msgSend)(monitor, stopSel);
     }
-    objc_setAssociatedObject(self, "skFramerateMonitor", nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    objc_setAssociatedObject(self, &kFramerateMonitorKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     SpliceKit_log(@"Framerate monitor stopped");
 }
 
@@ -333,14 +345,26 @@ static void SKDebug_reloadTLKIfPossible(void) {
         ((void (*)(id, SEL, id))objc_msgSend)(module, sel, sender);
         return;
     }
-    [self applyPreset:nil];  // no-op if representedObject nil
-    // Direct clear as fallback
+    // Direct clear fallback — mirrors the all_off preset logic exactly.
     NSUserDefaults *d = [NSUserDefaults standardUserDefaults];
     for (NSString *k in SKDebug_tlkVisualFlags()) [d removeObjectForKey:k];
     for (NSString *k in SKDebug_tlkLoggingFlags()) [d removeObjectForKey:k];
     for (NSString *k in SKDebug_renderFlags()) [d removeObjectForKey:k];
     for (NSString *k in SKDebug_fcpBehaviorFlags()) [d removeObjectForKey:k];
+    [d removeObjectForKey:@"LogLevel"];
+    [d removeObjectForKey:@"LogUI"];
+    [d removeObjectForKey:@"LogThread"];
+    [d removeObjectForKey:@"LogCategory"];
+    [d removeObjectForKey:@"EnableScheduledReadAudioLogging"];
     [d synchronize];
+    // Clear CFPreferences keys
+    CFPreferencesSetAppValue(CFSTR("VideoDecoderLogLevelInNLE"), NULL,
+                             kCFPreferencesCurrentApplication);
+    CFPreferencesSetAppValue(CFSTR("FrameDropLogLevel"), NULL,
+                             kCFPreferencesCurrentApplication);
+    CFPreferencesSetAppValue(CFSTR("GPU_LOGGING"), NULL,
+                             kCFPreferencesCurrentApplication);
+    CFPreferencesAppSynchronize(kCFPreferencesCurrentApplication);
     SKDebug_reloadTLKIfPossible();
 }
 
