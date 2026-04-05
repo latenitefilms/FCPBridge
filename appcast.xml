@@ -6,6 +6,22 @@
     <description>SpliceKit Patcher release updates</description>
     <language>en</language>
     <item>
+      <title>SpliceKit v3.0.0</title>
+      <sparkle:version>3.0.0</sparkle:version>
+      <sparkle:shortVersionString>3.0.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <pubDate>Sun, 05 Apr 2026 03:51:52 +0000</pubDate>
+      <description><![CDATA[
+        <h2>What's New in 3.0.0</h2>
+        <p>Rebrand to SpliceKit with wizard UI, Xcode project, DMG distribution, Enhancements menu, and portable tool paths</p>
+      ]]></description>
+      <enclosure
+        url="https://github.com/elliotttate/SpliceKit/releases/download/v3.0.0/SpliceKit-v3.0.0.dmg"
+        sparkle:edSignature="J615fECNhwgkTLyRypXk6SSWKr+jHTaVFvy+vZ2ooRnvnD8zVuqHNllCWByuUdjcuQ4ejFINw9F4CcoKu0sACw=="
+        length="10060306"
+        type="application/octet-stream" />
+    </item>
+    <item>
       <title>SpliceKit v2.8.4</title>
       <sparkle:version>2.8.4</sparkle:version>
       <sparkle:shortVersionString>2.8.4</sparkle:shortVersionString>
