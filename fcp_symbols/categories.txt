@@ -1,0 +1,197 @@
+# FCP ObjC Categories
+# Extracted: 2026-04-04T22:35:18Z
+# Methods added to existing classes. IDA decompiles the methods
+# but loses which category added them.
+
+## Final Cut Pro (7 categories)
+  FFEffect_$_FFMotionEffectGetDocument
+  FFProject_$_FinalCutScriptingAdditions
+  LKViewModule_$_PEViewModuleAdditions
+  NSString_$_PEValidNumberFormatter
+  NSView_$_STPViewDebugging
+  NSWindowController_$_STOPTHEICONMADNESS
+  PCUserDefaultsMigrator_$_PEAdditions
+
+## Flexo (57 categories)
+  CAKeyframeAnimation_$_iLifeAdditions
+  CALayer_$_Threading
+  CAMediaTimingFunction_$_iLifeAdditions
+  CAPropertyAnimation_$_iLifeAdditions
+  CATextLayer_$_iLifeAdditions
+  CHChannelBase_$_FFCHChannelBaseAdditions
+  CHChannelDouble_$_ParameterExport
+  CHChannelEnum_$_ParameterExport
+  CHChannelFolder_$_FFCHChannelFolderAdditions
+  FigTimeRangeAndObject_$_FFModelLocking
+  FMSong_$_FlexoUtilities
+  LKTimecode_$_FFShareAdditions
+  LKViewModule_$_FFAdditions
+  LKWindowModule_$_FFAdditions
+  MIOPreviewView_$_FFImportTableModuleAccessibility
+  NSAppleEventDescriptor_$_FFAdditions
+  NSArray_$_FlexoAdditions
+  NSAttributedString_$_FlexoUtilities
+  NSBezierPath_$_RoundedRect
+  NSBitmapImageRep_$_Additions
+  NSCoder_$_flexoExtensions
+  NSColor_$_RCAdditions
+  NSDate_$_FFAdditions
+  NSDateComponents_$_FFAdditions
+  NSDictionary_$_FlexoAdditions
+  NSError_$_FFPlaybackAndSchedulingErrorReporting
+  NSException_$_SFUtilityAdditions
+  NSFileManager_$_FlexoAdditions
+  NSImage_$_Ragnarok_Temp_images
+  NSKeyedUnarchiver_$_FFSecureKeyedArchiver
+  NSMenu_$_NSMenuFlexoAdditions
+  NSMutableArray_$_iLifeAdditions
+  NSMutableDictionary_$_FlexoAdditions
+  NSObject_$_MutableDeepCopy
+  NSScreen_$_FFAdditions
+  NSSegmentedCell_$_FFAdditions
+  NSSet_$_MutableDeepCopy
+  NSSortDescriptor_$_Additions
+  NSString_$_FFVideoFormatStringAdditions
+  NSTextView_$_FFAdditions
+  NSURL_$_symlinkAdditions
+  NSUserDefaults_$_Additions
+  NSValue_$_iLifeAdditions
+  NSValueTransformer_$_CustomValueTransformers
+  NSView_$_Additions
+  OZViewController_$_OZViewControllerAdditions
+  PHAsset_$_FFMDCompatibilityAdditions
+  PHAssetCollection_$_FFAdditions
+  PHCollection_$_FFMDCompatibilityAdditions
+  PHImageManager_$_FFAdditions
+  PHObject_$_FFMDCompatibilityAdditions
+  PKDrawing_$_FFTelestration
+  PKInk_$_FFTelestration
+  PKStroke_$_FFTelestration
+  PKStrokePoint_$_FFTelestration
+  TLKTimelineLayer_$_LayoutTextBadges
+  TLKTimelineView_$_FFAnchoredTimelineModule
+
+## Ozone (31 categories)
+  AVAssetWriter_$_OZAdditions
+  AVAssetWriterInput_$_OZAdditions
+  AVAssetWriterInputPixelBufferAdaptor_$_OZAdditions
+  AVMetadataItem_$_OZAdditions
+  CAKeyframeAnimation_$_OZCaarExport
+  CALayer_$_OZCaarExport
+  CAMediaTimingFunction_$_Helpers
+  CATextLayer_$_OZCaarImport
+  iMovieTextLayer_$_OZCaarExport
+  LKColor_$_ContextSpecificAdditions
+  LKFont_$_ContextSpecificAdditions
+  LKSegmentedControl_$_OZCanvasModuleAdditions
+  MDPSubmesh_$_OZAdditions
+  NSArray_$_OZAdditions
+  NSAttributedString_$_TMMatrixAdditions
+  NSBundle_$_OZAdditions
+  NSCoder_$_OZAdditions
+  NSColor_$_OZRGBA
+  NSDictionary_$_OZAdditions
+  NSDocumentController_$_OZAdditions
+  NSFileManager_$_SpaceInvaderAdditions
+  NSMutableDictionary_$_OZAdditions
+  NSString_$_SpaceInvaderAdditions
+  NSTableColumn_$_OZViewCell_NoteNumberOfOutlineRowsChangedExtension
+  NSURL_$_OZAdditions
+  NSUserDefaults_$_OZAdditions
+  NSValue_$_OZAdditions
+  NSWindow_$_OZAdditions
+  OZCurveEditorCtrl_$_Private
+  OZCurveSet_$_UndoHelper
+  OZMiniCurveEditor_$_appSpecific
+
+## TimelineKit (3 categories)
+  CALayer_$_TLKAdditions
+  NSObject_$_TLKBlockAdditions
+  NSValue_$_TLKRangeExtensions
+
+## LunaKit (21 categories)
+  NSApplication_$_ModuleKitExtensions
+  NSArray_$_Group_Comparison
+  NSBezierPath_$_LunaKitAdditions
+  NSButton_$_LKDFR_NSButtonConvenience
+  NSCell_$_NSCell_LKAddition
+  NSColor_$_LunaKitPrivateAdditions
+  NSControl_$_LunaKitAdditions
+  NSCustomTouchBarItem_$_LKDFR_NSButtonConvenience
+  NSDictionary_$_Mapping_Comparision
+  NSDocument_$_ModuleKitExtensions
+  NSEvent_$_ProAdditions
+  NSGroupTouchBarItem_$_LKDFR_AlertStyle
+  NSMenu_$_LunaKitAdditions
+  NSNumber_$_ModifierMask_Comparision
+  NSObject_$_LKColorWellTrackingAdditions
+  NSResponder_$_NSResponder_LKAdditions
+  NSScroller_$_LKHorizontal
+  NSString_$_CommandAdditions
+  NSTabView_$_LKTabModuleAdditions
+  NSView_$_SlidingExtras
+  NSWindow_$_super_keyDown_shunt
+
+## ProCore (9 categories)
+  CALayer_$_ProCore
+  NSAttributedString_$_PCCaptionUtilities
+  NSBitmapImageRep_$_PCAdditions
+  NSColor_$_PCCaptionUtilities
+  NSFont_$_PCXFontAdditions
+  NSImage_$_PCAdditions
+  NSMutableArray_$_Nullability
+  NSString_$_PCAdditions
+  NSValue_$_PC_SIMD
+
+## ProInspector (3 categories)
+  LKColor_$_PIAdditions
+  NSBundle_$_PIAdditions
+  PCMapLocation_$_PIAdditions
+
+## ProCurveEditor (1 categories)
+  NSBundle_$_OZCurveAdditions
+
+## ProAppsFxSupport (1 categories)
+  NSURL_$_PAEsymlinkAdditions
+
+## ProOSC (8 categories)
+  MDPBrush_$_POAdditions
+  MDPBrushDescriptor_$_POAdditions
+  NSArray_$_POAdditions
+  NSBundle_$_POAdditions
+  NSColor_$_POAdditions
+  NSString_$_POAdditions
+  NSTimer_$_POAdditions
+  NSTouch_$_POAdditions
+
+## ProExtensionHost (1 categories)
+  NSAppleEventDescriptor_$_CMTime
+
+## ProTracker (2 categories)
+  LKColor_$_ProTrackerAdditions
+  VNFaceObservation_$_VNFaceObsevationProTrackerAdditions
+
+## TextFramework (2 categories)
+  OZTimelineRow_$_TXSequenceTimelineRow
+  OZViewer_$_TXTextInteraction
+
+## FxPlug (1 categories)
+  NSCoder_$_FxCoding
+
+## MIO (1 categories)
+  NSString_$_MIORADVersionString
+
+## MDPKit (3 categories)
+  NSAttributedString_$_MDPKitAdditions
+  NSColor_$_MDPKitAdditions
+  NSImage_$_MDPKitAdditions
+
+## LunaFoundation (1 categories)
+  NSString_$_LKFormatDeputyStringUtilities
+
+## PluginManager (1 categories)
+  NSMutableDictionary_$_PROConveniences
+
+## VAML (1 categories)
+  NSString_$_Levenshtein
+

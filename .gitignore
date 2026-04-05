@@ -45,3 +45,6 @@ Package.resolved
 # Release binaries (use GitHub Releases instead)
 patcher/SpliceKitPatcher-v*.zip
 patcher/SpliceKit-v*.dmg
+
+# Runtime metadata export (75MB+, regenerate with tools/fcp_runtime_export.py)
+ida_export/

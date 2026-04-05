@@ -1,0 +1,1195 @@
+# FCP Swift Symbols (Demangled)
+# Extracted: 2026-04-04T22:35:40Z
+# IDA Pro is poor at Swift - these symbols contain struct/enum/protocol
+# definitions that IDA can't reconstruct.
+
+## Final Cut Pro (4656 Swift symbols)
+  lazy cache variable for type metadata for __C.FFCloudContentDownloadStatus
+  lazy cache variable for type metadata for __C.FFWorkspace
+  lazy cache variable for type metadata for __C.NSFileAttributeKey
+  lazy cache variable for type metadata for __C.NSModalResponse
+  lazy cache variable for type metadata for __C.NSNumber
+  lazy cache variable for type metadata for __C.NSUserDefaults
+  lazy cache variable for type metadata for __C.OS_dispatch_queue
+  lazy cache variable for type metadata for __C.os_unfair_lock_s
+  lazy cache variable for type metadata for CloudContent.CatalogError.PermissionError?
+  lazy cache variable for type metadata for Combine.Published<Swift.Bool>
+  lazy cache variable for type metadata for Combine.Published<Swift.Double>
+  lazy cache variable for type metadata for Combine.Published<Swift.String>
+  lazy cache variable for type metadata for Foundation.Date?
+  lazy protocol witness table cache variable for type __C.NSFileAttributeKey and conformance __C.NSFileAttributeKey : Swift._HasCustomAnyHashableRepresentation in __C_Synthesized
+  lazy protocol witness table cache variable for type __C.NSFileAttributeKey and conformance __C.NSFileAttributeKey : Swift._SwiftNewtypeWrapper in __C_Synthesized
+  lazy protocol witness table cache variable for type __C.NSFileAttributeKey and conformance __C.NSFileAttributeKey : Swift.Equatable in __C_Synthesized
+  lazy protocol witness table cache variable for type __C.NSFileAttributeKey and conformance __C.NSFileAttributeKey : Swift.Hashable in __C_Synthesized
+  lazy protocol witness table cache variable for type __C.NSFileAttributeKey and conformance __C.NSFileAttributeKey : Swift.RawRepresentable in __C_Synthesized
+  lazy protocol witness table cache variable for type __C.NSModalResponse and conformance __C.NSModalResponse : Swift._HasCustomAnyHashableRepresentation in __C_Synthesized
+  lazy protocol witness table cache variable for type __C.NSModalResponse and conformance __C.NSModalResponse : Swift._SwiftNewtypeWrapper in __C_Synthesized
+  lazy protocol witness table cache variable for type __C.NSModalResponse and conformance __C.NSModalResponse : Swift.Equatable in __C_Synthesized
+  lazy protocol witness table cache variable for type __C.NSModalResponse and conformance __C.NSModalResponse : Swift.Hashable in __C_Synthesized
+  lazy protocol witness table cache variable for type __C.NSModalResponse and conformance __C.NSModalResponse : Swift.RawRepresentable in __C_Synthesized
+  lazy protocol witness table cache variable for type (extension in Dispatch):__C.OS_dispatch_queue.Attributes and conformance (extension in Dispatch):__C.OS_dispatch_queue.Attributes : Swift.SetAlgebra in Dispatch
+  lazy protocol witness table cache variable for type [(extension in Dispatch):__C.OS_dispatch_queue.Attributes] and conformance [A] : Swift.Sequence in Swift
+  lazy protocol witness table cache variable for type [Dispatch.DispatchWorkItemFlags] and conformance [A] : Swift.Sequence in Swift
+  lazy protocol witness table cache variable for type [Final_Cut_Pro.CatalogRegistryManifestEffectDecodable] and conformance <A where A: Swift.Decodable> [A] : Swift.Decodable in Swift
+  lazy protocol witness table cache variable for type [Final_Cut_Pro.CloudContentDefaultsInteractor.DefaultsKey] and conformance [A] : Swift.Collection in Swift
+  lazy protocol witness table cache variable for type [Final_Cut_Pro.CloudContentEnvironment] and conformance [A] : Swift.Collection in Swift
+  lazy protocol witness table cache variable for type [Final_Cut_Pro.CloudContentMockApplicationStatus] and conformance [A] : Swift.Collection in Swift
+  lazy protocol witness table cache variable for type [Final_Cut_Pro.MockCloudContentEffectMockScenario] and conformance [A] : Swift.Collection in Swift
+  lazy protocol witness table cache variable for type [Swift.String] and conformance <A where A: Swift.Decodable> [A] : Swift.Decodable in Swift
+  lazy protocol witness table cache variable for type CloudContent.Asset and conformance CloudContent.CloudContentObject : Swift.Equatable in CloudContent
+  lazy protocol witness table cache variable for type CloudContent.Asset and conformance CloudContent.CloudContentObject : Swift.Hashable in CloudContent
+  lazy protocol witness table cache variable for type CloudContent.AssetError and conformance CloudContent.AssetError : Swift.Error in CloudContent
+  lazy protocol witness table cache variable for type CloudContent.ContentTag and conformance CloudContent.ContentTag : Swift.Equatable in CloudContent
+  lazy protocol witness table cache variable for type CloudContent.ContentTag and conformance CloudContent.ContentTag : Swift.Hashable in CloudContent
+  lazy protocol witness table cache variable for type CloudContent.MetadataTag and conformance CloudContent.MetadataTag : Swift.Equatable in CloudContent
+  lazy protocol witness table cache variable for type CloudContent.MetadataTag and conformance CloudContent.MetadataTag : Swift.Hashable in CloudContent
+  lazy protocol witness table cache variable for type Dispatch.DispatchWorkItemFlags and conformance Dispatch.DispatchWorkItemFlags : Swift.SetAlgebra in Dispatch
+  lazy protocol witness table cache variable for type Final_Cut_Pro.(DownArrow in _1E82FAA25AD1F67A72AB1178B1050D82) and conformance Final_Cut_Pro.(DownArrow in _1E82FAA25AD1F67A72AB1178B1050D82) : SwiftUI.View in Final_Cut_Pro
+  lazy protocol witness table cache variable for type Final_Cut_Pro.(IndigoGradientButtonStyle in _1B36793E31D2A9DC622364699A13F906) and conformance Final_Cut_Pro.(IndigoGradientButtonStyle in _1B36793E31D2A9DC622364699A13F906) : SwiftUI.ButtonStyle in Final_Cut_Pro
+  lazy protocol witness table cache variable for type Final_Cut_Pro.CatalogRegistryManifestDecodable and conformance Final_Cut_Pro.CatalogRegistryManifestDecodable : Swift.Decodable in Final_Cut_Pro
+  lazy protocol witness table cache variable for type Final_Cut_Pro.CatalogRegistryManifestDecodable.CodingKeys and conformance Final_Cut_Pro.CatalogRegistryManifestDecodable.CodingKeys : Swift.CodingKey in Final_Cut_Pro
+  lazy protocol witness table cache variable for type Final_Cut_Pro.CatalogRegistryManifestDecodable.CodingKeys and conformance Final_Cut_Pro.CatalogRegistryManifestDecodable.CodingKeys : Swift.CustomDebugStringConvertible in Final_Cut_Pro
+  lazy protocol witness table cache variable for type Final_Cut_Pro.CatalogRegistryManifestDecodable.CodingKeys and conformance Final_Cut_Pro.CatalogRegistryManifestDecodable.CodingKeys : Swift.CustomStringConvertible in Final_Cut_Pro
+  lazy protocol witness table cache variable for type Final_Cut_Pro.CatalogRegistryManifestDecodable.CodingKeys and conformance Final_Cut_Pro.CatalogRegistryManifestDecodable.CodingKeys : Swift.Equatable in Final_Cut_Pro
+  lazy protocol witness table cache variable for type Final_Cut_Pro.CatalogRegistryManifestEffectDecodable and conformance Final_Cut_Pro.CatalogRegistryManifestEffectDecodable : Swift.Decodable in Final_Cut_Pro
+  lazy protocol witness table cache variable for type Final_Cut_Pro.CatalogRegistryManifestEffectDecodable.CodingKeys and conformance Final_Cut_Pro.CatalogRegistryManifestEffectDecodable.CodingKeys : Swift.CodingKey in Final_Cut_Pro
+  lazy protocol witness table cache variable for type Final_Cut_Pro.CatalogRegistryManifestEffectDecodable.CodingKeys and conformance Final_Cut_Pro.CatalogRegistryManifestEffectDecodable.CodingKeys : Swift.CustomDebugStringConvertible in Final_Cut_Pro
+  lazy protocol witness table cache variable for type Final_Cut_Pro.CatalogRegistryManifestEffectDecodable.CodingKeys and conformance Final_Cut_Pro.CatalogRegistryManifestEffectDecodable.CodingKeys : Swift.CustomStringConvertible in Final_Cut_Pro
+  lazy protocol witness table cache variable for type Final_Cut_Pro.CatalogRegistryManifestEffectDecodable.CodingKeys and conformance Final_Cut_Pro.CatalogRegistryManifestEffectDecodable.CodingKeys : Swift.Equatable in Final_Cut_Pro
+  lazy protocol witness table cache variable for type Final_Cut_Pro.CloudContentDataSource.(Failure in _FFA44CD2F355F73CE5B248FF636000E9) and conformance Final_Cut_Pro.CloudContentDataSource.(Failure in _FFA44CD2F355F73CE5B248FF636000E9) : Swift.Equatable in Final_Cut_Pro
+  lazy protocol witness table cache variable for type Final_Cut_Pro.CloudContentDataSource.(Failure in _FFA44CD2F355F73CE5B248FF636000E9) and conformance Final_Cut_Pro.CloudContentDataSource.(Failure in _FFA44CD2F355F73CE5B248FF636000E9) : Swift.Error in Final_Cut_Pro
+  lazy protocol witness table cache variable for type Final_Cut_Pro.CloudContentDefaultsInteractor.DefaultsKey and conformance Final_Cut_Pro.CloudContentDefaultsInteractor.DefaultsKey : Swift.Equatable in Final_Cut_Pro
+  lazy protocol witness table cache variable for type Final_Cut_Pro.CloudContentDemoProjectDownloader.CloudContentDemoProjectDownloaderError and conformance Final_Cut_Pro.CloudContentDemoProjectDownloader.CloudContentDemoProjectDownloaderError : Swift.Equatable in Final_Cut_Pro
+  lazy protocol witness table cache variable for type Final_Cut_Pro.CloudContentDemoProjectDownloader.CloudContentDemoProjectDownloaderError and conformance Final_Cut_Pro.CloudContentDemoProjectDownloader.CloudContentDemoProjectDownloaderError : Swift.Error in Final_Cut_Pro
+  lazy protocol witness table cache variable for type Final_Cut_Pro.CloudContentDownloadOperation.(State in _7AC4DA4B056DAFBA3C400EDA29B5F3B4) and conformance Final_Cut_Pro.CloudContentDownloadOperation.(State in _7AC4DA4B056DAFBA3C400EDA29B5F3B4) : Swift.Equatable in Final_Cut_Pro
+  lazy protocol witness table cache variable for type Final_Cut_Pro.CloudContentEnvironment and conformance Final_Cut_Pro.CloudContentEnvironment : Swift.Equatable in Final_Cut_Pro
+  lazy protocol witness table cache variable for type Final_Cut_Pro.CloudContentFirstLaunchHelper.LaunchError and conformance Final_Cut_Pro.CloudContentFirstLaunchHelper.LaunchError : Swift.Equatable in Final_Cut_Pro
+  lazy protocol witness table cache variable for type Final_Cut_Pro.CloudContentFirstLaunchHelper.LaunchError and conformance Final_Cut_Pro.CloudContentFirstLaunchHelper.LaunchError : Swift.Error in Final_Cut_Pro
+  lazy protocol witness table cache variable for type Final_Cut_Pro.CloudContentFirstLaunchView.ViewModel and conformance Final_Cut_Pro.CloudContentFirstLaunchView.ViewModel : Combine.ObservableObject in Final_Cut_Pro
+  lazy protocol witness table cache variable for type Final_Cut_Pro.CloudContentMockApplicationStatus and conformance Final_Cut_Pro.CloudContentMockApplicationStatus : Swift.Equatable in Final_Cut_Pro
+  lazy protocol witness table cache variable for type Final_Cut_Pro.DemoProjectDownloadController.LaunchError and conformance Final_Cut_Pro.DemoProjectDownloadController.LaunchError : Swift.Equatable in Final_Cut_Pro
+  lazy protocol witness table cache variable for type Final_Cut_Pro.DemoProjectDownloadController.LaunchError and conformance Final_Cut_Pro.DemoProjectDownloadController.LaunchError : Swift.Error in Final_Cut_Pro
+  lazy protocol witness table cache variable for type Final_Cut_Pro.DemoProjectDownloadView.ViewModel and conformance Final_Cut_Pro.DemoProjectDownloadView.ViewModel : Observation.Observable in Final_Cut_Pro
+  lazy protocol witness table cache variable for type Final_Cut_Pro.DevCloudContentViewModel and conformance Final_Cut_Pro.DevCloudContentViewModel : ProMediaLibrary.LibraryManagerObserver in Final_Cut_Pro
+  lazy protocol witness table cache variable for type Final_Cut_Pro.EffectStatus and conformance Final_Cut_Pro.EffectStatus : Swift.Equatable in Final_Cut_Pro
+  lazy protocol witness table cache variable for type Final_Cut_Pro.MockCloudContentEffectMockScenario and conformance Final_Cut_Pro.MockCloudContentEffectMockScenario : Swift.Equatable in Final_Cut_Pro
+  lazy protocol witness table cache variable for type Foundation.URL and conformance Foundation.URL : Swift.Hashable in Foundation
+  lazy protocol witness table cache variable for type PMLCloudContent.CloudContentError and conformance PMLCloudContent.CloudContentError : Swift.Error in PMLCloudContent
+  lazy protocol witness table cache variable for type PMLCloudContent.CloudContentLibraryManager and conformance PMLCloudContent.CloudContentLibraryManager : ProMediaLibrary.LibraryManager in PMLCloudContent
+  lazy protocol witness table cache variable for type Swift.ArraySlice<Swift.String> and conformance Swift.ArraySlice<A> : Swift.BidirectionalCollection in Swift
+  lazy protocol witness table cache variable for type Swift.Double and conformance Swift.Double : Swift.BinaryFloatingPoint in Swift
+  lazy protocol witness table cache variable for type Swift.String and conformance Swift.String : Swift.CVarArg in Foundation
+  lazy protocol witness table cache variable for type Swift.String and conformance Swift.String : Swift.StringProtocol in Swift
+  lazy protocol witness table cache variable for type SwiftUI._BackgroundModifier<SwiftUI.LinearGradient> and conformance SwiftUI._BackgroundModifier<A> : SwiftUI.ViewModifier in SwiftUI
+  lazy protocol witness table cache variable for type SwiftUI._ClipEffect<SwiftUI.RoundedRectangle> and conformance SwiftUI._ClipEffect<A> : SwiftUI.ViewModifier in SwiftUI
+  lazy protocol witness table cache variable for type SwiftUI._ForegroundStyleModifier<SwiftUI.Color> and conformance SwiftUI._ForegroundStyleModifier<A> : SwiftUI.ViewModifier in SwiftUI
+  lazy protocol witness table cache variable for type SwiftUI.Button<SwiftUI.ModifiedContent<SwiftUI.Text, SwiftUI._FlexFrameLayout>> and conformance SwiftUI.Button<A> : SwiftUI.View in SwiftUI
+  lazy protocol witness table cache variable for type SwiftUI.Button<SwiftUI.Text> and conformance SwiftUI.Button<A> : SwiftUI.View in SwiftUI
+  lazy protocol witness table cache variable for type SwiftUI.ButtonStyleConfiguration.Label and conformance SwiftUI.ButtonStyleConfiguration.Label : SwiftUI.View in SwiftUI
+  lazy protocol witness table cache variable for type SwiftUI.HStack<SwiftUI.TupleView<(<<opaque return type of (extension in SwiftUI):SwiftUI.View.alert<A, B, C where A1: Swift.StringProtocol, B1: SwiftUI.View, C1: SwiftUI.View>(_: A1, isPresented: SwiftUI.Binding<Swift.Bool>, actions: () -> B1, message: () -> C1) -> some>>.0, SwiftUI.ModifiedContent<<<opaque return type of (extension in SwiftUI):SwiftUI.View.buttonStyle<A where A1: SwiftUI.ButtonStyle>(A1) -> some>>.0, SwiftUI._ClipEffect<SwiftUI.RoundedRectangle>>)>> and conformance SwiftUI.HStack<A> : SwiftUI.View in SwiftUI
+  lazy protocol witness table cache variable for type SwiftUI.HStack<SwiftUI.TupleView<(SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<Final_Cut_Pro.(DownArrow in _1E82FAA25AD1F67A72AB1178B1050D82), SwiftUI._PaddingLayout>, SwiftUI.AccessibilityAttachmentModifier>, SwiftUI.ModifiedContent<SwiftUI.VStack<SwiftUI.TupleView<(SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<SwiftUI.Text, SwiftUI._PaddingLayout>, SwiftUI._ForegroundStyleModifier<SwiftUI.Color>>, SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<SwiftUI.Text, SwiftUI._EnvironmentKeyWritingModifier<CoreGraphics.CGFloat>>, SwiftUI._EnvironmentKeyWritingModifier<SwiftUI.Font?>>, SwiftUI._ForegroundStyleModifier<SwiftUI.Color>>, SwiftUI._PaddingLayout>)>>, SwiftUI._PaddingLayout>)>> and conformance SwiftUI.HStack<A> : SwiftUI.View in SwiftUI
+  lazy protocol witness table cache variable for type SwiftUI.HStack<SwiftUI.TupleView<(SwiftUI.ModifiedContent<SwiftUI.VStack<SwiftUI.TupleView<(SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<SwiftUI.ProgressView<SwiftUI.EmptyView, SwiftUI.EmptyView>, SwiftUI._PaddingLayout>, SwiftUI._EnvironmentKeyWritingModifier<SwiftUI.AnyShapeStyle?>>, SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<SwiftUI.Text, SwiftUI._PaddingLayout>, SwiftUI._EnvironmentKeyWritingModifier<SwiftUI.Font?>>, SwiftUI._ForegroundStyleModifier<SwiftUI.Color>>, SwiftUI._PaddingLayout>)>>, SwiftUI._PaddingLayout>, Final_Cut_Pro.CloudContentFirstLaunchButtons)>> and conformance SwiftUI.HStack<A> : SwiftUI.View in SwiftUI
+  lazy protocol witness table cache variable for type SwiftUI.ModifiedContent<Final_Cut_Pro.(DownArrow in _1E82FAA25AD1F67A72AB1178B1050D82), SwiftUI._PaddingLayout> and conformance < where A: SwiftUI.View, B: SwiftUI.ViewModifier> SwiftUI.ModifiedContent<A, B> : SwiftUI.View in SwiftUI
+  lazy protocol witness table cache variable for type SwiftUI.ModifiedContent<SwiftUI.ButtonStyleConfiguration.Label, SwiftUI._PaddingLayout> and conformance < where A: SwiftUI.View, B: SwiftUI.ViewModifier> SwiftUI.ModifiedContent<A, B> : SwiftUI.View in SwiftUI
+  lazy protocol witness table cache variable for type SwiftUI.ModifiedContent<SwiftUI.HStack<SwiftUI.TupleView<(SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<Final_Cut_Pro.(DownArrow in _1E82FAA25AD1F67A72AB1178B1050D82), SwiftUI._PaddingLayout>, SwiftUI.AccessibilityAttachmentModifier>, SwiftUI.ModifiedContent<SwiftUI.VStack<SwiftUI.TupleView<(SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<SwiftUI.Text, SwiftUI._PaddingLayout>, SwiftUI._ForegroundStyleModifier<SwiftUI.Color>>, SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<SwiftUI.Text, SwiftUI._EnvironmentKeyWritingModifier<CoreGraphics.CGFloat>>, SwiftUI._EnvironmentKeyWritingModifier<SwiftUI.Font?>>, SwiftUI._ForegroundStyleModifier<SwiftUI.Color>>, SwiftUI._PaddingLayout>)>>, SwiftUI._PaddingLayout>)>>, SwiftUI._FrameLayout> and conformance < where A: SwiftUI.View, B: SwiftUI.ViewModifier> SwiftUI.ModifiedContent<A, B> : SwiftUI.View in SwiftUI
+  lazy protocol witness table cache variable for type SwiftUI.ModifiedContent<SwiftUI.HStack<SwiftUI.TupleView<(SwiftUI.ModifiedContent<SwiftUI.VStack<SwiftUI.TupleView<(SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<SwiftUI.ProgressView<SwiftUI.EmptyView, SwiftUI.EmptyView>, SwiftUI._PaddingLayout>, SwiftUI._EnvironmentKeyWritingModifier<SwiftUI.AnyShapeStyle?>>, SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<SwiftUI.Text, SwiftUI._PaddingLayout>, SwiftUI._EnvironmentKeyWritingModifier<SwiftUI.Font?>>, SwiftUI._ForegroundStyleModifier<SwiftUI.Color>>, SwiftUI._PaddingLayout>)>>, SwiftUI._PaddingLayout>, Final_Cut_Pro.CloudContentFirstLaunchButtons)>>, SwiftUI._PaddingLayout> and conformance < where A: SwiftUI.View, B: SwiftUI.ViewModifier> SwiftUI.ModifiedContent<A, B> : SwiftUI.View in SwiftUI
+  lazy protocol witness table cache variable for type SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<SwiftUI.ButtonStyleConfiguration.Label, SwiftUI._PaddingLayout>, SwiftUI._ForegroundStyleModifier<SwiftUI.Color>> and conformance < where A: SwiftUI.View, B: SwiftUI.ViewModifier> SwiftUI.ModifiedContent<A, B> : SwiftUI.View in SwiftUI
+  lazy protocol witness table cache variable for type SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<SwiftUI.HStack<SwiftUI.TupleView<(SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<Final_Cut_Pro.(DownArrow in _1E82FAA25AD1F67A72AB1178B1050D82), SwiftUI._PaddingLayout>, SwiftUI.AccessibilityAttachmentModifier>, SwiftUI.ModifiedContent<SwiftUI.VStack<SwiftUI.TupleView<(SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<SwiftUI.Text, SwiftUI._PaddingLayout>, SwiftUI._ForegroundStyleModifier<SwiftUI.Color>>, SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<SwiftUI.Text, SwiftUI._EnvironmentKeyWritingModifier<CoreGraphics.CGFloat>>, SwiftUI._EnvironmentKeyWritingModifier<SwiftUI.Font?>>, SwiftUI._ForegroundStyleModifier<SwiftUI.Color>>, SwiftUI._PaddingLayout>)>>, SwiftUI._PaddingLayout>)>>, SwiftUI._FrameLayout>, SwiftUI._PaddingLayout> and conformance < where A: SwiftUI.View, B: SwiftUI.ViewModifier> SwiftUI.ModifiedContent<A, B> : SwiftUI.View in SwiftUI
+  lazy protocol witness table cache variable for type SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<SwiftUI.HStack<SwiftUI.TupleView<(SwiftUI.ModifiedContent<SwiftUI.VStack<SwiftUI.TupleView<(SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<SwiftUI.ProgressView<SwiftUI.EmptyView, SwiftUI.EmptyView>, SwiftUI._PaddingLayout>, SwiftUI._EnvironmentKeyWritingModifier<SwiftUI.AnyShapeStyle?>>, SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<SwiftUI.Text, SwiftUI._PaddingLayout>, SwiftUI._EnvironmentKeyWritingModifier<SwiftUI.Font?>>, SwiftUI._ForegroundStyleModifier<SwiftUI.Color>>, SwiftUI._PaddingLayout>)>>, SwiftUI._PaddingLayout>, Final_Cut_Pro.CloudContentFirstLaunchButtons)>>, SwiftUI._PaddingLayout>, SwiftUI._PaddingLayout> and conformance < where A: SwiftUI.View, B: SwiftUI.ViewModifier> SwiftUI.ModifiedContent<A, B> : SwiftUI.View in SwiftUI
+  lazy protocol witness table cache variable for type SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<SwiftUI.ButtonStyleConfiguration.Label, SwiftUI._PaddingLayout>, SwiftUI._ForegroundStyleModifier<SwiftUI.Color>>, SwiftUI._BackgroundModifier<SwiftUI.LinearGradient>> and conformance < where A: SwiftUI.View, B: SwiftUI.ViewModifier> SwiftUI.ModifiedContent<A, B> : SwiftUI.View in SwiftUI
+  lazy protocol witness table cache variable for type SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<SwiftUI.HStack<SwiftUI.TupleView<(SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<Final_Cut_Pro.(DownArrow in _1E82FAA25AD1F67A72AB1178B1050D82), SwiftUI._PaddingLayout>, SwiftUI.AccessibilityAttachmentModifier>, SwiftUI.ModifiedContent<SwiftUI.VStack<SwiftUI.TupleView<(SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<SwiftUI.Text, SwiftUI._PaddingLayout>, SwiftUI._ForegroundStyleModifier<SwiftUI.Color>>, SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<SwiftUI.Text, SwiftUI._EnvironmentKeyWritingModifier<CoreGraphics.CGFloat>>, SwiftUI._EnvironmentKeyWritingModifier<SwiftUI.Font?>>, SwiftUI._ForegroundStyleModifier<SwiftUI.Color>>, SwiftUI._PaddingLayout>)>>, SwiftUI._PaddingLayout>)>>, SwiftUI._FrameLayout>, SwiftUI._PaddingLayout>, SwiftUI._PaddingLayout> and conformance < where A: SwiftUI.View, B: SwiftUI.ViewModifier> SwiftUI.ModifiedContent<A, B> : SwiftUI.View in SwiftUI
+  lazy protocol witness table cache variable for type SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<SwiftUI.HStack<SwiftUI.TupleView<(SwiftUI.ModifiedContent<SwiftUI.VStack<SwiftUI.TupleView<(SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<SwiftUI.ProgressView<SwiftUI.EmptyView, SwiftUI.EmptyView>, SwiftUI._PaddingLayout>, SwiftUI._EnvironmentKeyWritingModifier<SwiftUI.AnyShapeStyle?>>, SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<SwiftUI.Text, SwiftUI._PaddingLayout>, SwiftUI._EnvironmentKeyWritingModifier<SwiftUI.Font?>>, SwiftUI._ForegroundStyleModifier<SwiftUI.Color>>, SwiftUI._PaddingLayout>)>>, SwiftUI._PaddingLayout>, Final_Cut_Pro.CloudContentFirstLaunchButtons)>>, SwiftUI._PaddingLayout>, SwiftUI._PaddingLayout>, SwiftUI._PaddingLayout> and conformance < where A: SwiftUI.View, B: SwiftUI.ViewModifier> SwiftUI.ModifiedContent<A, B> : SwiftUI.View in SwiftUI
+  lazy protocol witness table cache variable for type SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<SwiftUI.VStack<SwiftUI.TupleView<(Final_Cut_Pro.CloudContentFirstLaunchDownArrowWithText, SwiftUI.Divider, Final_Cut_Pro.CloudContentFirstLaunchProgressBarWithButtons)>>, SwiftUI._ClipEffect<SwiftUI.RoundedRectangle>>, SwiftUI._SafeAreaRegionsIgnoringLayout> and conformance < where A: SwiftUI.View, B: SwiftUI.ViewModifier> SwiftUI.ModifiedContent<A, B> : SwiftUI.View in SwiftUI
+  lazy protocol witness table cache variable for type SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<SwiftUI.VStack<SwiftUI.TupleView<(SwiftUI.Text, SwiftUI.ProgressView<SwiftUI.EmptyView, SwiftUI.EmptyView>, SwiftUI.HStack<SwiftUI.TupleView<(SwiftUI.Spacer, SwiftUI.Button<SwiftUI.Text>)>>)>>, SwiftUI._PaddingLayout>, SwiftUI._FlexFrameLayout> and conformance < where A: SwiftUI.View, B: SwiftUI.ViewModifier> SwiftUI.ModifiedContent<A, B> : SwiftUI.View in SwiftUI
+  lazy protocol witness table cache variable for type SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<SwiftUI.ZStack<SwiftUI.TupleView<(SwiftUI.LinearGradient, SwiftUI.ModifiedContent<SwiftUI.Image, SwiftUI._FrameLayout>)>>, SwiftUI._FrameLayout>, SwiftUI._ClipEffect<SwiftUI.RoundedRectangle>> and conformance < where A: SwiftUI.View, B: SwiftUI.ViewModifier> SwiftUI.ModifiedContent<A, B> : SwiftUI.View in SwiftUI
+  lazy protocol witness table cache variable for type SwiftUI.ModifiedContent<SwiftUI.Text, SwiftUI._FlexFrameLayout> and conformance < where A: SwiftUI.View, B: SwiftUI.ViewModifier> SwiftUI.ModifiedContent<A, B> : SwiftUI.View in SwiftUI
+  lazy protocol witness table cache variable for type SwiftUI.ModifiedContent<SwiftUI.VStack<SwiftUI.TupleView<(Final_Cut_Pro.CloudContentFirstLaunchDownArrowWithText, SwiftUI.Divider, Final_Cut_Pro.CloudContentFirstLaunchProgressBarWithButtons)>>, SwiftUI._ClipEffect<SwiftUI.RoundedRectangle>> and conformance < where A: SwiftUI.View, B: SwiftUI.ViewModifier> SwiftUI.ModifiedContent<A, B> : SwiftUI.View in SwiftUI
+  lazy protocol witness table cache variable for type SwiftUI.ModifiedContent<SwiftUI.VStack<SwiftUI.TupleView<(SwiftUI.Text, SwiftUI.ProgressView<SwiftUI.EmptyView, SwiftUI.EmptyView>, SwiftUI.HStack<SwiftUI.TupleView<(SwiftUI.Spacer, SwiftUI.Button<SwiftUI.Text>)>>)>>, SwiftUI._PaddingLayout> and conformance < where A: SwiftUI.View, B: SwiftUI.ViewModifier> SwiftUI.ModifiedContent<A, B> : SwiftUI.View in SwiftUI
+  lazy protocol witness table cache variable for type SwiftUI.ModifiedContent<SwiftUI.ZStack<SwiftUI.TupleView<(SwiftUI.LinearGradient, SwiftUI.ModifiedContent<SwiftUI.Image, SwiftUI._FrameLayout>)>>, SwiftUI._FrameLayout> and conformance < where A: SwiftUI.View, B: SwiftUI.ViewModifier> SwiftUI.ModifiedContent<A, B> : SwiftUI.View in SwiftUI
+  lazy protocol witness table cache variable for type SwiftUI.TupleView<(SwiftUI.Button<SwiftUI.Text>, SwiftUI.Button<SwiftUI.Text>)> and conformance SwiftUI.TupleView<A> : SwiftUI.View in SwiftUI
+  lazy protocol witness table cache variable for type SwiftUI.VStack<SwiftUI.TupleView<(Final_Cut_Pro.CloudContentFirstLaunchDownArrowWithText, SwiftUI.Divider, Final_Cut_Pro.CloudContentFirstLaunchProgressBarWithButtons)>> and conformance SwiftUI.VStack<A> : SwiftUI.View in SwiftUI
+  lazy protocol witness table cache variable for type SwiftUI.VStack<SwiftUI.TupleView<(SwiftUI.Text, SwiftUI.ProgressView<SwiftUI.EmptyView, SwiftUI.EmptyView>, SwiftUI.HStack<SwiftUI.TupleView<(SwiftUI.Spacer, SwiftUI.Button<SwiftUI.Text>)>>)>> and conformance SwiftUI.VStack<A> : SwiftUI.View in SwiftUI
+  lazy protocol witness table cache variable for type SwiftUI.ZStack<SwiftUI.TupleView<(SwiftUI.LinearGradient, SwiftUI.ModifiedContent<SwiftUI.Image, SwiftUI._FrameLayout>)>> and conformance SwiftUI.ZStack<A> : SwiftUI.View in SwiftUI
+  mangling cache variable for type metadata for (__C.NSFileAttributeKey, Any)
+  mangling cache variable for type metadata for ()?
+  mangling cache variable for type metadata for (<<opaque return type of (extension in SwiftUI):SwiftUI.View.alert<A, B, C where A1: Swift.StringProtocol, B1: SwiftUI.View, C1: SwiftUI.View>(_: A1, isPresented: SwiftUI.Binding<Swift.Bool>, actions: () -> B1, message: () -> C1) -> some>>.0, SwiftUI.ModifiedContent<<<opaque return type of (extension in SwiftUI):SwiftUI.View.buttonStyle<A where A1: SwiftUI.ButtonStyle>(A1) -> some>>.0, SwiftUI._ClipEffect<SwiftUI.RoundedRectangle>>)
+  mangling cache variable for type metadata for (Final_Cut_Pro.CloudContentFirstLaunchDownArrowWithText, SwiftUI.Divider, Final_Cut_Pro.CloudContentFirstLaunchProgressBarWithButtons)
+  mangling cache variable for type metadata for (Final_Cut_Pro.EffectStatus, Final_Cut_Pro.EffectStatus)
+  mangling cache variable for type metadata for (Swift.AnyHashable, Any)
+  mangling cache variable for type metadata for (Swift.String, Any)
+  mangling cache variable for type metadata for (Swift.String, Final_Cut_Pro.EffectStatus)
+  mangling cache variable for type metadata for (SwiftUI.Button<SwiftUI.Text>, SwiftUI.Button<SwiftUI.Text>)
+  mangling cache variable for type metadata for (SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<Final_Cut_Pro.(DownArrow in _1E82FAA25AD1F67A72AB1178B1050D82), SwiftUI._PaddingLayout>, SwiftUI.AccessibilityAttachmentModifier>, SwiftUI.ModifiedContent<SwiftUI.VStack<SwiftUI.TupleView<(SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<SwiftUI.Text, SwiftUI._PaddingLayout>, SwiftUI._ForegroundStyleModifier<SwiftUI.Color>>, SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<SwiftUI.Text, SwiftUI._EnvironmentKeyWritingModifier<CoreGraphics.CGFloat>>, SwiftUI._EnvironmentKeyWritingModifier<SwiftUI.Font?>>, SwiftUI._ForegroundStyleModifier<SwiftUI.Color>>, SwiftUI._PaddingLayout>)>>, SwiftUI._PaddingLayout>)
+  mangling cache variable for type metadata for (SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<SwiftUI.ProgressView<SwiftUI.EmptyView, SwiftUI.EmptyView>, SwiftUI._PaddingLayout>, SwiftUI._EnvironmentKeyWritingModifier<SwiftUI.AnyShapeStyle?>>, SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<SwiftUI.Text, SwiftUI._PaddingLayout>, SwiftUI._EnvironmentKeyWritingModifier<SwiftUI.Font?>>, SwiftUI._ForegroundStyleModifier<SwiftUI.Color>>, SwiftUI._PaddingLayout>)
+  mangling cache variable for type metadata for (SwiftUI.ModifiedContent<SwiftUI.VStack<SwiftUI.TupleView<(SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<SwiftUI.ProgressView<SwiftUI.EmptyView, SwiftUI.EmptyView>, SwiftUI._PaddingLayout>, SwiftUI._EnvironmentKeyWritingModifier<SwiftUI.AnyShapeStyle?>>, SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<SwiftUI.Text, SwiftUI._PaddingLayout>, SwiftUI._EnvironmentKeyWritingModifier<SwiftUI.Font?>>, SwiftUI._ForegroundStyleModifier<SwiftUI.Color>>, SwiftUI._PaddingLayout>)>>, SwiftUI._PaddingLayout>, Final_Cut_Pro.CloudContentFirstLaunchButtons)
+  mangling cache variable for type metadata for (SwiftUI.Spacer, SwiftUI.Button<SwiftUI.Text>)
+  mangling cache variable for type metadata for (SwiftUI.Text, SwiftUI.ProgressView<SwiftUI.EmptyView, SwiftUI.EmptyView>, SwiftUI.HStack<SwiftUI.TupleView<(SwiftUI.Spacer, SwiftUI.Button<SwiftUI.Text>)>>)
+  mangling cache variable for type metadata for (title: Swift.String, action: () -> ())
+  mangling cache variable for type metadata for [(extension in Dispatch):__C.OS_dispatch_queue.Attributes]
+  mangling cache variable for type metadata for [Dispatch.DispatchWorkItemFlags]
+  mangling cache variable for type metadata for [Final_Cut_Pro.CatalogRegistryManifestEffectDecodable]
+  mangling cache variable for type metadata for [Final_Cut_Pro.CloudContentDefaultsInteractor.DefaultsKey]
+  mangling cache variable for type metadata for [Final_Cut_Pro.CloudContentEnvironment]
+  mangling cache variable for type metadata for [Final_Cut_Pro.CloudContentMockApplicationStatus]
+  mangling cache variable for type metadata for [Final_Cut_Pro.MockCloudContentEffectMockScenario]
+  mangling cache variable for type metadata for [Swift.String : Any]
+  mangling cache variable for type metadata for [Swift.String : Final_Cut_Pro.CloudContentCatalogRegistryManifest]
+  mangling cache variable for type metadata for [Swift.String]
+  mangling cache variable for type metadata for <<opaque return type of (extension in SwiftUI):SwiftUI.View.alert<A, B, C where A1: Swift.StringProtocol, B1: SwiftUI.View, C1: SwiftUI.View>(_: A1, isPresented: SwiftUI.Binding<Swift.Bool>, actions: () -> B1, message: () -> C1) -> some>>.0
+  mangling cache variable for type metadata for Any?
+  mangling cache variable for type metadata for CloudContent.AssetError?
+  mangling cache variable for type metadata for CloudContent.CatalogError?
+  mangling cache variable for type metadata for CloudContent.CatalogError.PermissionError?
+  mangling cache variable for type metadata for Combine.Published<Swift.Bool>
+  mangling cache variable for type metadata for Combine.Published<Swift.Bool>.Publisher
+  mangling cache variable for type metadata for Combine.Published<Swift.Double>
+  mangling cache variable for type metadata for Combine.Published<Swift.Double>.Publisher
+  mangling cache variable for type metadata for Combine.Published<Swift.String>
+  mangling cache variable for type metadata for Combine.Published<Swift.String>.Publisher
+  mangling cache variable for type metadata for Final_Cut_Pro.CloudContentEffect
+  mangling cache variable for type metadata for Final_Cut_Pro.CloudContentEffect?
+  mangling cache variable for type metadata for Final_Cut_Pro.CloudContentOperation
+  mangling cache variable for type metadata for Final_Cut_Pro.EffectStatus?
+  mangling cache variable for type metadata for Foundation.Date?
+  mangling cache variable for type metadata for Foundation.URL?
+  mangling cache variable for type metadata for Swift._ContiguousArrayStorage<(__C.NSFileAttributeKey, Any)>
+  mangling cache variable for type metadata for Swift._ContiguousArrayStorage<(Swift.AnyHashable, Any)>
+  mangling cache variable for type metadata for Swift._ContiguousArrayStorage<(Swift.String, Any)>
+  mangling cache variable for type metadata for Swift._ContiguousArrayStorage<Any>
+  mangling cache variable for type metadata for Swift._ContiguousArrayStorage<CloudContent.ContentTag>
+  mangling cache variable for type metadata for Swift._ContiguousArrayStorage<CloudContent.MetadataTag>
+  mangling cache variable for type metadata for Swift._ContiguousArrayStorage<Final_Cut_Pro.CatalogRegistryManifestEffectDecodable>
+  mangling cache variable for type metadata for Swift._ContiguousArrayStorage<Final_Cut_Pro.CloudContentEffect>
+  mangling cache variable for type metadata for Swift._ContiguousArrayStorage<Final_Cut_Pro.CloudContentOperation>
+  mangling cache variable for type metadata for Swift._ContiguousArrayStorage<Foundation.URL>
+  mangling cache variable for type metadata for Swift._ContiguousArrayStorage<Swift.CVarArg>
+  mangling cache variable for type metadata for Swift._ContiguousArrayStorage<Swift.Double>
+  mangling cache variable for type metadata for Swift._ContiguousArrayStorage<Swift.Int>
+  mangling cache variable for type metadata for Swift._ContiguousArrayStorage<Swift.String>
+  mangling cache variable for type metadata for Swift._ContiguousArrayStorage<SwiftUI.Color>
+  mangling cache variable for type metadata for Swift._ContiguousArrayStorage<SwiftUI.Edge.Set>
+  mangling cache variable for type metadata for Swift._DictionaryStorage<__C.NSFileAttributeKey, Any>
+  mangling cache variable for type metadata for Swift._DictionaryStorage<Swift.AnyHashable, Any>
+  mangling cache variable for type metadata for Swift._DictionaryStorage<Swift.String, __C.FFCloudContentDownloadTask>
+  mangling cache variable for type metadata for Swift._DictionaryStorage<Swift.String, Any>
+  mangling cache variable for type metadata for Swift._DictionaryStorage<Swift.String, Final_Cut_Pro.CloudContentCatalogRegistryManifest>
+  mangling cache variable for type metadata for Swift._DictionaryStorage<Swift.String, Final_Cut_Pro.CloudContentGroupStatus>
+  mangling cache variable for type metadata for Swift._DictionaryStorage<Swift.String, Final_Cut_Pro.CloudContentOperation>
+  mangling cache variable for type metadata for Swift._DictionaryStorage<Swift.String, Final_Cut_Pro.EffectStatus>
+  mangling cache variable for type metadata for Swift._SetStorage<CloudContent.Asset>
+  mangling cache variable for type metadata for Swift._SetStorage<Swift.String>
+  mangling cache variable for type metadata for Swift.ArraySlice<Swift.String>
+  mangling cache variable for type metadata for Swift.CheckedContinuation<__C.FFCloudContentDownloadStatus, Swift.Never>
+  mangling cache variable for type metadata for Swift.CheckedContinuation<Foundation.URL, Swift.Error>
+  mangling cache variable for type metadata for Swift.Error
+  mangling cache variable for type metadata for Swift.KeyedDecodingContainer<Final_Cut_Pro.CatalogRegistryManifestDecodable.CodingKeys>
+  mangling cache variable for type metadata for Swift.KeyedDecodingContainer<Final_Cut_Pro.CatalogRegistryManifestEffectDecodable.CodingKeys>
+  mangling cache variable for type metadata for Swift.ManagedBuffer<__C.FFCloudContentDownloadStatus, __C.os_unfair_lock_s>
+  mangling cache variable for type metadata for Swift.ManagedBuffer<Final_Cut_Pro.CloudContentDownloadOperation.(State in _7AC4DA4B056DAFBA3C400EDA29B5F3B4), __C.os_unfair_lock_s>
+  mangling cache variable for type metadata for Swift.ManagedBuffer<Swift.Bool, __C.os_unfair_lock_s>
+  mangling cache variable for type metadata for Swift.ManagedBuffer<Swift.Double, __C.os_unfair_lock_s>
+  mangling cache variable for type metadata for Swift.ManagedBuffer<Swift.Int, __C.os_unfair_lock_s>
+  mangling cache variable for type metadata for Swift.ManagedBuffer<Swift.Result<Foundation.URL, Swift.Error>?, __C.os_unfair_lock_s>
+  mangling cache variable for type metadata for Swift.Result<Foundation.URL, CloudContent.AssetError>
+  mangling cache variable for type metadata for Swift.Result<Foundation.URL, Swift.Error>
+  mangling cache variable for type metadata for Swift.Result<Foundation.URL, Swift.Error>?
+  mangling cache variable for type metadata for Swift.TaskPriority?
+  mangling cache variable for type metadata for Swift.UnsafeContinuation<__C.FFCloudContentDownloadStatus, Swift.Never>
+  mangling cache variable for type metadata for Swift.UnsafeContinuation<__C.NSModalResponse, Swift.Never>
+  mangling cache variable for type metadata for Swift.UnsafeContinuation<(), Swift.Never>
+  mangling cache variable for type metadata for SwiftUI._BackgroundModifier<SwiftUI.LinearGradient>
+  mangling cache variable for type metadata for SwiftUI._ClipEffect<SwiftUI.RoundedRectangle>
+  mangling cache variable for type metadata for SwiftUI._ForegroundStyleModifier<SwiftUI.Color>
+  mangling cache variable for type metadata for SwiftUI._VariadicView.Tree<SwiftUI._HStackLayout, SwiftUI.TupleView<(<<opaque return type of (extension in SwiftUI):SwiftUI.View.alert<A, B, C where A1: Swift.StringProtocol, B1: SwiftUI.View, C1: SwiftUI.View>(_: A1, isPresented: SwiftUI.Binding<Swift.Bool>, actions: () -> B1, message: () -> C1) -> some>>.0, SwiftUI.ModifiedContent<<<opaque return type of (extension in SwiftUI):SwiftUI.View.buttonStyle<A where A1: SwiftUI.ButtonStyle>(A1) -> some>>.0, SwiftUI._ClipEffect<SwiftUI.RoundedRectangle>>)>>
+  mangling cache variable for type metadata for SwiftUI._VariadicView.Tree<SwiftUI._HStackLayout, SwiftUI.TupleView<(SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<Final_Cut_Pro.(DownArrow in _1E82FAA25AD1F67A72AB1178B1050D82), SwiftUI._PaddingLayout>, SwiftUI.AccessibilityAttachmentModifier>, SwiftUI.ModifiedContent<SwiftUI.VStack<SwiftUI.TupleView<(SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<SwiftUI.Text, SwiftUI._PaddingLayout>, SwiftUI._ForegroundStyleModifier<SwiftUI.Color>>, SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<SwiftUI.Text, SwiftUI._EnvironmentKeyWritingModifier<CoreGraphics.CGFloat>>, SwiftUI._EnvironmentKeyWritingModifier<SwiftUI.Font?>>, SwiftUI._ForegroundStyleModifier<SwiftUI.Color>>, SwiftUI._PaddingLayout>)>>, SwiftUI._PaddingLayout>)>>
+  mangling cache variable for type metadata for SwiftUI._VariadicView.Tree<SwiftUI._HStackLayout, SwiftUI.TupleView<(SwiftUI.ModifiedContent<SwiftUI.VStack<SwiftUI.TupleView<(SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<SwiftUI.ProgressView<SwiftUI.EmptyView, SwiftUI.EmptyView>, SwiftUI._PaddingLayout>, SwiftUI._EnvironmentKeyWritingModifier<SwiftUI.AnyShapeStyle?>>, SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<SwiftUI.ModifiedContent<SwiftUI.Text, SwiftUI._PaddingLayout>, SwiftUI._EnvironmentKeyWritingModifier<SwiftUI.Font?>>, SwiftUI._ForegroundStyleModifier<SwiftUI.Color>>, SwiftUI._PaddingLayout>)>>, SwiftUI._PaddingLayout>, Final_Cut_Pro.CloudContentFirstLaunchButtons)>>
+  mangling cache variable for type metadata for SwiftUI._VariadicView.Tree<SwiftUI._HStackLayout, SwiftUI.TupleView<(SwiftUI.Spacer, SwiftUI.Button<SwiftUI.Text>)>>
+
+## Flexo (84 Swift symbols)
+  S nominal type descriptor for Flexo.FFAnalysisSearchWarningViewController
+  S nominal type descriptor for Flexo.FFGenerateCaptionsLanguagePicker
+  S nominal type descriptor for Flexo.FFImagePlayground
+  S nominal type descriptor for Flexo.FlexoTip
+  S nominal type descriptor for Flexo.FlexoTipInvalidationReason
+  S nominal type descriptor for Flexo.TipSetupHelper
+  S type metadata for Flexo.FFAnalysisSearchWarningViewController
+  S type metadata for Flexo.FFGenerateCaptionsLanguagePicker
+  S type metadata for Flexo.FFImagePlayground
+  S type metadata for Flexo.FlexoTip
+  S type metadata for Flexo.FlexoTipInvalidationReason
+  S type metadata for Flexo.TipSetupHelper
+  T type metadata accessor for Flexo.FFAnalysisSearchWarningViewController
+  T type metadata accessor for Flexo.FFGenerateCaptionsLanguagePicker
+  T type metadata accessor for Flexo.FFImagePlayground
+  T type metadata accessor for Flexo.FlexoTip
+  T type metadata accessor for Flexo.FlexoTipInvalidationReason
+  T type metadata accessor for Flexo.TipSetupHelper
+
+## Ozone (6489 Swift symbols)
+  metaclass for Ozone.(ResourceBundleClass in _DBC012E1CF90C442E149DE5324229B6F)
+  s anonymous descriptor Ozone.(ResourceBundleClass in _DBC012E1CF90C442E149DE5324229B6F)
+  s full type metadata for Ozone.(OZImagePlaygroundDelegateProxy in _99A494467370313FB90243F3B3E85032)
+  s full type metadata for Ozone.OZImagePlayground
+  s nominal type descriptor for Ozone.(OZImagePlaygroundDelegateProxy in _99A494467370313FB90243F3B3E85032)
+  s nominal type descriptor for Ozone.(ResourceBundleClass in _DBC012E1CF90C442E149DE5324229B6F)
+  S nominal type descriptor for Ozone.OZImagePlayground
+  s reflection metadata field descriptor Ozone.(ResourceBundleClass in _DBC012E1CF90C442E149DE5324229B6F)
+  s type metadata for Ozone.(OZImagePlaygroundDelegateProxy in _99A494467370313FB90243F3B3E85032)
+  S type metadata for Ozone.OZImagePlayground
+  t Ozone.(ResourceBundleClass in _DBC012E1CF90C442E149DE5324229B6F).__deallocating_deinit
+  t type metadata accessor for Ozone.(OZImagePlaygroundDelegateProxy in _99A494467370313FB90243F3B3E85032)
+  t type metadata accessor for Ozone.(ResourceBundleClass in _DBC012E1CF90C442E149DE5324229B6F)
+  T type metadata accessor for Ozone.OZImagePlayground
+  type metadata for Ozone.(ResourceBundleClass in _DBC012E1CF90C442E149DE5324229B6F)
+  U nominal type descriptor for ImagePlayground.ImagePlaygroundViewController
+  U protocol witness table for Swift.MainActor : Swift.Actor in Swift
+  U type metadata accessor for DeveloperToolsSupport.ImageResource
+  U type metadata accessor for Foundation.URL
+  U type metadata accessor for ImagePlayground.ImagePlaygroundViewController
+  U type metadata accessor for Swift.MainActor
+  ull type metadata for Ozone.(ResourceBundleClass in _DBC012E1CF90C442E149DE5324229B6F)
+
+## TimelineKit (0
+0 Swift symbols)
+
+## LunaKit (0
+0 Swift symbols)
+
+## Helium (0
+0 Swift symbols)
+
+## HeliumSenso (0
+0 Swift symbols)
+
+## Lithium (0
+0 Swift symbols)
+
+## ProCore (0
+0 Swift symbols)
+
+## ProAppSupport (328 Swift symbols)
+  D metaclass for ProAppSupport.TaskManager
+  D type metadata for ProAppSupport.TaskManager
+  S class metadata base offset for ProAppSupport.App
+  S class metadata base offset for ProAppSupport.AppIdentity
+  S class metadata base offset for ProAppSupport.AppInfo
+  S class metadata base offset for ProAppSupport.AppModel
+  S class metadata base offset for ProAppSupport.Log
+  S class metadata base offset for ProAppSupport.LogCategory
+  S class metadata base offset for ProAppSupport.MultiLanguageOptionSet
+  S class metadata base offset for ProAppSupport.RouteDetail
+  S class metadata base offset for ProAppSupport.TaskManager
+  S enum case for (extension in ProAppSupport):Swift.String.TruncationPosition.leading((extension in ProAppSupport):Swift.String.TruncationPosition.Type) -> (extension in ProAppSupport):Swift.String.TruncationPosition
+  S enum case for (extension in ProAppSupport):Swift.String.TruncationPosition.middle((extension in ProAppSupport):Swift.String.TruncationPosition.Type) -> (extension in ProAppSupport):Swift.String.TruncationPosition
+  S enum case for (extension in ProAppSupport):Swift.String.TruncationPosition.trailing((extension in ProAppSupport):Swift.String.TruncationPosition.Type) -> (extension in ProAppSupport):Swift.String.TruncationPosition
+  S enum case for ProAppSupport.Log.UserDefaultKeys.category(ProAppSupport.Log.UserDefaultKeys.Type) -> ProAppSupport.Log.UserDefaultKeys
+  S enum case for ProAppSupport.Log.UserDefaultKeys.level(ProAppSupport.Log.UserDefaultKeys.Type) -> ProAppSupport.Log.UserDefaultKeys
+  S enum case for ProAppSupport.Log.UserDefaultKeys.showThreadInfo(ProAppSupport.Log.UserDefaultKeys.Type) -> ProAppSupport.Log.UserDefaultKeys
+  S enum case for ProAppSupport.Log.UserDefaultKeys.showUI(ProAppSupport.Log.UserDefaultKeys.Type) -> ProAppSupport.Log.UserDefaultKeys
+  S enum case for ProAppSupport.LogLevel.debug(ProAppSupport.LogLevel.Type) -> ProAppSupport.LogLevel
+  S enum case for ProAppSupport.LogLevel.error(ProAppSupport.LogLevel.Type) -> ProAppSupport.LogLevel
+  S enum case for ProAppSupport.LogLevel.failure(ProAppSupport.LogLevel.Type) -> ProAppSupport.LogLevel
+  S enum case for ProAppSupport.LogLevel.info(ProAppSupport.LogLevel.Type) -> ProAppSupport.LogLevel
+  S enum case for ProAppSupport.LogLevel.trace(ProAppSupport.LogLevel.Type) -> ProAppSupport.LogLevel
+  S enum case for ProAppSupport.LogLevel.warning(ProAppSupport.LogLevel.Type) -> ProAppSupport.LogLevel
+  S nominal type descriptor for (extension in ProAppSupport):Swift.String.TruncationPosition
+  S nominal type descriptor for ProAppSupport.App
+  S nominal type descriptor for ProAppSupport.AppIdentity
+  S nominal type descriptor for ProAppSupport.AppInfo
+  S nominal type descriptor for ProAppSupport.AppModel
+  S nominal type descriptor for ProAppSupport.Log
+  S nominal type descriptor for ProAppSupport.Log.UserDefaultKeys
+  S nominal type descriptor for ProAppSupport.LogCategory
+  S nominal type descriptor for ProAppSupport.LogLevel
+  S nominal type descriptor for ProAppSupport.MultiLanguageOptionSet
+  S nominal type descriptor for ProAppSupport.RouteDetail
+  S nominal type descriptor for ProAppSupport.RoutingDecision
+  S nominal type descriptor for ProAppSupport.TaskManager
+  S type metadata for (extension in ProAppSupport):Swift.String.TruncationPosition
+  S type metadata for ProAppSupport.App
+  S type metadata for ProAppSupport.AppIdentity
+  S type metadata for ProAppSupport.AppInfo
+  S type metadata for ProAppSupport.AppModel
+  S type metadata for ProAppSupport.Log
+  S type metadata for ProAppSupport.Log.UserDefaultKeys
+  S type metadata for ProAppSupport.LogCategory
+  S type metadata for ProAppSupport.LogLevel
+  S type metadata for ProAppSupport.MultiLanguageOptionSet
+  S type metadata for ProAppSupport.RouteDetail
+  S type metadata for ProAppSupport.RoutingDecision
+  T type metadata accessor for (extension in ProAppSupport):Swift.String.TruncationPosition
+  T type metadata accessor for ProAppSupport.App
+  T type metadata accessor for ProAppSupport.AppIdentity
+  T type metadata accessor for ProAppSupport.AppInfo
+  T type metadata accessor for ProAppSupport.AppModel
+  T type metadata accessor for ProAppSupport.Log
+  T type metadata accessor for ProAppSupport.Log.UserDefaultKeys
+  T type metadata accessor for ProAppSupport.LogCategory
+  T type metadata accessor for ProAppSupport.LogLevel
+  T type metadata accessor for ProAppSupport.MultiLanguageOptionSet
+  T type metadata accessor for ProAppSupport.RouteDetail
+  T type metadata accessor for ProAppSupport.RoutingDecision
+  T type metadata accessor for ProAppSupport.TaskManager
+
+## ProInspector (0
+0 Swift symbols)
+
+## ProInspectorFoundation (0
+0 Swift symbols)
+
+## ProChannel (0
+0 Swift symbols)
+
+## ProCurveEditor (0
+0 Swift symbols)
+
+## ProMedia (0
+0 Swift symbols)
+
+## ProMediaLibrary (845 Swift symbols)
+  D type metadata for ProMediaLibrary.InterchangeFormat
+  D type metadata for ProMediaLibrary.InterchangeFormat.Value
+  D type metadata for ProMediaLibrary.Item
+  D type metadata for ProMediaLibrary.ItemPattern
+  D type metadata for ProMediaLibrary.ItemPredicate
+  D type metadata for ProMediaLibrary.ItemType
+  D type metadata for ProMediaLibrary.LibraryManagerError
+  D type metadata for ProMediaLibrary.LibraryOrganizer.NodeDescriptor
+  D type metadata for ProMediaLibrary.QueryOptions
+  D type metadata for ProMediaLibrary.Simplified
+  D type metadata for ProMediaLibrary.StaticQuery
+  S class metadata base offset for ProMediaLibrary.LibraryOrganizer
+  S enum case for ProMediaLibrary.AnnotationPattern.favorite(ProMediaLibrary.AnnotationPattern.Type) -> ProMediaLibrary.AnnotationPattern
+  S enum case for ProMediaLibrary.AnnotationPattern.indeterminate(ProMediaLibrary.AnnotationPattern.Type) -> ProMediaLibrary.AnnotationPattern
+  S enum case for ProMediaLibrary.AnnotationPattern.keyword(ProMediaLibrary.AnnotationPattern.Type) -> (ProMediaLibrary.KeywordType) -> ProMediaLibrary.AnnotationPattern
+  S enum case for ProMediaLibrary.AnnotationPattern.range(ProMediaLibrary.AnnotationPattern.Type) -> ProMediaLibrary.AnnotationPattern
+  S enum case for ProMediaLibrary.AnnotationPattern.reject(ProMediaLibrary.AnnotationPattern.Type) -> ProMediaLibrary.AnnotationPattern
+  S enum case for ProMediaLibrary.AnnotationPattern.select(ProMediaLibrary.AnnotationPattern.Type) -> ProMediaLibrary.AnnotationPattern
+  S enum case for ProMediaLibrary.AnnotationPattern.use(ProMediaLibrary.AnnotationPattern.Type) -> ProMediaLibrary.AnnotationPattern
+  S enum case for ProMediaLibrary.AnnotationType.favorite(ProMediaLibrary.AnnotationType.Type) -> ProMediaLibrary.AnnotationType
+  S enum case for ProMediaLibrary.AnnotationType.keyword(ProMediaLibrary.AnnotationType.Type) -> ProMediaLibrary.AnnotationType
+  S enum case for ProMediaLibrary.AnnotationType.range(ProMediaLibrary.AnnotationType.Type) -> ProMediaLibrary.AnnotationType
+  S enum case for ProMediaLibrary.AnnotationType.reject(ProMediaLibrary.AnnotationType.Type) -> ProMediaLibrary.AnnotationType
+  S enum case for ProMediaLibrary.AnnotationType.select(ProMediaLibrary.AnnotationType.Type) -> ProMediaLibrary.AnnotationType
+  S enum case for ProMediaLibrary.AnnotationType.use(ProMediaLibrary.AnnotationType.Type) -> ProMediaLibrary.AnnotationType
+  S enum case for ProMediaLibrary.ChangeType.itemsAdded(ProMediaLibrary.ChangeType.Type) -> ProMediaLibrary.ChangeType
+  S enum case for ProMediaLibrary.ChangeType.itemsChanged(ProMediaLibrary.ChangeType.Type) -> ProMediaLibrary.ChangeType
+  S enum case for ProMediaLibrary.ChangeType.itemsDeleted(ProMediaLibrary.ChangeType.Type) -> ProMediaLibrary.ChangeType
+  S enum case for ProMediaLibrary.ChangeType.itemsMoved(ProMediaLibrary.ChangeType.Type) -> ProMediaLibrary.ChangeType
+  S enum case for ProMediaLibrary.ChangeType.itemsUpdated(ProMediaLibrary.ChangeType.Type) -> ProMediaLibrary.ChangeType
+  S enum case for ProMediaLibrary.ChangeType.unknown(ProMediaLibrary.ChangeType.Type) -> ProMediaLibrary.ChangeType
+  S enum case for ProMediaLibrary.ClipPattern.assetClip(ProMediaLibrary.ClipPattern.Type) -> ProMediaLibrary.ClipPattern
+  S enum case for ProMediaLibrary.ClipPattern.compositeClip(ProMediaLibrary.ClipPattern.Type) -> ProMediaLibrary.ClipPattern
+  S enum case for ProMediaLibrary.ClipPattern.indeterminate(ProMediaLibrary.ClipPattern.Type) -> ProMediaLibrary.ClipPattern
+  S enum case for ProMediaLibrary.ClipType.assetClip(ProMediaLibrary.ClipType.Type) -> ProMediaLibrary.ClipType
+  S enum case for ProMediaLibrary.ClipType.compositeClip(ProMediaLibrary.ClipType.Type) -> ProMediaLibrary.ClipType
+  S enum case for ProMediaLibrary.DerivativeFormat.originalMedia(ProMediaLibrary.DerivativeFormat.Type) -> ProMediaLibrary.DerivativeFormat
+  S enum case for ProMediaLibrary.DerivativeFormat.renderedMedia(ProMediaLibrary.DerivativeFormat.Type) -> ProMediaLibrary.DerivativeFormat
+  S enum case for ProMediaLibrary.DerivativeFormat.thumbnail(ProMediaLibrary.DerivativeFormat.Type) -> ProMediaLibrary.DerivativeFormat
+  S enum case for ProMediaLibrary.DerivativeFormat.waveform(ProMediaLibrary.DerivativeFormat.Type) -> ProMediaLibrary.DerivativeFormat
+  S enum case for ProMediaLibrary.DerivativeRequest.renderedMedia(ProMediaLibrary.DerivativeRequest.Type) -> (ProMediaLibrary.RenderedMediaDerivativeRequest) -> ProMediaLibrary.DerivativeRequest
+  S enum case for ProMediaLibrary.DerivativeRequest.thumbnail(ProMediaLibrary.DerivativeRequest.Type) -> (ProMediaLibrary.ThumbnailDerivativeRequest) -> ProMediaLibrary.DerivativeRequest
+  S enum case for ProMediaLibrary.DerivativeRequest.waveform(ProMediaLibrary.DerivativeRequest.Type) -> (ProMediaLibrary.WaveformDerivativeRequest) -> ProMediaLibrary.DerivativeRequest
+  S enum case for ProMediaLibrary.DerivativeValue.renderedMedia(ProMediaLibrary.DerivativeValue.Type) -> (Any) -> ProMediaLibrary.DerivativeValue
+  S enum case for ProMediaLibrary.DerivativeValue.thumbnail(ProMediaLibrary.DerivativeValue.Type) -> (__C.NSImage) -> ProMediaLibrary.DerivativeValue
+  S enum case for ProMediaLibrary.DerivativeValue.waveform(ProMediaLibrary.DerivativeValue.Type) -> (__C.NSImage) -> ProMediaLibrary.DerivativeValue
+  S enum case for ProMediaLibrary.InterchangeFormat.folder(ProMediaLibrary.InterchangeFormat.Type) -> ProMediaLibrary.InterchangeFormat
+  S enum case for ProMediaLibrary.InterchangeFormat.objectData(ProMediaLibrary.InterchangeFormat.Type) -> (UniformTypeIdentifiers.UTType) -> ProMediaLibrary.InterchangeFormat
+  S enum case for ProMediaLibrary.InterchangeFormat.objectIdentifier(ProMediaLibrary.InterchangeFormat.Type) -> (Swift.String) -> ProMediaLibrary.InterchangeFormat
+  S enum case for ProMediaLibrary.InterchangeFormat.objectReference(ProMediaLibrary.InterchangeFormat.Type) -> (UniformTypeIdentifiers.UTType) -> ProMediaLibrary.InterchangeFormat
+  S enum case for ProMediaLibrary.InterchangeFormat.Value.folder(ProMediaLibrary.InterchangeFormat.Value.Type) -> (Swift.String) -> ProMediaLibrary.InterchangeFormat.Value
+  S enum case for ProMediaLibrary.InterchangeFormat.Value.objectData(ProMediaLibrary.InterchangeFormat.Value.Type) -> (UniformTypeIdentifiers.UTType, Foundation.Data) -> ProMediaLibrary.InterchangeFormat.Value
+  S enum case for ProMediaLibrary.InterchangeFormat.Value.objectIdentifier(ProMediaLibrary.InterchangeFormat.Value.Type) -> (Swift.String, Swift.String) -> ProMediaLibrary.InterchangeFormat.Value
+  S enum case for ProMediaLibrary.InterchangeFormat.Value.objectReference(ProMediaLibrary.InterchangeFormat.Value.Type) -> (Foundation.URL) -> ProMediaLibrary.InterchangeFormat.Value
+  S enum case for ProMediaLibrary.Item.ItemRelationship.annotating(ProMediaLibrary.Item.ItemRelationship.Type) -> ProMediaLibrary.Item.ItemRelationship
+  S enum case for ProMediaLibrary.Item.ItemRelationship.annotation(ProMediaLibrary.Item.ItemRelationship.Type) -> ProMediaLibrary.Item.ItemRelationship
+  S enum case for ProMediaLibrary.Item.ItemRelationship.containedBy(ProMediaLibrary.Item.ItemRelationship.Type) -> ProMediaLibrary.Item.ItemRelationship
+  S enum case for ProMediaLibrary.Item.ItemRelationship.containing(ProMediaLibrary.Item.ItemRelationship.Type) -> ProMediaLibrary.Item.ItemRelationship
+  S enum case for ProMediaLibrary.Item.ItemRelationship.observation(ProMediaLibrary.Item.ItemRelationship.Type) -> ProMediaLibrary.Item.ItemRelationship
+  S enum case for ProMediaLibrary.Item.ItemRelationship.observing(ProMediaLibrary.Item.ItemRelationship.Type) -> ProMediaLibrary.Item.ItemRelationship
+  S enum case for ProMediaLibrary.ItemCollectionPattern.bundle(ProMediaLibrary.ItemCollectionPattern.Type) -> ProMediaLibrary.ItemCollectionPattern
+  S enum case for ProMediaLibrary.ItemCollectionPattern.folder(ProMediaLibrary.ItemCollectionPattern.Type) -> ProMediaLibrary.ItemCollectionPattern
+  S enum case for ProMediaLibrary.ItemCollectionPattern.indeterminate(ProMediaLibrary.ItemCollectionPattern.Type) -> ProMediaLibrary.ItemCollectionPattern
+  S enum case for ProMediaLibrary.ItemCollectionPattern.smartCollection(ProMediaLibrary.ItemCollectionPattern.Type) -> ProMediaLibrary.ItemCollectionPattern
+  S enum case for ProMediaLibrary.ItemCollectionType.bundle(ProMediaLibrary.ItemCollectionType.Type) -> ProMediaLibrary.ItemCollectionType
+  S enum case for ProMediaLibrary.ItemCollectionType.folder(ProMediaLibrary.ItemCollectionType.Type) -> ProMediaLibrary.ItemCollectionType
+  S enum case for ProMediaLibrary.ItemCollectionType.smartCollection(ProMediaLibrary.ItemCollectionType.Type) -> ProMediaLibrary.ItemCollectionType
+  S enum case for ProMediaLibrary.ItemPattern.annotation(ProMediaLibrary.ItemPattern.Type) -> (ProMediaLibrary.AnnotationPattern) -> ProMediaLibrary.ItemPattern
+  S enum case for ProMediaLibrary.ItemPattern.clip(ProMediaLibrary.ItemPattern.Type) -> (ProMediaLibrary.ClipPattern) -> ProMediaLibrary.ItemPattern
+  S enum case for ProMediaLibrary.ItemPattern.collection(ProMediaLibrary.ItemPattern.Type) -> (ProMediaLibrary.ItemCollectionPattern, ProMediaLibrary.ItemPattern) -> ProMediaLibrary.ItemPattern
+  S enum case for ProMediaLibrary.ItemPattern.document(ProMediaLibrary.ItemPattern.Type) -> (UniformTypeIdentifiers.UTType) -> ProMediaLibrary.ItemPattern
+  S enum case for ProMediaLibrary.ItemPattern.item(ProMediaLibrary.ItemPattern.Type) -> ProMediaLibrary.ItemPattern
+  S enum case for ProMediaLibrary.ItemPattern.observation(ProMediaLibrary.ItemPattern.Type) -> (ProMediaLibrary.ObservationPattern) -> ProMediaLibrary.ItemPattern
+  S enum case for ProMediaLibrary.ItemPattern.person(ProMediaLibrary.ItemPattern.Type) -> ProMediaLibrary.ItemPattern
+  S enum case for ProMediaLibrary.ItemPattern.soundEffect(ProMediaLibrary.ItemPattern.Type) -> (ProMediaLibrary.SoundEffectPattern) -> ProMediaLibrary.ItemPattern
+  S enum case for ProMediaLibrary.ItemPattern.visualEffect(ProMediaLibrary.ItemPattern.Type) -> (ProMediaLibrary.VisualEffectPattern) -> ProMediaLibrary.ItemPattern
+  S enum case for ProMediaLibrary.ItemPredicate.alwaysFalse(ProMediaLibrary.ItemPredicate.Type) -> ProMediaLibrary.ItemPredicate
+  S enum case for ProMediaLibrary.ItemPredicate.alwaysTrue(ProMediaLibrary.ItemPredicate.Type) -> ProMediaLibrary.ItemPredicate
+  S enum case for ProMediaLibrary.ItemPredicate.and(ProMediaLibrary.ItemPredicate.Type) -> (ProMediaLibrary.ItemPredicate, ProMediaLibrary.ItemPredicate) -> ProMediaLibrary.ItemPredicate
+  S enum case for ProMediaLibrary.ItemPredicate.and3(ProMediaLibrary.ItemPredicate.Type) -> (ProMediaLibrary.ItemPredicate, ProMediaLibrary.ItemPredicate, ProMediaLibrary.ItemPredicate) -> ProMediaLibrary.ItemPredicate
+  S enum case for ProMediaLibrary.ItemPredicate.identifier(ProMediaLibrary.ItemPredicate.Type) -> (Swift.String) -> ProMediaLibrary.ItemPredicate
+  S enum case for ProMediaLibrary.ItemPredicate.match(ProMediaLibrary.ItemPredicate.Type) -> (ProMediaLibrary.ItemMatcher) -> ProMediaLibrary.ItemPredicate
+  S enum case for ProMediaLibrary.ItemPredicate.metadata(ProMediaLibrary.ItemPredicate.Type) -> (Swift.String, Swift.AnyHashable) -> ProMediaLibrary.ItemPredicate
+  S enum case for ProMediaLibrary.ItemPredicate.not(ProMediaLibrary.ItemPredicate.Type) -> (ProMediaLibrary.ItemPredicate) -> ProMediaLibrary.ItemPredicate
+  S enum case for ProMediaLibrary.ItemPredicate.or(ProMediaLibrary.ItemPredicate.Type) -> (ProMediaLibrary.ItemPredicate, ProMediaLibrary.ItemPredicate) -> ProMediaLibrary.ItemPredicate
+  S enum case for ProMediaLibrary.ItemPredicate.pipe(ProMediaLibrary.ItemPredicate.Type) -> (ProMediaLibrary.ItemPredicate, ProMediaLibrary.ItemPredicate) -> ProMediaLibrary.ItemPredicate
+  S enum case for ProMediaLibrary.ItemPredicate.type(ProMediaLibrary.ItemPredicate.Type) -> (ProMediaLibrary.ItemPattern) -> ProMediaLibrary.ItemPredicate
+  S enum case for ProMediaLibrary.ItemType.annotation(ProMediaLibrary.ItemType.Type) -> (ProMediaLibrary.AnnotationType) -> ProMediaLibrary.ItemType
+  S enum case for ProMediaLibrary.ItemType.clip(ProMediaLibrary.ItemType.Type) -> (ProMediaLibrary.ClipType) -> ProMediaLibrary.ItemType
+  S enum case for ProMediaLibrary.ItemType.collection(ProMediaLibrary.ItemType.Type) -> (ProMediaLibrary.ItemCollectionType, ProMediaLibrary.ItemPattern) -> ProMediaLibrary.ItemType
+  S enum case for ProMediaLibrary.ItemType.document(ProMediaLibrary.ItemType.Type) -> (UniformTypeIdentifiers.UTType) -> ProMediaLibrary.ItemType
+  S enum case for ProMediaLibrary.ItemType.observation(ProMediaLibrary.ItemType.Type) -> (ProMediaLibrary.ObservationType) -> ProMediaLibrary.ItemType
+  S enum case for ProMediaLibrary.ItemType.person(ProMediaLibrary.ItemType.Type) -> ProMediaLibrary.ItemType
+  S enum case for ProMediaLibrary.ItemType.soundEffect(ProMediaLibrary.ItemType.Type) -> (ProMediaLibrary.SoundEffectType) -> ProMediaLibrary.ItemType
+  S enum case for ProMediaLibrary.ItemType.visualEffect(ProMediaLibrary.ItemType.Type) -> (ProMediaLibrary.VisualEffectType) -> ProMediaLibrary.ItemType
+  S enum case for ProMediaLibrary.ItemUpdateOption.none(ProMediaLibrary.ItemUpdateOption.Type) -> ProMediaLibrary.ItemUpdateOption
+  S enum case for ProMediaLibrary.ItemUpdateOption.renameItem(ProMediaLibrary.ItemUpdateOption.Type) -> (Swift.Bool) -> ProMediaLibrary.ItemUpdateOption
+  S enum case for ProMediaLibrary.LibraryManagerError.invalidDerivativeRequest(ProMediaLibrary.LibraryManagerError.Type) -> (ProMediaLibrary.DerivativeRequest) -> ProMediaLibrary.LibraryManagerError
+  S enum case for ProMediaLibrary.LibraryManagerError.invalidInterchangeRequest(ProMediaLibrary.LibraryManagerError.Type) -> (ProMediaLibrary.InterchangeFormat) -> ProMediaLibrary.LibraryManagerError
+  S enum case for ProMediaLibrary.LibraryManagerError.invalidInterchangeValue(ProMediaLibrary.LibraryManagerError.Type) -> (ProMediaLibrary.InterchangeFormat.Value) -> ProMediaLibrary.LibraryManagerError
+  S enum case for ProMediaLibrary.LibraryManagerError.invalidItemType(ProMediaLibrary.LibraryManagerError.Type) -> (ProMediaLibrary.ItemType) -> ProMediaLibrary.LibraryManagerError
+  S enum case for ProMediaLibrary.LibraryManagerError.unexpectedError(ProMediaLibrary.LibraryManagerError.Type) -> ProMediaLibrary.LibraryManagerError
+  S enum case for ProMediaLibrary.LibraryOrganizer.NodeDescriptor.group(ProMediaLibrary.LibraryOrganizer.NodeDescriptor.Type) -> (Swift.String, [ProMediaLibrary.LibraryOrganizer.NodeDescriptor]) -> ProMediaLibrary.LibraryOrganizer.NodeDescriptor
+  S enum case for ProMediaLibrary.LibraryOrganizer.NodeDescriptor.groupedQuery(ProMediaLibrary.LibraryOrganizer.NodeDescriptor.Type) -> (Swift.String, ProMediaLibrary.ItemPredicate) -> ProMediaLibrary.LibraryOrganizer.NodeDescriptor
+  S enum case for ProMediaLibrary.LibraryOrganizer.NodeDescriptor.inlineQuery(ProMediaLibrary.LibraryOrganizer.NodeDescriptor.Type) -> (ProMediaLibrary.ItemPredicate) -> ProMediaLibrary.LibraryOrganizer.NodeDescriptor
+  S enum case for ProMediaLibrary.ObservationPattern.face(ProMediaLibrary.ObservationPattern.Type) -> ProMediaLibrary.ObservationPattern
+  S enum case for ProMediaLibrary.ObservationPattern.indeterminate(ProMediaLibrary.ObservationPattern.Type) -> ProMediaLibrary.ObservationPattern
+  S enum case for ProMediaLibrary.ObservationType.face(ProMediaLibrary.ObservationType.Type) -> ProMediaLibrary.ObservationType
+  S enum case for ProMediaLibrary.SoundEffectPattern.effect(ProMediaLibrary.SoundEffectPattern.Type) -> ProMediaLibrary.SoundEffectPattern
+  S enum case for ProMediaLibrary.SoundEffectPattern.generator(ProMediaLibrary.SoundEffectPattern.Type) -> ProMediaLibrary.SoundEffectPattern
+  S enum case for ProMediaLibrary.SoundEffectPattern.indeterminate(ProMediaLibrary.SoundEffectPattern.Type) -> ProMediaLibrary.SoundEffectPattern
+  S enum case for ProMediaLibrary.SoundEffectPattern.music(ProMediaLibrary.SoundEffectPattern.Type) -> ProMediaLibrary.SoundEffectPattern
+  S enum case for ProMediaLibrary.SoundEffectPattern.transition(ProMediaLibrary.SoundEffectPattern.Type) -> ProMediaLibrary.SoundEffectPattern
+  S enum case for ProMediaLibrary.SoundEffectType.effect(ProMediaLibrary.SoundEffectType.Type) -> ProMediaLibrary.SoundEffectType
+  S enum case for ProMediaLibrary.SoundEffectType.generator(ProMediaLibrary.SoundEffectType.Type) -> ProMediaLibrary.SoundEffectType
+  S enum case for ProMediaLibrary.SoundEffectType.music(ProMediaLibrary.SoundEffectType.Type) -> ProMediaLibrary.SoundEffectType
+  S enum case for ProMediaLibrary.SoundEffectType.transition(ProMediaLibrary.SoundEffectType.Type) -> ProMediaLibrary.SoundEffectType
+  S enum case for ProMediaLibrary.ThumbnailDerivativeRequest.Quality.high(ProMediaLibrary.ThumbnailDerivativeRequest.Quality.Type) -> ProMediaLibrary.ThumbnailDerivativeRequest.Quality
+  S enum case for ProMediaLibrary.ThumbnailDerivativeRequest.Quality.low(ProMediaLibrary.ThumbnailDerivativeRequest.Quality.Type) -> ProMediaLibrary.ThumbnailDerivativeRequest.Quality
+  S enum case for ProMediaLibrary.ThumbnailDerivativeRequest.Quality.medium(ProMediaLibrary.ThumbnailDerivativeRequest.Quality.Type) -> ProMediaLibrary.ThumbnailDerivativeRequest.Quality
+  S enum case for ProMediaLibrary.VisualEffectPattern.ar(ProMediaLibrary.VisualEffectPattern.Type) -> ProMediaLibrary.VisualEffectPattern
+  S enum case for ProMediaLibrary.VisualEffectPattern.effect(ProMediaLibrary.VisualEffectPattern.Type) -> ProMediaLibrary.VisualEffectPattern
+  S enum case for ProMediaLibrary.VisualEffectPattern.generator(ProMediaLibrary.VisualEffectPattern.Type) -> ProMediaLibrary.VisualEffectPattern
+  S enum case for ProMediaLibrary.VisualEffectPattern.indeterminate(ProMediaLibrary.VisualEffectPattern.Type) -> ProMediaLibrary.VisualEffectPattern
+  S enum case for ProMediaLibrary.VisualEffectPattern.title(ProMediaLibrary.VisualEffectPattern.Type) -> ProMediaLibrary.VisualEffectPattern
+  S enum case for ProMediaLibrary.VisualEffectPattern.transition(ProMediaLibrary.VisualEffectPattern.Type) -> ProMediaLibrary.VisualEffectPattern
+  S enum case for ProMediaLibrary.VisualEffectType.ar(ProMediaLibrary.VisualEffectType.Type) -> ProMediaLibrary.VisualEffectType
+  S enum case for ProMediaLibrary.VisualEffectType.effect(ProMediaLibrary.VisualEffectType.Type) -> ProMediaLibrary.VisualEffectType
+  S enum case for ProMediaLibrary.VisualEffectType.generator(ProMediaLibrary.VisualEffectType.Type) -> ProMediaLibrary.VisualEffectType
+  S enum case for ProMediaLibrary.VisualEffectType.title(ProMediaLibrary.VisualEffectType.Type) -> ProMediaLibrary.VisualEffectType
+  S enum case for ProMediaLibrary.VisualEffectType.transition(ProMediaLibrary.VisualEffectType.Type) -> ProMediaLibrary.VisualEffectType
+  S nominal type descriptor for ProMediaLibrary.AnnotationPattern
+  S nominal type descriptor for ProMediaLibrary.AnnotationType
+  S nominal type descriptor for ProMediaLibrary.ChangeDetails
+  S nominal type descriptor for ProMediaLibrary.ChangeType
+  S nominal type descriptor for ProMediaLibrary.ClipPattern
+  S nominal type descriptor for ProMediaLibrary.ClipType
+  S nominal type descriptor for ProMediaLibrary.DerivativeFormat
+  S nominal type descriptor for ProMediaLibrary.DerivativeRequest
+  S nominal type descriptor for ProMediaLibrary.DerivativeValue
+  S nominal type descriptor for ProMediaLibrary.EmptyQuery
+  S nominal type descriptor for ProMediaLibrary.InterchangeFormat
+  S nominal type descriptor for ProMediaLibrary.InterchangeFormat.Value
+  S nominal type descriptor for ProMediaLibrary.Item
+  S nominal type descriptor for ProMediaLibrary.Item.ItemRelationship
+  S nominal type descriptor for ProMediaLibrary.ItemChangeDetails
+  S nominal type descriptor for ProMediaLibrary.ItemCollectionPattern
+  S nominal type descriptor for ProMediaLibrary.ItemCollectionType
+  S nominal type descriptor for ProMediaLibrary.ItemMatcher
+  S nominal type descriptor for ProMediaLibrary.ItemPattern
+  S nominal type descriptor for ProMediaLibrary.ItemPredicate
+  S nominal type descriptor for ProMediaLibrary.ItemType
+  S nominal type descriptor for ProMediaLibrary.ItemUpdateOption
+  S nominal type descriptor for ProMediaLibrary.KeywordType
+  S nominal type descriptor for ProMediaLibrary.LibraryManagerError
+  S nominal type descriptor for ProMediaLibrary.LibraryOrganizer
+  S nominal type descriptor for ProMediaLibrary.LibraryOrganizer.NodeDescriptor
+  S nominal type descriptor for ProMediaLibrary.MetadataDefinition
+  S nominal type descriptor for ProMediaLibrary.MetadataSet
+  S nominal type descriptor for ProMediaLibrary.MetadataView
+  S nominal type descriptor for ProMediaLibrary.ObjectIdentifierSource
+  S nominal type descriptor for ProMediaLibrary.ObservationPattern
+  S nominal type descriptor for ProMediaLibrary.ObservationType
+  S nominal type descriptor for ProMediaLibrary.QueryOptions
+  S nominal type descriptor for ProMediaLibrary.RenderedMediaDerivativeRequest
+  S nominal type descriptor for ProMediaLibrary.Simplified
+  S nominal type descriptor for ProMediaLibrary.SoundEffectPattern
+  S nominal type descriptor for ProMediaLibrary.SoundEffectType
+  S nominal type descriptor for ProMediaLibrary.StandardMetadataKey
+  S nominal type descriptor for ProMediaLibrary.StaticQuery
+  S nominal type descriptor for ProMediaLibrary.ThumbnailDerivativeRequest
+  S nominal type descriptor for ProMediaLibrary.ThumbnailDerivativeRequest.Quality
+  S nominal type descriptor for ProMediaLibrary.VisualEffectPattern
+  S nominal type descriptor for ProMediaLibrary.VisualEffectType
+  S nominal type descriptor for ProMediaLibrary.WaveformDerivativeRequest
+  S protocol witness table for <A where A == ProMediaLibrary.Item> [A] : ProMediaLibrary.QueryResult in ProMediaLibrary
+  S protocol witness table for ProMediaLibrary.EmptyQuery : ProMediaLibrary.Query in ProMediaLibrary
+  S protocol witness table for ProMediaLibrary.LibraryOrganizer : ProMediaLibrary.LibraryManager in ProMediaLibrary
+  S protocol witness table for ProMediaLibrary.StaticQuery : ProMediaLibrary.Query in ProMediaLibrary
+  S type metadata for ProMediaLibrary.AnnotationPattern
+  S type metadata for ProMediaLibrary.AnnotationType
+  S type metadata for ProMediaLibrary.ChangeDetails
+  S type metadata for ProMediaLibrary.ChangeType
+  S type metadata for ProMediaLibrary.ClipPattern
+  S type metadata for ProMediaLibrary.ClipType
+  S type metadata for ProMediaLibrary.DerivativeFormat
+  S type metadata for ProMediaLibrary.DerivativeRequest
+  S type metadata for ProMediaLibrary.DerivativeValue
+  S type metadata for ProMediaLibrary.EmptyQuery
+  S type metadata for ProMediaLibrary.Item.ItemRelationship
+  S type metadata for ProMediaLibrary.ItemChangeDetails
+  S type metadata for ProMediaLibrary.ItemCollectionPattern
+  S type metadata for ProMediaLibrary.ItemCollectionType
+  S type metadata for ProMediaLibrary.ItemMatcher
+  S type metadata for ProMediaLibrary.ItemUpdateOption
+  S type metadata for ProMediaLibrary.KeywordType
+  S type metadata for ProMediaLibrary.LibraryOrganizer
+  S type metadata for ProMediaLibrary.MetadataDefinition
+  S type metadata for ProMediaLibrary.MetadataSet
+  S type metadata for ProMediaLibrary.MetadataView
+
+## ProAppsFxSupport (0
+0 Swift symbols)
+
+## ProOSC (0
+0 Swift symbols)
+
+## ProGraphics (0
+0 Swift symbols)
+
+## ProGL (0
+0 Swift symbols)
+
+## ProShapes (0
+0 Swift symbols)
+
+## ProExtension (0
+0 Swift symbols)
+
+## ProExtensionHost (0
+0 Swift symbols)
+
+## ProExtensionSupport (0
+0 Swift symbols)
+
+## ProTracker (0
+0 Swift symbols)
+
+## ProService (0
+0 Swift symbols)
+
+## TextFramework (0
+0 Swift symbols)
+
+## Interchange (10631 Swift symbols)
+  D metaclass for Interchange.AnchorItemWrapper
+  D metaclass for Interchange.AuditionItemWrapper
+  D metaclass for Interchange.CollectionItemWrapper
+  D metaclass for Interchange.ContainerClipItemWrapper
+  D metaclass for Interchange.EventItemWrapper
+  D metaclass for Interchange.MarkerItemWrapper
+  D metaclass for Interchange.MaskItemWrapper
+  D metaclass for Interchange.ResourceItemWrapper
+  D metaclass for Interchange.SerialClipItemWrapper
+  D metaclass for Interchange.SmartFilterWrapper
+  D metaclass for Interchange.StoryItemWrapper
+  D metaclass for Interchange.VideoFilterItemWrapper
+  D protocol witness table for Interchange.AnchorItemWrapper : Interchange.ItemWrapper in Interchange
+  D protocol witness table for Interchange.AuditionItemWrapper : Interchange.ItemWrapper in Interchange
+  D protocol witness table for Interchange.CollectionItemWrapper : Interchange.ItemWrapper in Interchange
+  D protocol witness table for Interchange.ContainerClipItemWrapper : Interchange.ItemWrapper in Interchange
+  D protocol witness table for Interchange.EventItemWrapper : Interchange.ItemWrapper in Interchange
+  D protocol witness table for Interchange.Implied.Source.AnalysisMethodAutomatic : Interchange.DefaultSource in Interchange
+  D protocol witness table for Interchange.Implied.Source.AnalysisTypeAny : Interchange.DefaultSource in Interchange
+  D protocol witness table for Interchange.Implied.Source.AudioLayoutUnspecified : Interchange.DefaultSource in Interchange
+  D protocol witness table for Interchange.Implied.Source.AudioRateUnspecified : Interchange.DefaultSource in Interchange
+  D protocol witness table for Interchange.Implied.Source.AvailabilityRuleIsAvailable : Interchange.DefaultSource in Interchange
+  D protocol witness table for Interchange.Implied.Source.AvailabilityRuleIsMissing : Interchange.DefaultSource in Interchange
+  D protocol witness table for Interchange.Implied.Source.BlendModeAdd : Interchange.DefaultSource in Interchange
+  D protocol witness table for Interchange.Implied.Source.BlendModeMultiply : Interchange.DefaultSource in Interchange
+  D protocol witness table for Interchange.Implied.Source.ColorConformModeAutomatic : Interchange.DefaultSource in Interchange
+  D protocol witness table for Interchange.Implied.Source.ColorConformTypeNone : Interchange.DefaultSource in Interchange
+  D protocol witness table for Interchange.Implied.Source.ColorProcessingStandard : Interchange.DefaultSource in Interchange
+  D protocol witness table for Interchange.Implied.Source.ConformFit : Interchange.DefaultSource in Interchange
+  D protocol witness table for Interchange.Implied.Source.CurveSmooth : Interchange.DefaultSource in Interchange
+  D protocol witness table for Interchange.Implied.Source.DecibelZero : Interchange.DefaultSource in Interchange
+  D protocol witness table for Interchange.Implied.Source.DisplayStyleNone : Interchange.DefaultSource in Interchange
+  D protocol witness table for Interchange.Implied.Source.DoubleOne : Interchange.DefaultSource in Interchange
+  D protocol witness table for Interchange.Implied.Source.DoubleZero : Interchange.DefaultSource in Interchange
+  D protocol witness table for Interchange.Implied.Source.EnabledSourceAll : Interchange.DefaultSource in Interchange
+  D protocol witness table for Interchange.Implied.Source.EqualityRuleIsExactly : Interchange.DefaultSource in Interchange
+  D protocol witness table for Interchange.Implied.Source.FadeEaseIn : Interchange.DefaultSource in Interchange
+  D protocol witness table for Interchange.Implied.Source.FadeEaseOut : Interchange.DefaultSource in Interchange
+  D protocol witness table for Interchange.Implied.Source.False : Interchange.DefaultSource in Interchange
+  D protocol witness table for Interchange.Implied.Source.FieldOrderUndefined : Interchange.DefaultSource in Interchange
+  D protocol witness table for Interchange.Implied.Source.FrameRateUnsupported : Interchange.DefaultSource in Interchange
+  D protocol witness table for Interchange.Implied.Source.FrameSamplingFloor : Interchange.DefaultSource in Interchange
+  D protocol witness table for Interchange.Implied.Source.InclusiveRuleIncludes : Interchange.DefaultSource in Interchange
+  D protocol witness table for Interchange.Implied.Source.InterpolationLinear : Interchange.DefaultSource in Interchange
+  D protocol witness table for Interchange.Implied.Source.IntOne : Interchange.DefaultSource in Interchange
+  D protocol witness table for Interchange.Implied.Source.IntZero : Interchange.DefaultSource in Interchange
+  D protocol witness table for Interchange.Implied.Source.IsolationType3D : Interchange.DefaultSource in Interchange
+  D protocol witness table for Interchange.Implied.Source.JustificationNone : Interchange.DefaultSource in Interchange
+  D protocol witness table for Interchange.Implied.Source.MappingNormal : Interchange.DefaultSource in Interchange
+  D protocol witness table for Interchange.Implied.Source.MarkerTypeAll : Interchange.DefaultSource in Interchange
+  D protocol witness table for Interchange.Implied.Source.OriginalMedia : Interchange.DefaultSource in Interchange
+  D protocol witness table for Interchange.Implied.Source.PlacementUnknown : Interchange.DefaultSource in Interchange
+  D protocol witness table for Interchange.Implied.Source.PointOne : Interchange.DefaultSource in Interchange
+  D protocol witness table for Interchange.Implied.Source.PointZero : Interchange.DefaultSource in Interchange
+  D protocol witness table for Interchange.Implied.Source.ProjectionNone : Interchange.DefaultSource in Interchange
+  D protocol witness table for Interchange.Implied.Source.PropertyRuleIncludesAny : Interchange.DefaultSource in Interchange
+  D protocol witness table for Interchange.Implied.Source.RollingShutterNone : Interchange.DefaultSource in Interchange
+  D protocol witness table for Interchange.Implied.Source.SetRuleIncludesAny : Interchange.DefaultSource in Interchange
+  D protocol witness table for Interchange.Implied.Source.StabilizationAutomatic : Interchange.DefaultSource in Interchange
+  D protocol witness table for Interchange.Implied.Source.StereoscopicMono : Interchange.DefaultSource in Interchange
+  D protocol witness table for Interchange.Implied.Source.TimecodeFormatUnspecified : Interchange.DefaultSource in Interchange
+  D protocol witness table for Interchange.Implied.Source.TimeInterpolationSmooth2 : Interchange.DefaultSource in Interchange
+  D protocol witness table for Interchange.Implied.Source.TimeInvalid : Interchange.DefaultSource in Interchange
+  D protocol witness table for Interchange.Implied.Source.TimeUnitUnsupported : Interchange.DefaultSource in Interchange
+  D protocol witness table for Interchange.Implied.Source.TimeZero : Interchange.DefaultSource in Interchange
+  D protocol witness table for Interchange.Implied.Source.True : Interchange.DefaultSource in Interchange
+  D protocol witness table for Interchange.Implied.Source.UsageRuleUsed : Interchange.DefaultSource in Interchange
+  D protocol witness table for Interchange.MarkerItemWrapper : Interchange.ItemWrapper in Interchange
+  D protocol witness table for Interchange.MaskItemWrapper : Interchange.ItemWrapper in Interchange
+  D protocol witness table for Interchange.ResourceItemWrapper : Interchange.ItemWrapper in Interchange
+  D protocol witness table for Interchange.SerialClipItemWrapper : Interchange.ItemWrapper in Interchange
+  D protocol witness table for Interchange.SmartFilterWrapper : Interchange.ItemWrapper in Interchange
+  D protocol witness table for Interchange.VideoFilterItemWrapper : Interchange.ItemWrapper in Interchange
+  D type metadata for Interchange.AnchorItemWrapper
+  D type metadata for Interchange.AuditionItemWrapper
+  D type metadata for Interchange.CollectionItemWrapper
+  D type metadata for Interchange.ContainerClipItemWrapper
+  D type metadata for Interchange.EventItemWrapper
+  D type metadata for Interchange.MarkerItemWrapper
+  D type metadata for Interchange.MaskItemWrapper
+  D type metadata for Interchange.ResourceItemWrapper
+  D type metadata for Interchange.SerialClipItemWrapper
+  D type metadata for Interchange.SmartFilterWrapper
+  D type metadata for Interchange.StoryItemWrapper
+  D type metadata for Interchange.VideoFilterItemWrapper
+  S nominal type descriptor for Interchange.AnalysisMarker
+  S nominal type descriptor for Interchange.AnchorItemWrapper
+  S nominal type descriptor for Interchange.Asset
+  S nominal type descriptor for Interchange.AssetClip
+  S nominal type descriptor for Interchange.AssociatedFile
+  S nominal type descriptor for Interchange.AssociatedFile.FileType
+  S nominal type descriptor for Interchange.AssociatedFile.Group
+  S nominal type descriptor for Interchange.Audio
+  S nominal type descriptor for Interchange.AudioChannelLayout
+  S nominal type descriptor for Interchange.AudioChannelLayoutCategory
+  S nominal type descriptor for Interchange.AudioChannelLayoutChannelMap
+  S nominal type descriptor for Interchange.AudioChannelLayoutChannelMapChannel
+  S nominal type descriptor for Interchange.AudioChannelLayoutChannelValence
+  S nominal type descriptor for Interchange.AudioChannelLayoutConverter
+  S nominal type descriptor for Interchange.AudioChannelLayoutItem
+  S nominal type descriptor for Interchange.AudioChannelLayoutItemName
+  S nominal type descriptor for Interchange.AudioChannelLayoutRouting
+  S nominal type descriptor for Interchange.AudioChannelLayoutRoutingMap
+  S nominal type descriptor for Interchange.AudioChannelLayouts
+  S nominal type descriptor for Interchange.AudioChannelSource
+  S nominal type descriptor for Interchange.AudioFilter
+  S nominal type descriptor for Interchange.AudioLayout
+  S nominal type descriptor for Interchange.AudioRate
+  S nominal type descriptor for Interchange.AudioRoleSource
+  S nominal type descriptor for Interchange.Audition
+  S nominal type descriptor for Interchange.AuditionItemWrapper
+  S nominal type descriptor for Interchange.Blend
+  S nominal type descriptor for Interchange.BlendMode
+  S nominal type descriptor for Interchange.BlendReservedData
+  S nominal type descriptor for Interchange.BlendReservedData.EffectParameters
+  S nominal type descriptor for Interchange.BundleManager
+  S nominal type descriptor for Interchange.Caption
+  S nominal type descriptor for Interchange.ChapterMarker
+  S nominal type descriptor for Interchange.Cinematic
+  S nominal type descriptor for Interchange.Clip
+  S nominal type descriptor for Interchange.CodableColor
+  S nominal type descriptor for Interchange.CollectionFolder
+  S nominal type descriptor for Interchange.CollectionItemCodingKeys
+  S nominal type descriptor for Interchange.CollectionItemWrapper
+  S nominal type descriptor for Interchange.ColorConform
+  S nominal type descriptor for Interchange.ColorConform.AutoOrManual
+  S nominal type descriptor for Interchange.ColorConform.ConformType
+  S nominal type descriptor for Interchange.ColorSpace
+  S nominal type descriptor for Interchange.Conform
+  S nominal type descriptor for Interchange.ConformRate
+  S nominal type descriptor for Interchange.ConformType
+  S nominal type descriptor for Interchange.ConsumerEffect
+  S nominal type descriptor for Interchange.ConsumerEffectExportMap
+  S nominal type descriptor for Interchange.ContainerClipItemWrapper
+  S nominal type descriptor for Interchange.CoordinateType
+  S nominal type descriptor for Interchange.Corners
+  S nominal type descriptor for Interchange.Crop
+  S nominal type descriptor for Interchange.Crop.Mode
+  S nominal type descriptor for Interchange.CropRect
+  S nominal type descriptor for Interchange.Curve
+  S nominal type descriptor for Interchange.DisplayStyle
+  S nominal type descriptor for Interchange.Document
+  S nominal type descriptor for Interchange.Document.ContentType
+  S nominal type descriptor for Interchange.EditContainer
+  S nominal type descriptor for Interchange.Effect
+  S nominal type descriptor for Interchange.EffectBundle
+  S nominal type descriptor for Interchange.EffectBundleConverter
+  S nominal type descriptor for Interchange.EffectBundleEffect
+  S nominal type descriptor for Interchange.EffectBundleEffectID
+  S nominal type descriptor for Interchange.EffectBundleEffects
+  S nominal type descriptor for Interchange.EffectBundleEffectSnapshot
+  S nominal type descriptor for Interchange.EffectBundleParameter
+  S nominal type descriptor for Interchange.EffectBundleParameterFolder
+  S nominal type descriptor for Interchange.EffectBundleParameters
+  S nominal type descriptor for Interchange.EffectBundlePart
+  S nominal type descriptor for Interchange.EffectBundlePartDefaultValue
+  S nominal type descriptor for Interchange.EffectBundleParts
+  S nominal type descriptor for Interchange.EffectBundlePartSnapshot
+  S nominal type descriptor for Interchange.EffectBundlePartSnapshots
+  S nominal type descriptor for Interchange.EffectChannel
+  S nominal type descriptor for Interchange.EffectChannelMap
+  S nominal type descriptor for Interchange.EnabledSource
+  S nominal type descriptor for Interchange.EnumerationMap
+  S nominal type descriptor for Interchange.Equalization
+  S nominal type descriptor for Interchange.Equalization.Mode
+  S nominal type descriptor for Interchange.ErrorReporter
+  S nominal type descriptor for Interchange.Event
+  S nominal type descriptor for Interchange.EventItemWrapper
+  S nominal type descriptor for Interchange.FadeIn
+  S nominal type descriptor for Interchange.FadeOut
+  S nominal type descriptor for Interchange.FadeType
+  S nominal type descriptor for Interchange.FCPXMLConverter
+  S nominal type descriptor for Interchange.FieldOrder
+  S nominal type descriptor for Interchange.FilterAvailabilityRule
+  S nominal type descriptor for Interchange.FilterEqualityRule
+  S nominal type descriptor for Interchange.FilterInclusiveRule
+  S nominal type descriptor for Interchange.FilterPropertyRule
+  S nominal type descriptor for Interchange.FilterSetRule
+  S nominal type descriptor for Interchange.FilterTimeRangeRule
+  S nominal type descriptor for Interchange.FilterTimeRule
+  S nominal type descriptor for Interchange.FilterUsageRule
+  S nominal type descriptor for Interchange.FinalCutAppFinder
+  S nominal type descriptor for Interchange.FinalCutVersion
+  S nominal type descriptor for Interchange.Format
+  S nominal type descriptor for Interchange.FrameRate
+  S nominal type descriptor for Interchange.FrameSampling
+  S nominal type descriptor for Interchange.Gap
+  S nominal type descriptor for Interchange.HeroEye
+  S nominal type descriptor for Interchange.HiddenClipMarker
+  S nominal type descriptor for Interchange.HumReduction
+  S nominal type descriptor for Interchange.HumReduction.Frequency
+  S nominal type descriptor for Interchange.Implied
+  S nominal type descriptor for Interchange.Implied.Source
+  S nominal type descriptor for Interchange.Implied.Source.AnalysisMethodAutomatic
+  S nominal type descriptor for Interchange.Implied.Source.AnalysisTypeAny
+  S nominal type descriptor for Interchange.Implied.Source.AudioLayoutUnspecified
+  S nominal type descriptor for Interchange.Implied.Source.AudioRateUnspecified
+  S nominal type descriptor for Interchange.Implied.Source.AvailabilityRuleIsAvailable
+  S nominal type descriptor for Interchange.Implied.Source.AvailabilityRuleIsMissing
+  S nominal type descriptor for Interchange.Implied.Source.BlendModeAdd
+
+## AudioEffects (0
+0 Swift symbols)
+
+## FxPlug (0
+0 Swift symbols)
+
+## MIO (0
+0 Swift symbols)
+
+## RetimingMath (0
+0 Swift symbols)
+
+## MDPKit (0
+0 Swift symbols)
+
+## CloudContent (6580 Swift symbols)
+  D metaclass for CloudContent.AREffectItem
+  D metaclass for CloudContent.Asset
+  D metaclass for CloudContent.BackgroundEffectItem
+  D metaclass for CloudContent.Blueprint
+  D metaclass for CloudContent.CatalogOptions
+  D metaclass for CloudContent.CatalogRegistryItem
+  D metaclass for CloudContent.ClipItem
+  D metaclass for CloudContent.ClipsAREffectCollection
+  D metaclass for CloudContent.ClipsAREffectCollectionGroup
+  D metaclass for CloudContent.ClipsAREffectItem
+  D metaclass for CloudContent.ClipsCollection
+  D metaclass for CloudContent.ClipsCollectionGroup
+  D metaclass for CloudContent.ClipsCollectionGroupList
+  D metaclass for CloudContent.ClipsEmojiCollectionGroup
+  D metaclass for CloudContent.ClipsFeaturedContent
+  D metaclass for CloudContent.ClipsFeaturedContentDescription
+  D metaclass for CloudContent.ClipsFilterCollection
+  D metaclass for CloudContent.ClipsFilterCollectionGroup
+  D metaclass for CloudContent.ClipsFilterItem
+  D metaclass for CloudContent.ClipsFlexMusicItem
+  D metaclass for CloudContent.ClipsItem
+  D metaclass for CloudContent.ClipsLabelCollection
+  D metaclass for CloudContent.ClipsLabelCollectionGroup
+  D metaclass for CloudContent.ClipsLabelItem
+  D metaclass for CloudContent.ClipsLiveTitleCollection
+  D metaclass for CloudContent.ClipsLiveTitleCollectionGroup
+  D metaclass for CloudContent.ClipsLiveTitleItem
+  D metaclass for CloudContent.ClipsMemojiCollectionGroup
+  D metaclass for CloudContent.ClipsPlaceholderCollectionGroup
+  D metaclass for CloudContent.ClipsPosterCollection
+  D metaclass for CloudContent.ClipsPosterCollectionGroup
+  D metaclass for CloudContent.ClipsPosterItem
+  D metaclass for CloudContent.ClipsSceneCollection
+  D metaclass for CloudContent.ClipsSceneCollectionGroup
+  D metaclass for CloudContent.ClipsSceneItem
+  D metaclass for CloudContent.ClipsStickerCollection
+  D metaclass for CloudContent.ClipsStickerCollectionGroup
+  D metaclass for CloudContent.ClipsStickerItem
+  D metaclass for CloudContent.CloudContentItem
+  D metaclass for CloudContent.CloudContentMetadata
+  D metaclass for CloudContent.CloudContentNotification
+  D metaclass for CloudContent.CloudContentObject
+  D metaclass for CloudContent.ColorItem
+  D metaclass for CloudContent.ColorWay
+  D metaclass for CloudContent.ContentLink
+  D metaclass for CloudContent.FeaturedContent
+  D metaclass for CloudContent.FeaturedContentDescription
+  D metaclass for CloudContent.FilterEffectItem
+  D metaclass for CloudContent.FilterItem
+  D metaclass for CloudContent.FinalCutAppFlexMusicItem
+  D metaclass for CloudContent.FontItem
+  D metaclass for CloudContent.Group
+  D metaclass for CloudContent.iMovieFlexMusicItem
+  D metaclass for CloudContent.ImportedEffectItem
+  D metaclass for CloudContent.InAppLearningLessonBundleItem
+  D metaclass for CloudContent.InAppLearningLessonCollection
+  D metaclass for CloudContent.InAppLearningResourceBundleItem
+  D metaclass for CloudContent.iWork3DObjectItem
+  D metaclass for CloudContent.iWorkCollection
+  D metaclass for CloudContent.iWorkImageItem
+  D metaclass for CloudContent.iWorkItem
+  D metaclass for CloudContent.iWorkItemLicense
+  D metaclass for CloudContent.iWorkKeyword
+  D metaclass for CloudContent.iWorkMovieItem
+  D metaclass for CloudContent.iWorkVectorItem
+  D metaclass for CloudContent.iWorkWeightedKeyword
+  D metaclass for CloudContent.LabelItem
+  D metaclass for CloudContent.LiveTitleItem
+  D metaclass for CloudContent.MaterialTextureCollection
+  D metaclass for CloudContent.MaterialTextureItem
+  D metaclass for CloudContent.MetadataCollection
+  D metaclass for CloudContent.MetadataCollectionGroup
+  D metaclass for CloudContent.MetadataCollectionGroupList
+  D metaclass for CloudContent.MetadataItem
+  D metaclass for CloudContent.PickerCollection
+  D metaclass for CloudContent.PickerCollectionGroup
+  D metaclass for CloudContent.PosterItem
+  D metaclass for CloudContent.ProjectBundleCollection
+  D metaclass for CloudContent.ProjectBundleItem
+  D metaclass for CloudContent.SceneItem
+  D metaclass for CloudContent.StickerItem
+  D metaclass for CloudContent.StyleCollection
+  D metaclass for CloudContent.StyleItem
+  D metaclass for CloudContent.TemplateCollection
+  D metaclass for CloudContent.TemplateItem
+  D metaclass for CloudContent.TitleEffectItem
+  D metaclass for CloudContent.TrailerCollection
+  D metaclass for CloudContent.TrailerItem
+  D metaclass for CloudContent.TransitionEffectItem
+  D metaclass for CloudContent.TransitionSet
+  D metaclass for CloudContent.TransitionUsageItem
+  D metaclass for CloudContent.VisualAREffectItem
+  D metaclass for CloudContent.VisualEffectCollection
+  D metaclass for CloudContent.VisualEffectCollectionGroup
+  D metaclass for CloudContent.VisualEffectCollectionGroupList
+  D metaclass for CloudContent.VisualEffectItem
+  D protocol witness table for CloudContent.AnalyticsInfo : CloudContent.ObjectiveCBridgeable in CloudContent
+  D protocol witness table for CloudContent.Attribute : CloudContent.ObjectiveCBridgeable in CloudContent
+  D protocol witness table for CloudContent.ClientIdentifier : CloudContent.ObjectiveCBridgeable in CloudContent
+  D protocol witness table for CloudContent.CloudContentObject : CloudContent.ObjectiveCBridgeable in CloudContent
+  D protocol witness table for CloudContent.ContentFilterAttribute : CloudContent.ObjectiveCBridgeable in CloudContent
+  D protocol witness table for CloudContent.ContentTag : CloudContent.ObjectiveCBridgeable in CloudContent
+  D protocol witness table for CloudContent.ContentType : CloudContent.ObjectiveCBridgeable in CloudContent
+  D protocol witness table for CloudContent.DynamicTextType : CloudContent.ObjectiveCBridgeable in CloudContent
+  D protocol witness table for CloudContent.EffectType : CloudContent.ObjectiveCBridgeable in CloudContent
+  D protocol witness table for CloudContent.FilterEffectType : CloudContent.ObjectiveCBridgeable in CloudContent
+  D protocol witness table for CloudContent.FlexMusicStyle : CloudContent.ObjectiveCBridgeable in CloudContent
+  D protocol witness table for CloudContent.KenBurnsOrFXUsage : CloudContent.ObjectiveCBridgeable in CloudContent
+  D protocol witness table for CloudContent.MetadataTag : CloudContent.ObjectiveCBridgeable in CloudContent
+  D protocol witness table for CloudContent.MetadataType : CloudContent.ObjectiveCBridgeable in CloudContent
+  D protocol witness table for CloudContent.PublishedParameterIndex : CloudContent.ObjectiveCBridgeable in CloudContent
+  D protocol witness table for CloudContent.SupportedMedia : CloudContent.ObjectiveCBridgeable in CloudContent
+  D protocol witness table for CloudContent.SupportedMediaPairs : CloudContent.ObjectiveCBridgeable in CloudContent
+  D protocol witness table for CloudContent.TitleEffectType : CloudContent.ObjectiveCBridgeable in CloudContent
+  D protocol witness table for CloudContent.TransitionDirection : CloudContent.ObjectiveCBridgeable in CloudContent
+  D protocol witness table for CloudContent.VisualEffectType : CloudContent.ObjectiveCBridgeable in CloudContent
+  D type metadata for CloudContent.AREffectItem
+  D type metadata for CloudContent.Asset
+  D type metadata for CloudContent.BackgroundEffectItem
+  D type metadata for CloudContent.Blueprint
+  D type metadata for CloudContent.CatalogError
+  D type metadata for CloudContent.CatalogError.PermissionError
+  D type metadata for CloudContent.CatalogOptions
+  D type metadata for CloudContent.CatalogRegistryItem
+  D type metadata for CloudContent.ClipItem
+  D type metadata for CloudContent.ClipsAREffectCollection
+  D type metadata for CloudContent.ClipsAREffectCollectionGroup
+  D type metadata for CloudContent.ClipsAREffectItem
+  D type metadata for CloudContent.ClipsCollection
+  D type metadata for CloudContent.ClipsCollectionGroup
+  D type metadata for CloudContent.ClipsCollectionGroupList
+  D type metadata for CloudContent.ClipsEmojiCollectionGroup
+  D type metadata for CloudContent.ClipsFeaturedContent
+  D type metadata for CloudContent.ClipsFeaturedContentDescription
+  D type metadata for CloudContent.ClipsFilterCollection
+  D type metadata for CloudContent.ClipsFilterCollectionGroup
+  D type metadata for CloudContent.ClipsFilterItem
+  D type metadata for CloudContent.ClipsFlexMusicItem
+  D type metadata for CloudContent.ClipsItem
+  D type metadata for CloudContent.ClipsLabelCollection
+  D type metadata for CloudContent.ClipsLabelCollectionGroup
+  D type metadata for CloudContent.ClipsLabelItem
+  D type metadata for CloudContent.ClipsLiveTitleCollection
+  D type metadata for CloudContent.ClipsLiveTitleCollectionGroup
+  D type metadata for CloudContent.ClipsLiveTitleItem
+  D type metadata for CloudContent.ClipsMemojiCollectionGroup
+  D type metadata for CloudContent.ClipsPlaceholderCollectionGroup
+  D type metadata for CloudContent.ClipsPosterCollection
+  D type metadata for CloudContent.ClipsPosterCollectionGroup
+  D type metadata for CloudContent.ClipsPosterItem
+  D type metadata for CloudContent.ClipsSceneCollection
+  D type metadata for CloudContent.ClipsSceneCollectionGroup
+  D type metadata for CloudContent.ClipsSceneItem
+  D type metadata for CloudContent.ClipsStickerCollection
+  D type metadata for CloudContent.ClipsStickerCollectionGroup
+  D type metadata for CloudContent.ClipsStickerItem
+  D type metadata for CloudContent.CloudContentItem
+  D type metadata for CloudContent.CloudContentMetadata
+  D type metadata for CloudContent.CloudContentNotification
+  D type metadata for CloudContent.CloudContentObject
+  D type metadata for CloudContent.ColorItem
+  D type metadata for CloudContent.ColorWay
+  D type metadata for CloudContent.ContentLink
+  D type metadata for CloudContent.FeaturedContent
+  D type metadata for CloudContent.FeaturedContentDescription
+  D type metadata for CloudContent.FilterEffectItem
+  D type metadata for CloudContent.FilterItem
+  D type metadata for CloudContent.FinalCutAppFlexMusicItem
+  D type metadata for CloudContent.FontItem
+  D type metadata for CloudContent.Group
+  D type metadata for CloudContent.iMovieFlexMusicItem
+  D type metadata for CloudContent.ImportedEffectItem
+  D type metadata for CloudContent.InAppLearningLessonBundleItem
+  D type metadata for CloudContent.InAppLearningLessonCollection
+  D type metadata for CloudContent.InAppLearningResourceBundleItem
+  D type metadata for CloudContent.iWork3DObjectItem
+  D type metadata for CloudContent.iWorkCollection
+  D type metadata for CloudContent.iWorkImageItem
+  D type metadata for CloudContent.iWorkItem
+  D type metadata for CloudContent.iWorkItemLicense
+  D type metadata for CloudContent.iWorkKeyword
+  D type metadata for CloudContent.iWorkMovieItem
+  D type metadata for CloudContent.iWorkVectorItem
+  D type metadata for CloudContent.iWorkWeightedKeyword
+  D type metadata for CloudContent.LabelItem
+  D type metadata for CloudContent.LiveTitleItem
+  D type metadata for CloudContent.MaterialTextureCollection
+  D type metadata for CloudContent.MaterialTextureItem
+  D type metadata for CloudContent.MetadataCollection
+  D type metadata for CloudContent.MetadataCollectionGroup
+  D type metadata for CloudContent.MetadataCollectionGroupList
+  D type metadata for CloudContent.MetadataItem
+  D type metadata for CloudContent.PickerCollection
+  D type metadata for CloudContent.PickerCollectionGroup
+  D type metadata for CloudContent.PosterItem
+  D type metadata for CloudContent.ProjectBundleCollection
+  D type metadata for CloudContent.ProjectBundleItem
+  D type metadata for CloudContent.SceneItem
+  D type metadata for CloudContent.StickerItem
+  D type metadata for CloudContent.StyleCollection
+
+## PMLCloudContent (422 Swift symbols)
+  D metaclass for PMLCloudContent.CloudContentLibraryManagerOptions
+  D type metadata for PMLCloudContent.CloudContentLibraryManagerOptions
+  S class metadata base offset for PMLCloudContent.CloudContentFlexMusicProvider
+  S class metadata base offset for PMLCloudContent.CloudContentLibraryManager
+  S class metadata base offset for PMLCloudContent.CloudContentLibraryManagerOptions
+  S enum case for PMLCloudContent.CloudContentDownloadProgress.completed(PMLCloudContent.CloudContentDownloadProgress.Type) -> PMLCloudContent.CloudContentDownloadProgress
+  S enum case for PMLCloudContent.CloudContentDownloadProgress.downloading(PMLCloudContent.CloudContentDownloadProgress.Type) -> (Swift.Double) -> PMLCloudContent.CloudContentDownloadProgress
+  S enum case for PMLCloudContent.CloudContentDownloadProgress.notStarted(PMLCloudContent.CloudContentDownloadProgress.Type) -> PMLCloudContent.CloudContentDownloadProgress
+  S enum case for PMLCloudContent.CloudContentDownloadProgress.pending(PMLCloudContent.CloudContentDownloadProgress.Type) -> PMLCloudContent.CloudContentDownloadProgress
+  S enum case for PMLCloudContent.CloudContentError.downloadFailed(PMLCloudContent.CloudContentError.Type) -> PMLCloudContent.CloudContentError
+  S enum case for PMLCloudContent.CloudContentError.itemRecalled(PMLCloudContent.CloudContentError.Type) -> PMLCloudContent.CloudContentError
+  S enum case for PMLCloudContent.CloudContentError.storageFull(PMLCloudContent.CloudContentError.Type) -> PMLCloudContent.CloudContentError
+  S enum case for PMLCloudContent.CloudContentError.unreachableNetwork(PMLCloudContent.CloudContentError.Type) -> PMLCloudContent.CloudContentError
+  S enum case for PMLCloudContent.CloudContentLibraryManager.ItemSubType.ar(PMLCloudContent.CloudContentLibraryManager.ItemSubType.Type) -> PMLCloudContent.CloudContentLibraryManager.ItemSubType
+  S enum case for PMLCloudContent.CloudContentLibraryManager.ItemSubType.flexMusic(PMLCloudContent.CloudContentLibraryManager.ItemSubType.Type) -> PMLCloudContent.CloudContentLibraryManager.ItemSubType
+  S enum case for PMLCloudContent.CloudContentLibraryManager.ItemSubType.imported(PMLCloudContent.CloudContentLibraryManager.ItemSubType.Type) -> PMLCloudContent.CloudContentLibraryManager.ItemSubType
+  S enum case for PMLCloudContent.CloudContentLibraryManager.ItemSubType.look(PMLCloudContent.CloudContentLibraryManager.ItemSubType.Type) -> PMLCloudContent.CloudContentLibraryManager.ItemSubType
+  S enum case for PMLCloudContent.CloudContentLibraryManager.ItemSubType.materialTexture(PMLCloudContent.CloudContentLibraryManager.ItemSubType.Type) -> PMLCloudContent.CloudContentLibraryManager.ItemSubType
+  S enum case for PMLCloudContent.CloudContentLibraryManager.PMLCloudContentFailure.fmAssetCreation(PMLCloudContent.CloudContentLibraryManager.PMLCloudContentFailure.Type) -> (Swift.String) -> PMLCloudContent.CloudContentLibraryManager.PMLCloudContentFailure
+  S enum case for PMLCloudContent.CloudContentLibraryManager.PMLCloudContentFailure.invalidData(PMLCloudContent.CloudContentLibraryManager.PMLCloudContentFailure.Type) -> PMLCloudContent.CloudContentLibraryManager.PMLCloudContentFailure
+  S enum case for PMLCloudContent.CloudContentLibraryManager.PMLCloudContentFailure.noResults(PMLCloudContent.CloudContentLibraryManager.PMLCloudContentFailure.Type) -> PMLCloudContent.CloudContentLibraryManager.PMLCloudContentFailure
+  S enum case for PMLCloudContent.CloudContentLibraryManager.PMLCloudContentFailure.swiftError(PMLCloudContent.CloudContentLibraryManager.PMLCloudContentFailure.Type) -> (Swift.Error) -> PMLCloudContent.CloudContentLibraryManager.PMLCloudContentFailure
+  S enum case for PMLCloudContent.CloudContentLibraryManager.PMLCloudContentFailure.swiftErrors(PMLCloudContent.CloudContentLibraryManager.PMLCloudContentFailure.Type) -> ([Swift.Error]) -> PMLCloudContent.CloudContentLibraryManager.PMLCloudContentFailure
+  S enum case for PMLCloudContent.Platform.iOS(PMLCloudContent.Platform.Type) -> PMLCloudContent.Platform
+  S enum case for PMLCloudContent.Platform.mac(PMLCloudContent.Platform.Type) -> PMLCloudContent.Platform
+  S enum case for PMLCloudContent.PlatformSettings.iOS(PMLCloudContent.PlatformSettings.Type) -> (Swift.String) -> PMLCloudContent.PlatformSettings
+  S enum case for PMLCloudContent.PlatformSettings.macOS(PMLCloudContent.PlatformSettings.Type) -> (Swift.String) -> PMLCloudContent.PlatformSettings
+  S nominal type descriptor for PMLCloudContent.CloudContentDownloadProgress
+  S nominal type descriptor for PMLCloudContent.CloudContentError
+  S nominal type descriptor for PMLCloudContent.CloudContentFlexMusicProvider
+  S nominal type descriptor for PMLCloudContent.CloudContentLibraryManager
+  S nominal type descriptor for PMLCloudContent.CloudContentLibraryManager.CameraEffectsDataSource
+  S nominal type descriptor for PMLCloudContent.CloudContentLibraryManager.ItemSubType
+  S nominal type descriptor for PMLCloudContent.CloudContentLibraryManager.MetadataKey
+  S nominal type descriptor for PMLCloudContent.CloudContentLibraryManager.MetadataKey.Accessibility
+  S nominal type descriptor for PMLCloudContent.CloudContentLibraryManager.MetadataKey.CameraPreview
+  S nominal type descriptor for PMLCloudContent.CloudContentLibraryManager.MetadataKey.EffectParameter
+  S nominal type descriptor for PMLCloudContent.CloudContentLibraryManager.MetadataKey.FlexMusic
+  S nominal type descriptor for PMLCloudContent.CloudContentLibraryManager.MetadataKey.HDRColorCorrection
+  S nominal type descriptor for PMLCloudContent.CloudContentLibraryManager.MetadataKey.ImportedEffect
+  S nominal type descriptor for PMLCloudContent.CloudContentLibraryManager.MetadataKey.MaterialTexture
+  S nominal type descriptor for PMLCloudContent.CloudContentLibraryManager.MetadataKey.ProjectBundles
+  S nominal type descriptor for PMLCloudContent.CloudContentLibraryManager.PMLCloudContentFailure
+  S nominal type descriptor for PMLCloudContent.CloudContentLibraryManagerOptions
+  S nominal type descriptor for PMLCloudContent.Platform
+  S nominal type descriptor for PMLCloudContent.PlatformSettings
+  S type metadata for PMLCloudContent.CloudContentDownloadProgress
+  S type metadata for PMLCloudContent.CloudContentError
+  S type metadata for PMLCloudContent.CloudContentFlexMusicProvider
+  S type metadata for PMLCloudContent.CloudContentLibraryManager
+  S type metadata for PMLCloudContent.CloudContentLibraryManager.CameraEffectsDataSource
+  S type metadata for PMLCloudContent.CloudContentLibraryManager.ItemSubType
+  S type metadata for PMLCloudContent.CloudContentLibraryManager.MetadataKey
+  S type metadata for PMLCloudContent.CloudContentLibraryManager.MetadataKey.Accessibility
+  S type metadata for PMLCloudContent.CloudContentLibraryManager.MetadataKey.CameraPreview
+  S type metadata for PMLCloudContent.CloudContentLibraryManager.MetadataKey.EffectParameter
+  S type metadata for PMLCloudContent.CloudContentLibraryManager.MetadataKey.FlexMusic
+  S type metadata for PMLCloudContent.CloudContentLibraryManager.MetadataKey.HDRColorCorrection
+  S type metadata for PMLCloudContent.CloudContentLibraryManager.MetadataKey.ImportedEffect
+  S type metadata for PMLCloudContent.CloudContentLibraryManager.MetadataKey.MaterialTexture
+  S type metadata for PMLCloudContent.CloudContentLibraryManager.MetadataKey.ProjectBundles
+  S type metadata for PMLCloudContent.CloudContentLibraryManager.PMLCloudContentFailure
+  S type metadata for PMLCloudContent.Platform
+  S type metadata for PMLCloudContent.PlatformSettings
+  T type metadata accessor for PMLCloudContent.CloudContentDownloadProgress
+  T type metadata accessor for PMLCloudContent.CloudContentError
+  T type metadata accessor for PMLCloudContent.CloudContentFlexMusicProvider
+  T type metadata accessor for PMLCloudContent.CloudContentLibraryManager
+  T type metadata accessor for PMLCloudContent.CloudContentLibraryManager.CameraEffectsDataSource
+  T type metadata accessor for PMLCloudContent.CloudContentLibraryManager.ItemSubType
+  T type metadata accessor for PMLCloudContent.CloudContentLibraryManager.MetadataKey
+  T type metadata accessor for PMLCloudContent.CloudContentLibraryManager.MetadataKey.Accessibility
+  T type metadata accessor for PMLCloudContent.CloudContentLibraryManager.MetadataKey.CameraPreview
+  T type metadata accessor for PMLCloudContent.CloudContentLibraryManager.MetadataKey.EffectParameter
+  T type metadata accessor for PMLCloudContent.CloudContentLibraryManager.MetadataKey.FlexMusic
+  T type metadata accessor for PMLCloudContent.CloudContentLibraryManager.MetadataKey.HDRColorCorrection
+  T type metadata accessor for PMLCloudContent.CloudContentLibraryManager.MetadataKey.ImportedEffect
+  T type metadata accessor for PMLCloudContent.CloudContentLibraryManager.MetadataKey.MaterialTexture
+  T type metadata accessor for PMLCloudContent.CloudContentLibraryManager.MetadataKey.ProjectBundles
+  T type metadata accessor for PMLCloudContent.CloudContentLibraryManager.PMLCloudContentFailure
+  T type metadata accessor for PMLCloudContent.CloudContentLibraryManagerOptions
+  T type metadata accessor for PMLCloudContent.Platform
+  T type metadata accessor for PMLCloudContent.PlatformSettings
+
+## LunaFoundation (0
+0 Swift symbols)
+
+## StudioSharedResources (0
+0 Swift symbols)
+
+## Stalgo (0
+0 Swift symbols)
+
+## EDEL (0
+0 Swift symbols)
+
+## PluginManager (0
+0 Swift symbols)
+
+## VAML (232 Swift symbols)
+  S nominal type descriptor for VAML.VAMLDebugPerformanceTestSearchContext
+  S nominal type descriptor for VAML.VAMLDebugPerformanceTestVisualSearchAnalyzer
+  S nominal type descriptor for VAML.VAMLDebugSearchIndexConfiguration
+  S nominal type descriptor for VAML.VAMLImageUtilities
+  S nominal type descriptor for VAML.VAMLSearchAnalysisResult
+  S nominal type descriptor for VAML.VAMLSearchContext
+  S nominal type descriptor for VAML.VAMLSearchQueryResult
+  S nominal type descriptor for VAML.VAMLSearchStatus
+  S nominal type descriptor for VAML.VAMLTranscriptionSearchAnalyzer
+  S nominal type descriptor for VAML.VAMLTranscriptPhrase
+  S nominal type descriptor for VAML.VAMLVisualSearchAnalyzer
+  S type metadata for VAML.VAMLDebugPerformanceTestSearchContext
+  S type metadata for VAML.VAMLDebugPerformanceTestVisualSearchAnalyzer
+  S type metadata for VAML.VAMLDebugSearchIndexConfiguration
+  S type metadata for VAML.VAMLImageUtilities
+  S type metadata for VAML.VAMLSearchAnalysisResult
+  S type metadata for VAML.VAMLSearchContext
+  S type metadata for VAML.VAMLSearchQueryResult
+  S type metadata for VAML.VAMLSearchStatus
+  S type metadata for VAML.VAMLTranscriptionSearchAnalyzer
+  S type metadata for VAML.VAMLTranscriptPhrase
+  S type metadata for VAML.VAMLVisualSearchAnalyzer
+  T type metadata accessor for VAML.VAMLDebugPerformanceTestSearchContext
+  T type metadata accessor for VAML.VAMLDebugPerformanceTestVisualSearchAnalyzer
+  T type metadata accessor for VAML.VAMLDebugSearchIndexConfiguration
+  T type metadata accessor for VAML.VAMLImageUtilities
+  T type metadata accessor for VAML.VAMLSearchAnalysisResult
+  T type metadata accessor for VAML.VAMLSearchContext
+  T type metadata accessor for VAML.VAMLSearchQueryResult
+  T type metadata accessor for VAML.VAMLSearchStatus
+  T type metadata accessor for VAML.VAMLTranscriptionSearchAnalyzer
+  T type metadata accessor for VAML.VAMLTranscriptPhrase
+  T type metadata accessor for VAML.VAMLVisualSearchAnalyzer
+
+## XMLCodable (396 Swift symbols)
+  D metaclass for XMLCodable.XMLDecoder
+  D protocol witness table for __C.NSXMLElement : XMLCodable.EncodableXMLElement in XMLCodable
+  D protocol witness table for XMLCodable.XMLParserElement : XMLCodable.EncodableXMLElement in XMLCodable
+  D type metadata for XMLCodable.XMLDecoder
+  S nominal type descriptor for XMLCodable.ElementContext
+  S nominal type descriptor for XMLCodable.XMLDecoder
+  S nominal type descriptor for XMLCodable.XMLEncoder
+  S nominal type descriptor for XMLCodable.XMLKeyType
+  S nominal type descriptor for XMLCodable.XMLNodeType
+  S nominal type descriptor for XMLCodable.XMLOutputFormatting
+  S nominal type descriptor for XMLCodable.XMLParserAttribute
+  S nominal type descriptor for XMLCodable.XMLParserComment
+  S nominal type descriptor for XMLCodable.XMLParserDocument
+  S nominal type descriptor for XMLCodable.XMLParserDTD
+  S nominal type descriptor for XMLCodable.XMLParserElement
+  S nominal type descriptor for XMLCodable.XMLParserHeader
+  S nominal type descriptor for XMLCodable.XMLParserNode
+  S protocol witness table for __C.NSURL : XMLCodable.StringRepresentable in XMLCodable
+  S protocol witness table for __C.NSXMLElement : XMLCodable.DecodableXMLElement in XMLCodable
+  S protocol witness table for __C.NSXMLNode : XMLCodable.DecodableXMLNode in XMLCodable
+  S protocol witness table for __C.NSXMLNode : XMLCodable.EncodableXMLNode in XMLCodable
+  S protocol witness table for Foundation.Date : XMLCodable.StringRepresentable in XMLCodable
+  S protocol witness table for Foundation.URL : XMLCodable.StringRepresentable in XMLCodable
+  S protocol witness table for Swift.Bool : XMLCodable.StringRepresentable in XMLCodable
+  S protocol witness table for Swift.Double : XMLCodable.StringRepresentable in XMLCodable
+  S protocol witness table for Swift.Int : XMLCodable.StringRepresentable in XMLCodable
+  S protocol witness table for Swift.String : XMLCodable.StringRepresentable in XMLCodable
+  S protocol witness table for XMLCodable.XMLParserAttribute : XMLCodable.DecodableXMLNode in XMLCodable
+  S protocol witness table for XMLCodable.XMLParserComment : XMLCodable.DecodableXMLNode in XMLCodable
+  S protocol witness table for XMLCodable.XMLParserElement : XMLCodable.DecodableXMLElement in XMLCodable
+  S protocol witness table for XMLCodable.XMLParserElement : XMLCodable.DecodableXMLNode in XMLCodable
+  S protocol witness table for XMLCodable.XMLParserNode : XMLCodable.EncodableXMLNode in XMLCodable
+  S type metadata for XMLCodable.ElementContext
+  S type metadata for XMLCodable.XMLKeyType
+  S type metadata for XMLCodable.XMLNodeType
+  S type metadata for XMLCodable.XMLOutputFormatting
+  S type metadata for XMLCodable.XMLParserAttribute
+  S type metadata for XMLCodable.XMLParserComment
+  S type metadata for XMLCodable.XMLParserDocument
+  S type metadata for XMLCodable.XMLParserDTD
+  S type metadata for XMLCodable.XMLParserElement
+  S type metadata for XMLCodable.XMLParserHeader
+  S type metadata for XMLCodable.XMLParserNode
+  T type metadata accessor for XMLCodable.ElementContext
+  T type metadata accessor for XMLCodable.XMLDecoder
+  T type metadata accessor for XMLCodable.XMLEncoder
+  T type metadata accessor for XMLCodable.XMLKeyType
+  T type metadata accessor for XMLCodable.XMLNodeType
+  T type metadata accessor for XMLCodable.XMLOutputFormatting
+  T type metadata accessor for XMLCodable.XMLParserAttribute
+  T type metadata accessor for XMLCodable.XMLParserComment
+  T type metadata accessor for XMLCodable.XMLParserDocument
+  T type metadata accessor for XMLCodable.XMLParserDTD
+  T type metadata accessor for XMLCodable.XMLParserElement
+  T type metadata accessor for XMLCodable.XMLParserHeader
+  T type metadata accessor for XMLCodable.XMLParserNode
+
