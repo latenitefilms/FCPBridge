@@ -22,6 +22,12 @@ __pycache__/
 *~
 xcuserdata/
 
+# Xcode build artifacts
+DerivedData/
+patcher/build/
+patcher/SpliceKit.xcodeproj/xcuserdata/
+patcher/SpliceKit.xcodeproj/project.xcworkspace/xcuserdata/
+
 # Keys and credentials
 *.pem
 *.key
@@ -38,3 +44,4 @@ Package.resolved
 
 # Release binaries (use GitHub Releases instead)
 patcher/FCPBridgePatcher-v*.zip
+patcher/SpliceKit-v*.dmg

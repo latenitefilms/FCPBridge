@@ -1,15 +1,15 @@
 #!/bin/bash
 set -e
 
-# FCPBridge Release Script — fully automated
+# SpliceKit Release Script — fully automated
 # Usage: ./release.sh <version> "<release notes>"
-# Example: ./release.sh 2.8.0 "New feature X, fix Y"
+# Example: ./release.sh 3.0.0 "New feature X, fix Y"
 
 VERSION="$1"
 NOTES="$2"
 if [ -z "$VERSION" ]; then
     echo "Usage: ./release.sh <version> [\"release notes\"]"
-    echo "Example: ./release.sh 2.8.0 \"Batch export improvements, bug fixes\""
+    echo "Example: ./release.sh 3.0.0 \"Wizard UI, DMG distribution\""
     exit 1
 fi
 if [ -z "$NOTES" ]; then
@@ -17,97 +17,117 @@ if [ -z "$NOTES" ]; then
 fi
 
 SIGN_ID="Developer ID Application: Brian Tate (RH4U5VJHM6)"
-KEYCHAIN_PROFILE="FCPBridge"
-PATCHER_APP="patcher/FCPBridgePatcher.app"
-ZIP_NAME="FCPBridgePatcher-v${VERSION}.zip"
-ZIP_PATH="patcher/${ZIP_NAME}"
+KEYCHAIN_PROFILE="SpliceKit"
+XCODE_PROJECT="patcher/SpliceKit.xcodeproj"
+BUILD_DIR="patcher/build"
+BUILT_APP="${BUILD_DIR}/Build/Products/Release/SpliceKit.app"
+DMG_NAME="SpliceKit-v${VERSION}.dmg"
+DMG_PATH="patcher/${DMG_NAME}"
 SPARKLE_SIGN="/tmp/bin/sign_update"
 
-echo "=== FCPBridge Release v${VERSION} ==="
+echo "=== SpliceKit Release v${VERSION} ==="
 echo ""
 
 # ──────────────────────────────────────────────
 # BUILD
 # ──────────────────────────────────────────────
 
-echo "[1/12] Bumping version to ${VERSION}..."
-/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${VERSION}" "${PATCHER_APP}/Contents/Info.plist"
-/usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${VERSION}" "${PATCHER_APP}/Contents/Info.plist"
+echo "[1/13] Bumping version to ${VERSION}..."
+/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${VERSION}" "patcher/SpliceKit/Info.plist"
+# Also update the Xcode project build settings
+sed -i '' "s/MARKETING_VERSION = \"[^\"]*\"/MARKETING_VERSION = \"${VERSION}\"/g" "${XCODE_PROJECT}/project.pbxproj"
+sed -i '' "s/CURRENT_PROJECT_VERSION = \"[^\"]*\"/CURRENT_PROJECT_VERSION = \"${VERSION}\"/g" "${XCODE_PROJECT}/project.pbxproj"
 
-echo "[2/12] Building FCPBridge dylib..."
+echo "[2/13] Building FCPBridge dylib..."
 make clean && make
 
-echo "[3/12] Syncing patcher resources and rebuilding patcher..."
-cp build/FCPBridge "${PATCHER_APP}/Contents/Resources/FCPBridge"
-cp mcp/server.py "${PATCHER_APP}/Contents/Resources/mcp/server.py"
-cp tools/silence-detector.swift "${PATCHER_APP}/Contents/Resources/tools/silence-detector.swift"
-rsync -a --delete Sources/ "${PATCHER_APP}/Contents/Resources/Sources/"
+echo "[3/13] Building SpliceKit app via Xcode..."
+xcodebuild -project "${XCODE_PROJECT}" \
+    -scheme SpliceKit \
+    -configuration Release \
+    -derivedDataPath "${BUILD_DIR}" \
+    ONLY_ACTIVE_ARCH=NO \
+    clean build
+
+echo "[4/13] Syncing bundled resources into app..."
+mkdir -p "${BUILT_APP}/Contents/Resources/Sources"
+mkdir -p "${BUILT_APP}/Contents/Resources/mcp"
+mkdir -p "${BUILT_APP}/Contents/Resources/tools/parakeet-transcriber"
+cp build/FCPBridge "${BUILT_APP}/Contents/Resources/FCPBridge"
+cp mcp/server.py "${BUILT_APP}/Contents/Resources/mcp/server.py"
+cp tools/silence-detector.swift "${BUILT_APP}/Contents/Resources/tools/silence-detector.swift"
+rsync -a --delete Sources/ "${BUILT_APP}/Contents/Resources/Sources/"
 rsync -a --delete \
     --exclude '.build' \
     --exclude '.swiftpm' \
-    tools/parakeet-transcriber/ "${PATCHER_APP}/Contents/Resources/tools/parakeet-transcriber/"
-xcrun swiftc -parse-as-library -O \
-    -target arm64-apple-macos14.0 \
-    -F "${PATCHER_APP}/Contents/Frameworks" \
-    -framework Sparkle \
-    -Xlinker -rpath -Xlinker @executable_path/../Frameworks \
-    -o "${PATCHER_APP}/Contents/MacOS/FCPBridgePatcher" \
-    patcher/FCPBridgePatcher/main.swift
+    tools/parakeet-transcriber/ "${BUILT_APP}/Contents/Resources/tools/parakeet-transcriber/"
 
 # ──────────────────────────────────────────────
 # SIGN
 # ──────────────────────────────────────────────
 
-echo "[4/12] Signing embedded binaries..."
-find "${PATCHER_APP}/Contents/Resources" -type f | while read f; do
+echo "[5/13] Signing embedded binaries..."
+find "${BUILT_APP}/Contents/Resources" -type f | while read f; do
     if file -b "$f" 2>/dev/null | grep -q "Mach-O"; then
         codesign --force --options runtime --timestamp --sign "${SIGN_ID}" "$f"
         echo "  Signed: $(basename "$f")"
     fi
 done
 
-echo "[5/12] Signing app bundle..."
-codesign --force --deep --options runtime --timestamp --sign "${SIGN_ID}" "${PATCHER_APP}"
-codesign --verify --deep --strict "${PATCHER_APP}"
+echo "[6/13] Signing app bundle..."
+codesign --force --deep --options runtime --timestamp --sign "${SIGN_ID}" "${BUILT_APP}"
+codesign --verify --deep --strict "${BUILT_APP}"
 echo "  Verification passed"
+
+# ──────────────────────────────────────────────
+# CREATE DMG
+# ──────────────────────────────────────────────
+
+echo "[7/13] Creating DMG..."
+DMG_TEMP="${BUILD_DIR}/dmg_staging"
+rm -rf "${DMG_TEMP}" "${DMG_PATH}"
+mkdir -p "${DMG_TEMP}"
+cp -R "${BUILT_APP}" "${DMG_TEMP}/"
+ln -s /Applications "${DMG_TEMP}/Applications"
+
+hdiutil create -volname "SpliceKit" \
+    -srcfolder "${DMG_TEMP}" \
+    -ov -format UDZO \
+    "${DMG_PATH}"
+rm -rf "${DMG_TEMP}"
+echo "  DMG: ${DMG_PATH} ($(du -h "${DMG_PATH}" | cut -f1))"
 
 # ──────────────────────────────────────────────
 # NOTARIZE
 # ──────────────────────────────────────────────
 
-echo "[6/12] Creating zip..."
-rm -f "${ZIP_PATH}"
-cd patcher && ditto -c -k --keepParent FCPBridgePatcher.app "${ZIP_NAME}" && cd ..
+echo "[8/13] Submitting DMG for notarization (this may take a few minutes)..."
+xcrun notarytool submit "${DMG_PATH}" --keychain-profile "${KEYCHAIN_PROFILE}" --wait
 
-echo "[7/12] Submitting for notarization (this may take a few minutes)..."
-xcrun notarytool submit "${ZIP_PATH}" --keychain-profile "${KEYCHAIN_PROFILE}" --wait
-
-echo "[8/12] Stapling notarization ticket..."
-xcrun stapler staple "${PATCHER_APP}"
-rm -f "${ZIP_PATH}"
-cd patcher && ditto -c -k --keepParent FCPBridgePatcher.app "${ZIP_NAME}" && cd ..
-echo "  Final zip: ${ZIP_PATH} ($(du -h "${ZIP_PATH}" | cut -f1))"
+echo "[9/13] Stapling notarization ticket..."
+xcrun stapler staple "${DMG_PATH}"
+echo "  Stapled: ${DMG_PATH}"
 
 # ──────────────────────────────────────────────
 # SPARKLE APPCAST
 # ──────────────────────────────────────────────
 
-echo "[9/12] Generating Sparkle EdDSA signature..."
+echo "[10/13] Generating Sparkle EdDSA signature..."
 if [ ! -f "${SPARKLE_SIGN}" ]; then
     echo "  Downloading Sparkle tools..."
     SPARKLE_URL=$(curl -s https://api.github.com/repos/sparkle-project/Sparkle/releases/latest | python3 -c "import sys,json; [print(a['browser_download_url']) for a in json.loads(sys.stdin.read())['assets'] if a['name'].endswith('.tar.xz')]")
     curl -sL "${SPARKLE_URL}" -o /tmp/sparkle.tar.xz
     cd /tmp && tar xf sparkle.tar.xz && cd -
 fi
-SPARKLE_SIG=$("${SPARKLE_SIGN}" "${ZIP_PATH}" | grep -o 'edSignature="[^"]*"' | sed 's/edSignature="//;s/"//')
-FILE_SIZE=$(stat -f%z "${ZIP_PATH}")
+SPARKLE_SIG=$("${SPARKLE_SIGN}" "${DMG_PATH}" | grep -o 'edSignature="[^"]*"' | sed 's/edSignature="//;s/"//')
+FILE_SIZE=$(stat -f%z "${DMG_PATH}")
 PUB_DATE=$(date -u "+%a, %d %b %Y %H:%M:%S +0000")
 echo "  Signature: ${SPARKLE_SIG}"
 
-echo "[10/12] Updating appcast.xml..."
+echo "[11/13] Updating appcast.xml..."
 # Build the new item XML
 NEW_ITEM="    <item>
-      <title>FCPBridge v${VERSION}</title>
+      <title>SpliceKit v${VERSION}</title>
       <sparkle:version>${VERSION}</sparkle:version>
       <sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
@@ -117,7 +137,7 @@ NEW_ITEM="    <item>
         <p>${NOTES}</p>
       ]]></description>
       <enclosure
-        url=\"https://github.com/elliotttate/FCPBridge/releases/download/v${VERSION}/${ZIP_NAME}\"
+        url=\"https://github.com/elliotttate/FCPBridge/releases/download/v${VERSION}/${DMG_NAME}\"
         sparkle:edSignature=\"${SPARKLE_SIG}\"
         length=\"${FILE_SIZE}\"
         type=\"application/octet-stream\" />
@@ -144,24 +164,25 @@ print('  Appcast updated')
 # GIT + GITHUB RELEASE
 # ──────────────────────────────────────────────
 
-echo "[11/12] Committing and pushing..."
+echo "[12/13] Committing and pushing..."
 git add -A
 git commit -m "Release v${VERSION}: ${NOTES}"
 git push origin main
 
-echo "[12/12] Creating GitHub release..."
-gh release create "v${VERSION}" "${ZIP_PATH}" \
+echo "[13/13] Creating GitHub release..."
+gh release create "v${VERSION}" "${DMG_PATH}" \
     --title "v${VERSION}" \
     --notes "${NOTES}" \
     2>/dev/null && RELEASE_URL=$(gh release view "v${VERSION}" --json url -q '.url') || RELEASE_URL="(check GitHub)"
 
 echo ""
 echo "========================================="
-echo "  Release v${VERSION} complete!"
+echo "  SpliceKit v${VERSION} released!"
 echo "  ${RELEASE_URL}"
 echo "========================================="
 echo ""
-echo "  - Built, signed, notarized, stapled"
+echo "  - Built via Xcode, signed, notarized, stapled"
+echo "  - DMG created with drag-to-Applications"
 echo "  - Appcast updated with EdDSA signature"
 echo "  - Pushed to main, GitHub release created"
 echo "  - Sparkle will auto-notify users"

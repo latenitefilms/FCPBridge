@@ -1,7 +1,7 @@
 #!/bin/bash
 #
-# FCPBridge Patcher
-# Patches Final Cut Pro to load the FCPBridge dylib for programmatic control.
+# SpliceKit Patcher
+# Patches Final Cut Pro to load the SpliceKit dylib for programmatic control.
 #
 # Usage:
 #   ./patch_fcp.sh                     # Patch using defaults
@@ -27,7 +27,7 @@ if [[ -z "${SOURCE_APP:-}" ]]; then
         SOURCE_APP="$STANDARD_APP"  # will fail with a clear error later
     fi
 fi
-DEFAULT_DEST="$HOME/Desktop/FinalCutPro_Modded"
+DEFAULT_DEST="$HOME/Library/Application Support/SpliceKit"
 DEST_DIR="${DEST_DIR:-$DEFAULT_DEST}"
 APP_NAME="$(basename "$SOURCE_APP")"
 BRIDGE_PORT=9876

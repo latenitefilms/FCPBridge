@@ -1431,10 +1431,11 @@ static NSString * const kSeparatorRowID = @"FCPSeparatorRow";
     // 2. Common deploy directories
     NSString *home = NSHomeDirectory();
     NSArray *paths = @[
+        [home stringByAppendingPathComponent:@"Library/Application Support/SpliceKit/tools/silence-detector"],
         [home stringByAppendingPathComponent:@"Desktop/FCPBridge/build/silence-detector"],
         [home stringByAppendingPathComponent:@"Documents/GitHub/FCPBridge/build/silence-detector"],
         [home stringByAppendingPathComponent:@"FCPBridge/build/silence-detector"],
-        [home stringByAppendingPathComponent:@"Library/Caches/FCPBridge/build/silence-detector"],
+        [home stringByAppendingPathComponent:@"Library/Caches/SpliceKit/build/silence-detector"],
     ];
     for (NSString *p in paths) {
         if ([fm isExecutableFileAtPath:p]) return p;

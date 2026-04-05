@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">
   <channel>
-    <title>FCPBridge Patcher Updates</title>
+    <title>SpliceKit Updates</title>
     <link>https://github.com/elliotttate/FCPBridge</link>
-    <description>FCPBridge Patcher release updates</description>
+    <description>SpliceKit release updates</description>
     <language>en</language>
     <item>
       <title>FCPBridge v2.8.4</title>

@@ -1752,12 +1752,13 @@ static double CMTimeToSeconds(FCPTranscript_CMTime t) {
     // 2. Common deploy directories (matching silence-detector pattern)
     NSString *home = NSHomeDirectory();
     NSArray *searchPaths = @[
+        [home stringByAppendingPathComponent:@"Library/Application Support/SpliceKit/tools/parakeet-transcriber"],
         [home stringByAppendingPathComponent:@"Desktop/FCPBridge/build/parakeet-transcriber"],
         [home stringByAppendingPathComponent:@"Documents/GitHub/FCPBridge/build/parakeet-transcriber"],
         [home stringByAppendingPathComponent:@"Desktop/FCPBridge/tools/parakeet-transcriber/.build/release/parakeet-transcriber"],
         [home stringByAppendingPathComponent:@"Documents/GitHub/FCPBridge/tools/parakeet-transcriber/.build/release/parakeet-transcriber"],
         [home stringByAppendingPathComponent:@"FCPBridge/tools/parakeet-transcriber/.build/release/parakeet-transcriber"],
-        [home stringByAppendingPathComponent:@"Library/Caches/FCPBridge/tools/parakeet-transcriber/.build/release/parakeet-transcriber"],
+        [home stringByAppendingPathComponent:@"Library/Caches/SpliceKit/tools/parakeet-transcriber/.build/release/parakeet-transcriber"],
     ];
     for (NSString *path in searchPaths) {
         if ([fm fileExistsAtPath:path]) return path;
@@ -1773,7 +1774,7 @@ static double CMTimeToSeconds(FCPTranscript_CMTime t) {
         [home stringByAppendingPathComponent:@"Documents/GitHub/FCPBridge/tools/parakeet-transcriber"],
         [home stringByAppendingPathComponent:@"Desktop/FCPBridge/tools/parakeet-transcriber"],
         [home stringByAppendingPathComponent:@"FCPBridge/tools/parakeet-transcriber"],
-        [home stringByAppendingPathComponent:@"Library/Caches/FCPBridge/tools/parakeet-transcriber"],
+        [home stringByAppendingPathComponent:@"Library/Caches/SpliceKit/tools/parakeet-transcriber"],
     ];
     for (NSString *path in candidates) {
         if ([fm fileExistsAtPath:[path stringByAppendingPathComponent:@"Package.swift"]]) {
@@ -2099,7 +2100,7 @@ static double CMTimeToSeconds(FCPTranscript_CMTime t) {
         } else if ([stderrText containsString:@"Intel"] || [stderrText containsString:@"Neural Engine"]) {
             userError = @"Parakeet requires Apple Silicon (M1+). Use Apple Speech engine instead.";
         }
-        [self setErrorState:[NSString stringWithFormat:@"%@ Check ~/Library/Logs/FCPBridge/fcpbridge.log for details.", userError]];
+        [self setErrorState:[NSString stringWithFormat:@"%@ Check ~/Library/Logs/SpliceKit/splicekit.log for details.", userError]];
         return;
     }
 

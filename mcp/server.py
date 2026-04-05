@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-FCPBridge MCP Server v2
-Provides direct in-process control of Final Cut Pro via the FCPBridge dylib.
+SpliceKit MCP Server v2
+Provides direct in-process control of Final Cut Pro via the SpliceKit dylib.
 Connects to the JSON-RPC server running INSIDE the FCP process at 127.0.0.1:9876.
 """
 
@@ -14,8 +14,8 @@ FCPBRIDGE_HOST = "127.0.0.1"
 FCPBRIDGE_PORT = 9876
 
 mcp = FastMCP(
-    "fcpbridge",
-    instructions="""Direct in-process control of Final Cut Pro via injected FCPBridge dylib.
+    "splicekit",
+    instructions="""Direct in-process control of Final Cut Pro via injected SpliceKit dylib.
 Connects to a JSON-RPC server running INSIDE the FCP process with access to 78,000+ ObjC classes.
 All operations are fully programmatic - no AppleScript, no UI automation.
 
@@ -130,7 +130,7 @@ montage_auto(song_uid, event_name, style) -- one-shot auto-montage
 
 
 class BridgeConnection:
-    """Persistent connection to the FCPBridge JSON-RPC server."""
+    """Persistent connection to the SpliceKit JSON-RPC server."""
 
     def __init__(self):
         self.sock = None
@@ -148,7 +148,7 @@ class BridgeConnection:
         try:
             self.ensure_connected()
         except (ConnectionRefusedError, OSError) as e:
-            return {"error": f"Cannot connect to FCPBridge at {FCPBRIDGE_HOST}:{FCPBRIDGE_PORT}. "
+            return {"error": f"Cannot connect to SpliceKit at {FCPBRIDGE_HOST}:{FCPBRIDGE_PORT}. "
                     f"Is the modded FCP running? Error: {e}"}
 
         self._id += 1
@@ -159,7 +159,7 @@ class BridgeConnection:
                 chunk = self.sock.recv(16777216)
                 if not chunk:
                     self.sock = None
-                    return {"error": "Connection closed by FCPBridge"}
+                    return {"error": "Connection closed by SpliceKit"}
                 self._buf += chunk
             line, self._buf = self._buf.split(b"\n", 1)
             resp = json.loads(line)
@@ -188,10 +188,10 @@ def _fmt(r):
 
 @mcp.tool()
 def bridge_status() -> str:
-    """Check if FCPBridge is running and get FCP version info."""
+    """Check if SpliceKit is running and get FCP version info."""
     r = bridge.call("system.version")
     if _err(r):
-        return f"FCPBridge NOT connected: {r.get('error', r)}"
+        return f"SpliceKit NOT connected: {r.get('error', r)}"
     return _fmt(r)
 
 
@@ -540,7 +540,7 @@ def call_method_with_args(target: str, selector: str, args: str = "[]",
 
 @mcp.tool()
 def manage_handles(action: str = "list", handle: str = "") -> str:
-    """Manage object handles stored by FCPBridge.
+    """Manage object handles stored by SpliceKit.
 
     Actions:
       list - show all active handles with class names
@@ -621,7 +621,7 @@ def import_fcpxml(xml: str, internal: bool = True) -> str:
 
 
 @mcp.tool()
-def generate_fcpxml(event_name: str = "FCPBridge Event", project_name: str = "FCPBridge Project",
+def generate_fcpxml(event_name: str = "SpliceKit Event", project_name: str = "SpliceKit Project",
                     frame_rate: str = "24", width: int = 1920, height: int = 1080,
                     items: str = "[]") -> str:
     """Generate valid FCPXML for import. Creates a project with clips, gaps, titles,
@@ -1137,7 +1137,7 @@ def call_method(class_name: str, selector: str, class_method: bool = True) -> st
 
 @mcp.tool()
 def raw_call(method: str, params: str = "{}") -> str:
-    """Send a raw JSON-RPC call to FCPBridge."""
+    """Send a raw JSON-RPC call to SpliceKit."""
     try:
         p = json.loads(params)
     except json.JSONDecodeError as e:
@@ -1642,7 +1642,7 @@ def execute_menu_command(menu_path: list[str]) -> str:
                    e.g. ["File", "New", "Project"] or ["Edit", "Paste as Connected Clip"]
 
     This gives you access to every single menu item in FCP, including items
-    that don't have dedicated FCPBridge actions. Menu items are matched
+    that don't have dedicated SpliceKit actions. Menu items are matched
     case-insensitively and trailing ellipsis (...) is ignored.
     """
     r = bridge.call("menu.execute", menuPath=menu_path)
@@ -2026,12 +2026,12 @@ def set_viewer_zoom(zoom: float) -> str:
 
 
 # ============================================================
-# FCPBridge Options
+# SpliceKit Options
 # ============================================================
 
 @mcp.tool()
 def get_bridge_options() -> str:
-    """Get the current FCPBridge option settings.
+    """Get the current SpliceKit option settings.
 
     Returns the state of all configurable options
     (e.g. effectDragAsAdjustmentClip, viewerPinchZoom, videoOnlyKeepsAudioDisabled).
@@ -2044,7 +2044,7 @@ def get_bridge_options() -> str:
 
 @mcp.tool()
 def set_bridge_option(option: str, enabled: bool) -> str:
-    """Toggle an FCPBridge option.
+    """Toggle a SpliceKit option.
 
     Args:
         option: Option name. Currently supported:

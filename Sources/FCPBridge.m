@@ -16,10 +16,10 @@ static dispatch_queue_t sLogQueue = nil;
 static void FCPBridge_initLogging(void) {
     sLogQueue = dispatch_queue_create("com.fcpbridge.log", DISPATCH_QUEUE_SERIAL);
 
-    // Write to ~/Library/Logs/FCPBridge/fcpbridge.log
-    NSString *logDir = [NSHomeDirectory() stringByAppendingPathComponent:@"Library/Logs/FCPBridge"];
+    // Write to ~/Library/Logs/SpliceKit/splicekit.log
+    NSString *logDir = [NSHomeDirectory() stringByAppendingPathComponent:@"Library/Logs/SpliceKit"];
     [[NSFileManager defaultManager] createDirectoryAtPath:logDir withIntermediateDirectories:YES attributes:nil error:nil];
-    sLogPath = [logDir stringByAppendingPathComponent:@"fcpbridge.log"];
+    sLogPath = [logDir stringByAppendingPathComponent:@"splicekit.log"];
 
     // Create or truncate the log file
     [[NSFileManager defaultManager] createFileAtPath:sLogPath contents:nil attributes:nil];
@@ -34,14 +34,14 @@ void FCPBridge_log(NSString *format, ...) {
     va_end(args);
 
     // Also NSLog
-    NSLog(@"[FCPBridge] %@", message);
+    NSLog(@"[SpliceKit] %@", message);
 
     // Write to file
     if (sLogHandle && sLogQueue) {
         NSString *timestamp = [NSDateFormatter localizedStringFromDate:[NSDate date]
                                                             dateStyle:NSDateFormatterNoStyle
                                                             timeStyle:NSDateFormatterMediumStyle];
-        NSString *line = [NSString stringWithFormat:@"[%@] [FCPBridge] %@\n", timestamp, message];
+        NSString *line = [NSString stringWithFormat:@"[%@] [SpliceKit] %@\n", timestamp, message];
         NSData *data = [line dataUsingEncoding:NSUTF8StringEncoding];
         dispatch_async(sLogQueue, ^{
             [sLogHandle writeData:data];
@@ -71,7 +71,7 @@ const char *FCPBridge_getSocketPath(void) {
         [[NSFileManager defaultManager] removeItemAtPath:testPath error:nil];
     } else {
         // Fall back to app-specific cache directory
-        NSString *cacheDir = [NSHomeDirectory() stringByAppendingPathComponent:@"Library/Caches/FCPBridge"];
+        NSString *cacheDir = [NSHomeDirectory() stringByAppendingPathComponent:@"Library/Caches/SpliceKit"];
         [[NSFileManager defaultManager] createDirectoryAtPath:cacheDir withIntermediateDirectories:YES attributes:nil error:nil];
         path = [cacheDir stringByAppendingPathComponent:@"fcpbridge.sock"];
         FCPBridge_log(@"Using fallback socket path: %@", path);
