@@ -1783,7 +1783,10 @@ static double CMTimeToSeconds(SpliceKitTranscript_CMTime t) {
     NSString *buildDir = [[[NSBundle mainBundle] bundlePath]
         stringByAppendingPathComponent:@"Contents/Frameworks/SpliceKit.framework/Versions/A/Resources"];
     NSString *builtPath = [buildDir stringByAppendingPathComponent:@"parakeet-transcriber"];
-    if ([fm fileExistsAtPath:builtPath]) return builtPath;
+    if ([fm fileExistsAtPath:builtPath]) {
+        SpliceKit_log(@"[Transcript] Found parakeet-transcriber in framework bundle");
+        return builtPath;
+    }
 
     // 2. Standard tool locations (portable — no user-specific paths)
     NSString *home = NSHomeDirectory();
@@ -1792,10 +1795,14 @@ static double CMTimeToSeconds(SpliceKitTranscript_CMTime t) {
         [home stringByAppendingPathComponent:@"Library/Application Support/SpliceKit/tools/parakeet-transcriber"],
         [home stringByAppendingPathComponent:@"Library/Caches/SpliceKit/tools/parakeet-transcriber/.build/release/parakeet-transcriber"],
     ];
+    SpliceKit_log(@"[Transcript] Searching for parakeet-transcriber binary...");
     for (NSString *path in searchPaths) {
-        if ([fm fileExistsAtPath:path]) return path;
+        BOOL exists = [fm fileExistsAtPath:path];
+        SpliceKit_log(@"[Transcript]   %@ %@", exists ? @"FOUND" : @"not found:", path);
+        if (exists) return path;
     }
 
+    SpliceKit_log(@"[Transcript] parakeet-transcriber not found in any search path");
     return nil;
 }
 
@@ -1806,11 +1813,13 @@ static double CMTimeToSeconds(SpliceKitTranscript_CMTime t) {
         [home stringByAppendingPathComponent:@"Library/Caches/SpliceKit/tools/parakeet-transcriber"],
         [home stringByAppendingPathComponent:@"Library/Application Support/SpliceKit/tools/parakeet-transcriber"],
     ];
+    SpliceKit_log(@"[Transcript] Searching for Parakeet source project (Package.swift)...");
     for (NSString *path in candidates) {
-        if ([fm fileExistsAtPath:[path stringByAppendingPathComponent:@"Package.swift"]]) {
-            return path;
-        }
+        BOOL exists = [fm fileExistsAtPath:[path stringByAppendingPathComponent:@"Package.swift"]];
+        SpliceKit_log(@"[Transcript]   %@ %@", exists ? @"FOUND" : @"not found:", path);
+        if (exists) return path;
     }
+    SpliceKit_log(@"[Transcript] No Parakeet source project found — cannot build from source");
     return nil;
 }
 
@@ -1868,11 +1877,16 @@ static double CMTimeToSeconds(SpliceKitTranscript_CMTime t) {
 }
 
 - (void)performParakeetTranscription {
-    SpliceKit_log(@"[Transcript] Using Parakeet engine (FluidAudio)");
+    SpliceKit_log(@"[Transcript] ────────────────────────────────────────");
+    SpliceKit_log(@"[Transcript] Starting Parakeet transcription (FluidAudio on-device)");
+    SpliceKit_log(@"[Transcript] Model: Parakeet %@, Speakers: %@",
+        self.parakeetModelVersion ?: @"v3",
+        self.speakerDetectionEnabled ? @"ON" : @"OFF");
 
     // Check / build the CLI tool
     NSString *binaryPath = [self parakeetTranscriberPath];
     if (!binaryPath) {
+        SpliceKit_log(@"[Transcript] Pre-built binary not found, attempting to build from source...");
         __block BOOL buildOK = NO;
         buildOK = [self buildParakeetTranscriberWithStatus:^(NSString *status) {
             dispatch_async(dispatch_get_main_queue(), ^{
@@ -1881,7 +1895,6 @@ static double CMTimeToSeconds(SpliceKitTranscript_CMTime t) {
             });
         }];
         if (!buildOK) {
-            // Check for common causes
             NSString *xcodeCheck = @"";
             NSTask *xcTask = [[NSTask alloc] init];
             xcTask.launchPath = @"/usr/bin/xcode-select";
@@ -1893,25 +1906,39 @@ static double CMTimeToSeconds(SpliceKitTranscript_CMTime t) {
                 [xcTask launch];
                 [xcTask waitUntilExit];
                 if (xcTask.terminationStatus != 0) {
-                    xcodeCheck = @" Xcode Command Line Tools are NOT installed — run: xcode-select --install";
+                    xcodeCheck = @"\n\nXcode Command Line Tools are NOT installed.\nRun this in Terminal: xcode-select --install";
                 }
-            } @catch (NSException *e) {
-                xcodeCheck = @" Could not check for Xcode CLT.";
-            }
+            } @catch (NSException *e) {}
 
-            [self setErrorState:[NSString stringWithFormat:
-                @"Failed to build Parakeet transcriber.%@ Re-run the SpliceKit Patcher to fix this.", xcodeCheck]];
-            SpliceKit_log(@"[Transcript] Parakeet build failed.%@ Searched: ~/Library/Caches/SpliceKit/tools/parakeet-transcriber/", xcodeCheck);
+            NSString *home = NSHomeDirectory();
+            NSString *msg = [NSString stringWithFormat:
+                @"Parakeet transcriber not found.\n\n"
+                @"To fix this, either:\n"
+                @"  1. Re-run the SpliceKit patcher app\n"
+                @"  2. Or copy the binary manually to:\n"
+                @"     %@/Applications/SpliceKit/tools/parakeet-transcriber\n\n"
+                @"You can also switch to \"Apple Speech\" engine in the dropdown above.%@",
+                home, xcodeCheck];
+            [self setErrorState:msg];
+            SpliceKit_log(@"[Transcript] ERROR: Parakeet transcriber not found and could not be built.");
+            SpliceKit_log(@"[Transcript] FIX: Re-run SpliceKit patcher, or copy binary to ~/Applications/SpliceKit/tools/");
             return;
         }
         binaryPath = [self parakeetTranscriberPath];
         if (!binaryPath) {
-            [self setErrorState:@"Parakeet transcriber binary not found after build."];
+            [self setErrorState:@"Parakeet transcriber binary not found after build. Try switching to Apple Speech engine."];
             return;
         }
     }
 
     SpliceKit_log(@"[Transcript] Using parakeet-transcriber at: %@", binaryPath);
+
+    // Verify the binary is executable
+    if (![[NSFileManager defaultManager] isExecutableFileAtPath:binaryPath]) {
+        SpliceKit_log(@"[Transcript] ERROR: parakeet-transcriber exists but is not executable");
+        [self setErrorState:@"Parakeet binary is not executable. Try: chmod +x ~/Applications/SpliceKit/tools/parakeet-transcriber"];
+        return;
+    }
 
     // Collect clips from timeline (reuse existing logic)
     __block NSArray *clips = nil;
@@ -1961,21 +1988,53 @@ static double CMTimeToSeconds(SpliceKitTranscript_CMTime t) {
 
     if (!clips || clips.count == 0) {
         if (self.status != SpliceKitTranscriptStatusError) {
-            [self setErrorState:@"No media clips found on timeline."];
+            [self setErrorState:@"No media clips found on timeline. Make sure you have a project open with clips."];
+            SpliceKit_log(@"[Transcript] No clips found. Is a project/timeline open?");
         }
         return;
     }
 
+    SpliceKit_log(@"[Transcript] Found %lu items on timeline", (unsigned long)clips.count);
+
     // Filter to clips with media URLs
     NSMutableArray *transcribableClips = [NSMutableArray array];
+    NSUInteger skippedNoMedia = 0;
+    NSUInteger skippedTooShort = 0;
     for (NSDictionary *clipInfo in clips) {
-        if (clipInfo[@"mediaURL"]) {
-            [transcribableClips addObject:clipInfo];
+        if (!clipInfo[@"mediaURL"]) {
+            skippedNoMedia++;
+            continue;
         }
+        double dur = [clipInfo[@"duration"] doubleValue];
+        if (dur < 0.5) {
+            skippedTooShort++;
+            SpliceKit_log(@"[Transcript] Skipping clip (%.2fs, too short for transcription): %@",
+                dur, [clipInfo[@"mediaURL"] lastPathComponent]);
+            continue;
+        }
+        [transcribableClips addObject:clipInfo];
+    }
+
+    if (skippedNoMedia > 0) {
+        SpliceKit_log(@"[Transcript] Skipped %lu items without source media (gaps, generators, titles)",
+            (unsigned long)skippedNoMedia);
+    }
+    if (skippedTooShort > 0) {
+        SpliceKit_log(@"[Transcript] Skipped %lu clips shorter than 0.5s (too short for speech recognition)",
+            (unsigned long)skippedTooShort);
     }
 
     if (transcribableClips.count == 0) {
-        [self setErrorState:@"Could not find source media files for any clips."];
+        NSString *reason = @"No transcribable clips found on timeline.";
+        if (skippedTooShort > 0 && skippedNoMedia == 0) {
+            reason = [NSString stringWithFormat:
+                @"All %lu clips are too short for transcription (< 0.5 seconds). "
+                @"Parakeet needs at least 1 second of audio.", (unsigned long)skippedTooShort];
+        } else if (skippedNoMedia > 0) {
+            reason = @"No clips with source media files found. The timeline may only contain gaps, generators, or titles.";
+        }
+        [self setErrorState:reason];
+        SpliceKit_log(@"[Transcript] %@", reason);
         return;
     }
 
@@ -2004,8 +2063,15 @@ static double CMTimeToSeconds(SpliceKitTranscript_CMTime t) {
     NSData *manifestData = [NSJSONSerialization dataWithJSONObject:manifestEntries options:0 error:nil];
     [manifestData writeToFile:manifestPath atomically:YES];
 
-    SpliceKit_log(@"[Transcript] Parakeet batch: %lu clips, %lu unique files",
+    SpliceKit_log(@"[Transcript] Parakeet batch: %lu clips, %lu unique source files",
         (unsigned long)transcribableClips.count, (unsigned long)uniqueFiles.count);
+    for (NSString *file in uniqueFiles) {
+        BOOL exists = [[NSFileManager defaultManager] fileExistsAtPath:file];
+        SpliceKit_log(@"[Transcript]   %@ %@", exists ? @"OK" : @"MISSING!", [file lastPathComponent]);
+        if (!exists) {
+            SpliceKit_log(@"[Transcript]   Full path: %@", file);
+        }
+    }
 
     // Build arguments for batch mode
     NSMutableArray *taskArgs = [NSMutableArray arrayWithObjects:@"--batch", manifestPath, @"--progress", nil];
@@ -2084,14 +2150,24 @@ static double CMTimeToSeconds(SpliceKitTranscript_CMTime t) {
         }
     };
 
+    SpliceKit_log(@"[Transcript] Launching: %@ %@", binaryPath,
+        [taskArgs componentsJoinedByString:@" "]);
+
     @try {
         [task launch];
+        SpliceKit_log(@"[Transcript] Parakeet process started (PID %d)", task.processIdentifier);
         [task waitUntilExit];
     } @catch (NSException *e) {
-        SpliceKit_log(@"[Transcript] Parakeet task failed: %@", e.reason);
+        SpliceKit_log(@"[Transcript] ERROR: Failed to launch parakeet-transcriber: %@", e.reason);
         stdoutPipe.fileHandleForReading.readabilityHandler = nil;
         stderrPipe.fileHandleForReading.readabilityHandler = nil;
-        [self setErrorState:[NSString stringWithFormat:@"Parakeet failed: %@", e.reason]];
+        NSString *hint = @"";
+        if ([e.reason containsString:@"launch path"]) {
+            hint = @"\n\nThe binary may be corrupted. Try re-running the SpliceKit patcher.";
+        } else if ([e.reason containsString:@"Permission"]) {
+            hint = @"\n\nTry: chmod +x ~/Applications/SpliceKit/tools/parakeet-transcriber";
+        }
+        [self setErrorState:[NSString stringWithFormat:@"Could not launch Parakeet transcriber: %@%@", e.reason, hint]];
         return;
     }
 
@@ -2109,43 +2185,118 @@ static double CMTimeToSeconds(SpliceKitTranscript_CMTime t) {
     [[NSFileManager defaultManager] removeItemAtPath:manifestPath error:nil];
 
     if (task.terminationStatus != 0) {
-        SpliceKit_log(@"[Transcript] Parakeet process exited with code %d", task.terminationStatus);
-        // Read any remaining stderr for clues
+        SpliceKit_log(@"[Transcript] ─── Parakeet failed (exit code %d) ───", task.terminationStatus);
+
+        // Collect all stderr output for diagnostics
         NSData *stderrRemaining = [stderrPipe.fileHandleForReading readDataToEndOfFile];
         NSString *stderrText = [[NSString alloc] initWithData:stderrRemaining encoding:NSUTF8StringEncoding] ?: @"";
-        if (stderrText.length > 0) {
-            SpliceKit_log(@"[Transcript] Parakeet final stderr: %@", stderrText);
+
+        // Also check stdout for error JSON
+        NSString *stdoutText = nil;
+        @synchronized (stdoutAccum) {
+            stdoutText = [[NSString alloc] initWithData:stdoutAccum encoding:NSUTF8StringEncoding] ?: @"";
         }
 
-        // Build a user-friendly error from whatever we know
-        NSString *userError = @"Parakeet transcription failed.";
-        if ([stderrText containsString:@"network"] || [stderrText containsString:@"connect"]) {
-            userError = @"Parakeet failed — could not download model. Check your internet connection.";
-        } else if ([stderrText containsString:@"rate-limited"]) {
-            userError = @"Parakeet failed — download rate-limited. Wait a few minutes and try again.";
-        } else if ([stderrText containsString:@"disk"] || [stderrText containsString:@"space"]) {
-            userError = @"Parakeet failed — not enough disk space for model (~475 MB required).";
-        } else if ([stderrText containsString:@"memory"] || [stderrText containsString:@"Memory"]) {
-            userError = @"Parakeet failed — not enough memory. Close other apps and try again.";
-        } else if ([stderrText containsString:@"Intel"] || [stderrText containsString:@"Neural Engine"]) {
-            userError = @"Parakeet requires Apple Silicon (M1+). Use Apple Speech engine instead.";
+        // Log everything we have
+        NSString *allOutput = [NSString stringWithFormat:@"%@%@", stderrText, stdoutText];
+        if (allOutput.length > 0) {
+            // Log full output line by line for readability
+            for (NSString *line in [allOutput componentsSeparatedByString:@"\n"]) {
+                if (line.length > 0) {
+                    SpliceKit_log(@"[Transcript]   parakeet> %@", line);
+                }
+            }
+        } else {
+            SpliceKit_log(@"[Transcript]   (no output from parakeet-transcriber)");
         }
-        [self setErrorState:[NSString stringWithFormat:@"%@ Check ~/Library/Logs/SpliceKit/splicekit.log for details.", userError]];
+
+        // Build a user-friendly error with specific guidance
+        NSString *userError = nil;
+        NSString *allLower = [allOutput lowercaseString];
+
+        if ([allLower containsString:@"invalid audio"] || [allLower containsString:@"at least 1 second"]) {
+            userError = @"Audio clips are too short for transcription. Parakeet requires at least 1 second of audio per clip.";
+        } else if ([allLower containsString:@"no such file"] || [allLower containsString:@"file not found"]) {
+            userError = @"Source media file not found. The media may have been moved or is offline. Check File > Relink Files in FCP.";
+        } else if ([allLower containsString:@"network"] || [allLower containsString:@"connect"] ||
+                   [allLower containsString:@"urlsession"] || [allLower containsString:@"timed out"]) {
+            userError = @"Could not download the Parakeet AI model. Check your internet connection and try again. "
+                        @"The model (~475 MB) is downloaded once and cached locally.";
+        } else if ([allLower containsString:@"rate-limited"] || [allLower containsString:@"rate limit"] ||
+                   [allLower containsString:@"429"]) {
+            userError = @"Model download was rate-limited. Wait a few minutes and try again.";
+        } else if ([allLower containsString:@"disk"] || [allLower containsString:@"no space"] ||
+                   [allLower containsString:@"not enough space"]) {
+            userError = @"Not enough disk space for the Parakeet model (~475 MB required). Free up some space and try again.";
+        } else if ([allLower containsString:@"memory"] || [allLower containsString:@"cannot allocate"] ||
+                   [allLower containsString:@"out of memory"]) {
+            userError = @"Not enough memory to run Parakeet. Close other apps and try again, or switch to Apple Speech engine.";
+        } else if ([allLower containsString:@"intel"] || [allLower containsString:@"neural engine"] ||
+                   [allLower containsString:@"coreml"] || [allLower containsString:@"not supported"]) {
+            userError = @"Parakeet requires Apple Silicon (M1 or later). Switch to \"Apple Speech\" in the engine dropdown.";
+        } else if ([allLower containsString:@"permission"] || [allLower containsString:@"denied"]) {
+            userError = @"Permission denied reading media file. Check that FCP has Full Disk Access in System Settings > Privacy.";
+        } else if ([allLower containsString:@"corrupt"] || [allLower containsString:@"invalid data"]) {
+            userError = @"Media file appears to be corrupted or in an unsupported format.";
+        } else if (task.terminationStatus == 9) {
+            userError = @"Parakeet was killed (likely out of memory). Close other apps and try again with fewer clips.";
+        } else if (task.terminationStatus == 6) {
+            userError = @"Parakeet crashed (SIGABRT). This may be a compatibility issue. Try switching to Apple Speech engine.";
+        } else {
+            // Generic fallback with the actual output
+            NSString *lastLine = @"";
+            NSArray *lines = [allOutput componentsSeparatedByString:@"\n"];
+            for (NSString *line in [lines reverseObjectEnumerator]) {
+                if (line.length > 0 && ![line hasPrefix:@"PROGRESS:"]) {
+                    lastLine = line;
+                    break;
+                }
+            }
+            if (lastLine.length > 0) {
+                userError = [NSString stringWithFormat:@"Parakeet transcription failed: %@", lastLine];
+            } else {
+                userError = [NSString stringWithFormat:@"Parakeet transcription failed (exit code %d). "
+                    @"Try switching to \"Apple Speech\" engine.", task.terminationStatus];
+            }
+        }
+
+        SpliceKit_log(@"[Transcript] User-facing error: %@", userError);
+        SpliceKit_log(@"[Transcript] ─── End of Parakeet error ───");
+        [self setErrorState:userError];
         return;
     }
+
+    SpliceKit_log(@"[Transcript] Parakeet finished successfully (exit code 0)");
 
     // Parse batch JSON output: [{"file":"path","words":[...]}, ...]
     NSData *jsonData;
     @synchronized (stdoutAccum) {
         jsonData = [stdoutAccum copy];
     }
-    NSArray *batchResults = [NSJSONSerialization JSONObjectWithData:jsonData options:0 error:nil];
 
-    if (![batchResults isKindOfClass:[NSArray class]]) {
-        SpliceKit_log(@"[Transcript] Parakeet returned invalid batch JSON");
-        [self setErrorState:@"Parakeet returned invalid output."];
+    SpliceKit_log(@"[Transcript] Parsing output (%lu bytes)", (unsigned long)jsonData.length);
+
+    if (jsonData.length == 0) {
+        SpliceKit_log(@"[Transcript] ERROR: Parakeet produced no output (0 bytes on stdout)");
+        [self setErrorState:@"Parakeet produced no output. The audio may be silent or too short. Try a longer clip."];
         return;
     }
+
+    NSError *jsonError = nil;
+    NSArray *batchResults = [NSJSONSerialization JSONObjectWithData:jsonData options:0 error:&jsonError];
+
+    if (![batchResults isKindOfClass:[NSArray class]]) {
+        SpliceKit_log(@"[Transcript] ERROR: Parakeet returned invalid JSON: %@",
+            jsonError ? jsonError.localizedDescription : @"not an array");
+        // Log first 500 chars of what we got
+        NSString *preview = [[NSString alloc] initWithData:jsonData encoding:NSUTF8StringEncoding] ?: @"(binary data)";
+        if (preview.length > 500) preview = [preview substringToIndex:500];
+        SpliceKit_log(@"[Transcript] Raw output preview: %@", preview);
+        [self setErrorState:@"Parakeet returned unexpected output. Check the log for details."];
+        return;
+    }
+
+    SpliceKit_log(@"[Transcript] Got results for %lu files", (unsigned long)batchResults.count);
 
     // Map results back to clips by file path
     NSMutableDictionary *resultsByFile = [NSMutableDictionary dictionary];
