@@ -1834,6 +1834,42 @@ def set_inspector_property(property: str, value: float | str | bool) -> str:
     return _fmt(r)
 
 
+@mcp.tool()
+def get_title_text() -> str:
+    """Read text content, font, and size from the selected Motion title clip.
+
+    Inspects the selected clip's effect channel tree to find CHChannelText nodes.
+    Returns the rendered text string, font family, font name, and point size as
+    stored in the NSAttributedString on the text channel.
+
+    This is useful for verifying that title text imported via FCPXML actually
+    rendered with the correct content and font size.
+
+    Requires a title clip to be selected first (use timeline_action("selectClipAtPlayhead")).
+    """
+    r = bridge.call("inspector.getTitle")
+    if _err(r):
+        return f"Error: {r.get('error', r)}"
+    return _fmt(r)
+
+
+@mcp.tool()
+def verify_captions() -> str:
+    """Verify that generated captions rendered correctly on the timeline.
+
+    Checks the most recently generated captions by inspecting their text channels.
+    Returns verification results: text content, font size, font family for each
+    title that can be found. Reports any mismatches from the expected style.
+
+    Run this after generate_captions() to confirm titles have visible text at
+    the correct font size, without needing to ask the user to check manually.
+    """
+    r = bridge.call("captions.verify")
+    if _err(r):
+        return f"Error: {r.get('error', r)}"
+    return _fmt(r)
+
+
 # ============================================================
 # View/Panel Toggles
 # ============================================================
@@ -3536,11 +3572,20 @@ def set_caption_grouping(mode: str = "social", max_words: int = 3,
 def generate_captions(style: str = "", position: str = "center",
                       animation: str = "pop", word_highlight: bool = True,
                       max_words: int = 3, all_caps: bool = True) -> str:
-    """Generate social-media-style captions and add them to the timeline.
+    """Generate social-media-style captions and add them to the USER's timeline.
 
     One-shot tool: uses the current transcription (or existing words),
-    applies the style, generates FCPXML title clips, and imports them
-    as a connected storyline above the primary storyline.
+    applies the style, generates FCPXML title clips, imports them into a
+    temp project, then copies and pastes them as a connected storyline
+    onto the user's actual timeline. The temp project is deleted after.
+
+    Position offset (bottom/center/top) is applied via ObjC transform
+    after paste, not via FCPXML adjust-transform (which breaks with
+    Motion templates).
+
+    After insertion, the pipeline self-verifies by inspecting the first
+    title's text channel — returns verified text, font size, and font
+    family in the response.
 
     Requires words to be loaded first via open_captions() or set_caption_words().
 
@@ -3549,10 +3594,11 @@ def generate_captions(style: str = "", position: str = "center",
         position: "bottom", "center", "top"
         animation: "none", "fade", "pop", "slide_up", "typewriter", "bounce"
         word_highlight: Word-by-word karaoke highlighting (default True)
-        max_words: Max words per caption segment (default 5)
+        max_words: Max words per caption segment (default 3)
         all_caps: Convert text to uppercase
 
-    Returns the number of caption clips generated and import status.
+    Returns the number of caption clips generated, import status,
+    and self-verification results (text, fontSize, fontFamily).
     """
     params = {}
     if style:

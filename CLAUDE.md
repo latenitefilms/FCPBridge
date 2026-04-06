@@ -840,30 +840,45 @@ SpliceKit without access to the decompiled FCP source code.
 open_captions()                                    # open panel + transcribe timeline
 open_captions(style="bold_pop")                    # open with preset style
 get_caption_state()                                # check transcription progress + segments
-get_caption_styles()                               # list all 12 style presets
+get_caption_styles()                               # list all 13 style presets
 set_caption_style(preset_id="neon_glow")           # apply a preset
 set_caption_style(preset_id="bold_pop", font_size=80, position="center")  # customize
 set_caption_grouping(mode="words", max_words=4)    # control word grouping
-generate_captions(style="bold_pop")                # generate FCPXML + import to timeline
+generate_captions(style="bold_pop")                # generate + paste to user's timeline
+verify_captions()                                  # inspect titles to verify text/font
+get_title_text()                                   # read text/font from selected title
 export_captions_srt(path="/tmp/captions.srt")      # export SRT subtitles
 export_captions_txt(path="/tmp/captions.txt")      # export plain text
 ```
 
-Generates word-by-word highlighted, animated caption titles as FCPXML and imports
-them directly into the timeline via pasteboard. No drag-and-drop, no dialogs.
+Generates word-by-word highlighted, animated caption titles as FCPXML. The pipeline:
+1. Imports FCPXML into a temp project (resolves Motion template)
+2. Copies titles from temp project to clipboard (native format)
+3. Pastes as connected storyline onto the user's actual timeline
+4. Applies position offset via ObjC transform (not FCPXML adjust-transform)
+5. Self-verifies: inspects first title's CHChannelText for text/font/size
+6. Cleans up the temp project
 
-**Style presets** (12 built-in): `bold_pop`, `neon_glow`, `clean_minimal`, `handwritten`,
+No drag-and-drop, no dialogs, captions land directly on the user's timeline.
+
+**Style presets** (13 built-in): `bold_pop`, `neon_glow`, `clean_minimal`, `handwritten`,
 `gradient_fire`, `outline_bold`, `shadow_deep`, `karaoke`, `typewriter`, `bounce_fun`,
-`subtitle_pro`, `social_bold`
+`subtitle_pro`, `social_bold`, `social_reels`
+
+**Positions**: bottom (default lower third), center, top, custom
 
 **Animations**: none, fade, pop, slide_up, typewriter, bounce
 
-**Word grouping modes**: words (max N per group), sentence (by punctuation),
-time (max seconds), chars (max characters)
+**Word grouping modes**: social (2-3 words, 0.5s silence break — best for TikTok/Reels),
+words (max N per group), sentence (by punctuation), time (max seconds), chars (max characters)
 
 Each caption is a `<title>` element with `<text-style>` attributes. Word-by-word
 highlight uses multiple `<text-style>` refs per title — the active word gets the
 highlight color, others get the base text color.
+
+**Title text inspection**: `get_title_text()` reads text content, font family, font name,
+and point size from the selected Motion title's CHChannelText channel. `verify_captions()`
+walks connected titles on the timeline and checks text/fontSize against the expected style.
 
 ## Additional Documentation
 - `docs/TRANSCRIPT_EDITING_GUIDE.md` — Transcript-based editing (engines, silence removal, speakers)
