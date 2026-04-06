@@ -6,6 +6,22 @@
     <description>SpliceKit Patcher release updates</description>
     <language>en</language>
     <item>
+      <title>SpliceKit v3.1.0</title>
+      <sparkle:version>3.1.0</sparkle:version>
+      <sparkle:shortVersionString>3.1.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <pubDate>Mon, 06 Apr 2026 20:11:44 +0000</pubDate>
+      <description><![CDATA[
+        <h2>What's New in 3.1.0</h2>
+        <p>Configurable J/L playback speed ladders — swizzle fastForward:/rewind: to walk user-defined speed steps (e.g. 1, 1.5, 1.8, 2, 4, 8) instead of hardcoded powers-of-two. Configure via Enhancements > Playback Speed menu or bridge API.</p>
+      ]]></description>
+      <enclosure
+        url="https://github.com/elliotttate/SpliceKit/releases/download/v3.1.0/SpliceKit-v3.1.0.dmg"
+        sparkle:edSignature="diXKIQTtV4gPl/iE+gIwtr9ic6ZM6AACWmz04lLkQraT497lhaEEW39uFmcIprFYfhoahRky5kUaZZ2CEzoVCQ=="
+        length="10620408"
+        type="application/octet-stream" />
+    </item>
+    <item>
       <title>SpliceKit v3.0.2</title>
       <sparkle:version>3.0.2</sparkle:version>
       <sparkle:shortVersionString>3.0.2</sparkle:shortVersionString>

@@ -2,6 +2,8 @@
 
 Direct in-process control of Final Cut Pro via dylib injection. SpliceKit loads a custom framework into FCP's process space, giving you full access to all 78,000+ ObjC classes and their methods through a JSON-RPC interface and MCP server.
 
+Join us on [FCP Cafe](https://fcp.cafe) in the **#splicekit** [Discord channel](https://discord.com/invite/HD3FPc4Azu) for help, questions, or feature requests. For bug reports, [opening a GitHub Issue](https://github.com/elliotttate/SpliceKit/issues) is still recommended.
+
 ## Sample Apps
 
 ### Transcript Editor — Text-Based Video Editing

@@ -50,23 +50,24 @@ typedef struct {
     SpliceKitCaption_CMTime duration;
 } SpliceKitCaption_CMTimeRange;
 
-#pragma mark - Word-Progress Template Config (Neon Grow TM4C)
+#pragma mark - Word-Progress Template Config (SpliceKit Caption)
 //
 // mCaptions emits only 3 params per title — Content Position, Content Opacity
 // (fade-out), and Custom Speed (word-progress keyframes). All other params
 // (Animate=Word, Speed=Custom, highlight colors, glow, etc.) are baked into
 // the Motion template as defaults.
 //
-// The Custom Speed key path is specific to templates with a Sequence Text
-// behavior matching the Neon Grow TM4C object hierarchy. Content Position
-// and Content Opacity are universal across Motion title templates.
+// Content Position and Content Opacity key paths are universal (on the Widget's
+// Content layer 10003). Custom Speed path depends on the template hierarchy:
+//   Content (10003) → Text (10061) → behaviors (4) → SeqText (500001) → Controls (201) → CustomSpeed (209)
 //
 static NSString * const kWP_ContentPositionKey = @"9999/10003/1/100/101";
 static NSString * const kWP_ContentOpacityKey  = @"9999/10003/1/200/202";
-static NSString * const kWP_CustomSpeedKey     = @"9999/10003/3336225139/3336225138/3336087544/10061/4/3291121706/201/209";
+// Caption Large clone: Main(999166631) → Title(999166633) → behaviors → SeqText(500001)
+static NSString * const kWP_CustomSpeedKey     = @"9999/999166631/999166633/4/500001/201/209";
 
-static NSString * const kWP_TemplateUID  = @"~/Titles.localized/mCaptions/Basic/Neon Grow TM4C/Neon Grow TM4C.moti";
-static NSString * const kWP_TemplateName = @"Neon Grow TM4C";
+static NSString * const kWP_TemplateUID  = @"~/Titles.localized/SpliceKit/SpliceKit Caption/SpliceKit Caption.moti";
+static NSString * const kWP_TemplateName = @"SpliceKit Caption";
 
 // Content opacity fade-out: 5 frames before clip end
 static const double kWP_FadeOutDuration = 5.0 / 30.0;
@@ -2034,7 +2035,11 @@ static BOOL SpliceKitCaption_pollMainThread(BOOL (^condition)(void), double time
     __block int verifiedTitleCount = 0;
     __block int positionAppliedCount = 0;
     CGFloat yOffset = [self yOffsetForPosition];
-    BOOL needsPosition = (s.position != SpliceKitCaptionPositionCenter || s.customYOffset != 0);
+    // Word-progress mode sets position via FCPXML Content Position param.
+    // Only apply the ObjC runtime transform for standard (Caption Large) mode,
+    // otherwise the two position systems compound and produce insane values.
+    BOOL needsPosition = !useWordProgress
+        && (s.position != SpliceKitCaptionPositionCenter || s.customYOffset != 0);
 
     if (pasteHandled) {
         SpliceKit_executeOnMainThread(^{
@@ -2371,11 +2376,11 @@ static BOOL SpliceKitCaption_pollMainThread(BOOL (^condition)(void), double time
     NSMutableString *xml = [NSMutableString string];
     NSString *laneAttr = lane ? [NSString stringWithFormat:@" lane=\"%@\"", lane] : @"";
 
-    // <title> — use start=offset (mCaptions convention, not start="3600s")
-    [xml appendFormat:@"%@<title ref=\"r2\"%@ offset=\"%@\" name=\"%@\" duration=\"%@\">\n",
+    // <title> — use start="3600s" (FCP standard for Motion titles)
+    [xml appendFormat:@"%@<title ref=\"r2\"%@ offset=\"%@\" name=\"%@\" duration=\"%@\" start=\"3600s\">\n",
         indent, laneAttr, offsetStr, SpliceKitCaption_escapeXML(text), durStr];
 
-    // Param 1: Content Position
+    // Param 1: Content Position (in Motion template coordinate space)
     [xml appendFormat:@"%@    <param name=\"Content Position\" key=\"%@\" value=\"0 %.0f\"/>\n",
         indent, kWP_ContentPositionKey, posY];
 
