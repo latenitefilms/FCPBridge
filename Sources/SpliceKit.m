@@ -797,7 +797,68 @@ static void SpliceKit_disableCloudContent(void) {
         }
     }
 
+    // Belt-and-suspenders: also block CCFirstLaunchHelper.setupAndPresent... directly.
+    // The CloudContentFeatureFlag.isEnabled swizzle above may silently fail for Creator
+    // Studio if the Swift class method isn't exposed to ObjC class_getClassMethod. Blocking
+    // the ObjC helper ensures the async CloudContentFirstLaunchView.ViewModel never spawns,
+    // preventing the CloudKit SIGTRAP that occurs without proper entitlements.
+    Class ccHelper = objc_getClass("CCFirstLaunchHelper");
+    if (ccHelper) {
+        SEL sel = NSSelectorFromString(@"setupAndPresentFirstLaunchIfNeededWithCompletionHandler:");
+        Method m = class_getInstanceMethod(ccHelper, sel);
+        if (m) {
+            method_setImplementation(m, (IMP)noopMethodWithArg);
+            SpliceKit_log(@"  Blocked -[CCFirstLaunchHelper setupAndPresent...]");
+        }
+    }
+
     SpliceKit_log(@"CloudContent/ImagePlayground disabled.");
+}
+
+// Creator Studio is a subscription-based FCP variant that runs an onboarding flow
+// (POFDesktopOnboardingCoordinator.runFlow) before showing the main window. This flow
+// presents a web view to validate the subscription via Apple's servers. After ad-hoc
+// re-signing, the app loses the entitlements needed for that validation, so the web view
+// shows "Cannot Connect".
+//
+// Fix: make +[Flexo isSPVEnabled] return NO. This causes applicationDidFinishLaunching:
+// to skip the onboarding coordinator entirely and call applicationContinueDidFinishLaunching:
+// directly — the same path that standard (non-subscription) FCP takes.
+// Also disable +[PCAppFeature isSPVEnabled] in ProCore for consistency.
+static void SpliceKit_disableSPV(void) {
+    SpliceKit_log(@"Disabling SPV (Subscription Proof Validation)...");
+
+    Class flexo = objc_getClass("Flexo");
+    if (flexo) {
+        Method m = class_getClassMethod(flexo, @selector(isSPVEnabled));
+        if (m) {
+            method_setImplementation(m, (IMP)returnNO);
+            SpliceKit_log(@"  Swizzled +[Flexo isSPVEnabled] -> NO");
+        }
+    }
+
+    Class pcFeature = objc_getClass("PCAppFeature");
+    if (pcFeature) {
+        Method m = class_getClassMethod(pcFeature, @selector(isSPVEnabled));
+        if (m) {
+            method_setImplementation(m, (IMP)returnNO);
+            SpliceKit_log(@"  Swizzled +[PCAppFeature isSPVEnabled] -> NO");
+        }
+    }
+
+    // Disabling SPV causes presentMainWindowOnAppLaunch: to show the welcome screen
+    // (gated by !isSPVEnabled). The welcome screen embeds a CloudContentFirstLaunchView
+    // whose ViewModel kicks off CloudContentCatalog.updateCatalogAndRegistry() on an
+    // async cooperative queue. That hits CloudKit which crashes (SIGTRAP) without proper
+    // entitlements. The patcher writes these to the com.apple.FinalCut defaults domain,
+    // but FCP reads from standardUserDefaults (bundle ID domain). Set them here directly
+    // so they're in the correct domain regardless of which FCP variant is running.
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    [defaults setBool:YES forKey:@"CloudContentFirstLaunchCompleted"];
+    [defaults setBool:YES forKey:@"FFCloudContentDisabled"];
+    SpliceKit_log(@"  Set CloudContentFirstLaunchCompleted + FFCloudContentDisabled in standardUserDefaults");
+
+    SpliceKit_log(@"SPV disabled.");
 }
 
 #pragma mark - Constructor
@@ -820,6 +881,7 @@ static void SpliceKit_init(void) {
 
     // These patches need to land before FCP's own init code runs
     SpliceKit_disableCloudContent();
+    SpliceKit_disableSPV();
     SpliceKit_fixShutdownHang();
 
     // Everything else waits for the app to finish launching
