@@ -2362,22 +2362,15 @@ static BOOL SpliceKitCaption_pollMainThread(BOOL (^condition)(void), double time
         [[NSApplication sharedApplication] sendAction:NSSelectorFromString(@"deselectAll:")
                                                    to:nil from:nil];
 
-        // Convert FCPXML to native clipboard (import → temp → copy → switch back).
-        // Uses the proven shared function — no overlay (it interferes with focus).
-        BOOL converted = SpliceKit_convertFCPXMLToNativeClipboard();
-        SpliceKit_log(@"[Captions] FCPXML-to-native conversion: %@", converted ? @"OK" : @"FAILED");
-
-        if (converted) {
-            // Paste as connected storyline — call directly on timeline module
-            tm = SpliceKit_getActiveTimelineModule();
-            SEL pasteSel = NSSelectorFromString(@"pasteAnchored:");
-            if (tm && [tm respondsToSelector:pasteSel]) {
-                ((void (*)(id, SEL, id))objc_msgSend)(tm, pasteSel, nil);
-                pasteHandled = YES;
-                SpliceKit_log(@"[Captions] pasteAnchored: OK");
-            }
-            [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.5]];
-        }
+        // Paste as connected — the pasteAnchored: swizzle detects FCPXML on the
+        // pasteboard and runs SpliceKit_convertFCPXMLToNativeClipboard() internally
+        // (import → temp project → copy → switch back), then the original paste
+        // runs with native data. This is the proven path that works reliably.
+        pasteHandled = [[NSApplication sharedApplication]
+            sendAction:NSSelectorFromString(@"pasteAnchored:")
+                    to:nil from:nil];
+        // Wait for the swizzle pipeline to complete (it spins the runloop internally)
+        [NSThread sleepForTimeInterval:1.0];
     });
 
     SpliceKit_log(@"[Captions] Paste as connected: %@", pasteHandled ? @"YES" : @"NO");
