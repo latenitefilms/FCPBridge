@@ -2333,12 +2333,23 @@ static BOOL SpliceKitCaption_pollMainThread(BOOL (^condition)(void), double time
     [xml writeToFile:xmlPath atomically:YES encoding:NSUTF8StringEncoding error:nil];
 
     // ---------------------------------------------------------------
-    // Step 2: Write FCPXML to pasteboard, show a snapshot overlay to
-    // hide the temp project switch, convert to native, then paste.
+    // Step 2: Import FCPXML → temp project → copy → switch back → paste.
+    // Self-contained pipeline with snapshot overlay (no shared cache/function).
     // ---------------------------------------------------------------
     __block BOOL pasteHandled = NO;
     SpliceKit_executeOnMainThread(^{
-        // Take a snapshot of FCP's main window to use as overlay
+        // --- Save user's current state ---
+        id userSequence = nil;
+        id tm = SpliceKit_getActiveTimelineModule();
+        if (tm) {
+            userSequence = ((id (*)(id, SEL))objc_msgSend)(tm, NSSelectorFromString(@"sequence"));
+        }
+        if (!userSequence) {
+            SpliceKit_log(@"[Captions] No active sequence for paste");
+            return;
+        }
+
+        // --- Create snapshot overlay ---
         NSWindow *mainWindow = [NSApp mainWindow];
         NSWindow *overlay = nil;
         if (mainWindow) {
@@ -2349,12 +2360,10 @@ static BOOL SpliceKitCaption_pollMainThread(BOOL (^condition)(void), double time
                     [contentView cacheDisplayInRect:contentView.bounds toBitmapImageRep:rep];
                     NSImage *snapshot = [[NSImage alloc] initWithSize:contentView.bounds.size];
                     [snapshot addRepresentation:rep];
-
                     overlay = [[NSWindow alloc] initWithContentRect:mainWindow.frame
                         styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO];
                     overlay.opaque = YES;
                     overlay.hasShadow = NO;
-                    // Use a very high window level to stay above FCP during the switch
                     overlay.level = NSScreenSaverWindowLevel;
                     overlay.backgroundColor = [NSColor blackColor];
                     NSImageView *iv = [[NSImageView alloc] initWithFrame:
@@ -2363,26 +2372,90 @@ static BOOL SpliceKitCaption_pollMainThread(BOOL (^condition)(void), double time
                     iv.imageScaling = NSImageScaleAxesIndependently;
                     [overlay.contentView addSubview:iv];
                     [overlay orderFront:nil];
-
-                    // CRITICAL: spin the runloop so the overlay actually renders
-                    // before we start the conversion (which will update the UI underneath)
                     [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.1]];
-                    SpliceKit_log(@"[Captions] Snapshot overlay rendered at level %ld", (long)overlay.level);
                 }
-            } @catch (NSException *e) {
-                SpliceKit_log(@"[Captions] Snapshot overlay failed: %@", e.reason);
-            }
+            } @catch (NSException *e) {}
+        }
+        SpliceKit_log(@"[Captions] Starting import pipeline (overlay %@)", overlay ? @"active" : @"none");
+
+        // --- Import FCPXML via FFXMLTranslationTask ---
+        NSDictionary *importResult = SpliceKit_handlePasteboardImportXML(@{@"xml": xml});
+        if (importResult[@"error"]) {
+            SpliceKit_log(@"[Captions] Import failed: %@", importResult[@"error"]);
+            if (overlay) [overlay orderOut:nil];
+            return;
         }
 
-        // Write FCPXML to pasteboard
-        NSPasteboard *pb = [NSPasteboard generalPasteboard];
-        [pb clearContents];
-        NSString *xmlType = ((id (*)(id, SEL))objc_msgSend)(
-            objc_getClass("IXXMLPasteboardType"), NSSelectorFromString(@"generic"));
-        [pb setString:xml forType:xmlType];
+        // --- Find temp project by name prefix ---
+        NSString *tempName = @"SpliceKit Captions";
+        id tempSeq = nil;
+        for (int attempt = 0; attempt < 20 && !tempSeq; attempt++) {
+            [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.2]];
+            id libs = ((id (*)(id, SEL))objc_msgSend)(
+                objc_getClass("FFLibraryDocument"), NSSelectorFromString(@"copyActiveLibraries"));
+            if (!libs || ![(NSArray *)libs count]) continue;
+            id lib = [(NSArray *)libs objectAtIndex:0];
+            id seqs = ((id (*)(id, SEL))objc_msgSend)(lib, NSSelectorFromString(@"_deepLoadedSequences"));
+            if (!seqs) continue;
+            for (id seq in (NSSet *)seqs) {
+                NSString *name = ((id (*)(id, SEL))objc_msgSend)(seq, NSSelectorFromString(@"displayName"));
+                if (name && [name hasPrefix:tempName] && seq != userSequence) {
+                    tempSeq = seq;
+                    break;
+                }
+            }
+        }
+        if (!tempSeq) {
+            SpliceKit_log(@"[Captions] Temp project '%@' not found after import", tempName);
+            if (overlay) [overlay orderOut:nil];
+            return;
+        }
+        SpliceKit_log(@"[Captions] Found temp project, loading...");
 
-        // Seek playhead to time 0
-        id tm = SpliceKit_getActiveTimelineModule();
+        // --- Load temp project in editor ---
+        id appDelegate = [NSApp delegate];
+        id editorContainer = ((id (*)(id, SEL))objc_msgSend)(appDelegate,
+            NSSelectorFromString(@"activeEditorContainer"));
+        if (!editorContainer) {
+            if (overlay) [overlay orderOut:nil];
+            return;
+        }
+        ((void (*)(id, SEL, id))objc_msgSend)(editorContainer,
+            NSSelectorFromString(@"loadEditorForSequence:"), tempSeq);
+
+        // Wait until temp project is active
+        for (int i = 0; i < 25; i++) {
+            [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.2]];
+            id curTm = SpliceKit_getActiveTimelineModule();
+            if (!curTm) continue;
+            id curSeq = ((id (*)(id, SEL))objc_msgSend)(curTm, NSSelectorFromString(@"sequence"));
+            if (curSeq == tempSeq) break;
+        }
+        [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.3]];
+
+        // --- Select all + copy from temp project ---
+        [[NSApplication sharedApplication] sendAction:NSSelectorFromString(@"selectAll:") to:nil from:nil];
+        [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.1]];
+        [[NSApplication sharedApplication] sendAction:NSSelectorFromString(@"copy:") to:nil from:nil];
+        [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.1]];
+        SpliceKit_log(@"[Captions] Copied from temp project");
+
+        // --- Switch back to user's project ---
+        ((void (*)(id, SEL, id))objc_msgSend)(editorContainer,
+            NSSelectorFromString(@"loadEditorForSequence:"), userSequence);
+
+        for (int i = 0; i < 25; i++) {
+            [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.2]];
+            id curTm = SpliceKit_getActiveTimelineModule();
+            if (!curTm) continue;
+            id curSeq = ((id (*)(id, SEL))objc_msgSend)(curTm, NSSelectorFromString(@"sequence"));
+            if (curSeq == userSequence) break;
+        }
+        [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.3]];
+        SpliceKit_log(@"[Captions] Switched back to user's project");
+
+        // --- Seek to 0, deselect, paste as connected ---
+        tm = SpliceKit_getActiveTimelineModule();
         if (tm) {
             SpliceKitCaption_CMTime zeroTime = {0, 600, 1, 0};
             SEL setSel = NSSelectorFromString(@"setPlayheadTime:");
@@ -2390,31 +2463,30 @@ static BOOL SpliceKitCaption_pollMainThread(BOOL (^condition)(void), double time
                 ((void (*)(id, SEL, SpliceKitCaption_CMTime))objc_msgSend)(tm, setSel, zeroTime);
             }
         }
+        [[NSApplication sharedApplication] sendAction:NSSelectorFromString(@"deselectAll:") to:nil from:nil];
+        [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.1]];
 
-        // Deselect all
-        [[NSApplication sharedApplication] sendAction:NSSelectorFromString(@"deselectAll:")
-                                                   to:nil from:nil];
-
-        // Convert FCPXML to native clipboard format (import → temp project → copy → switch back).
-        // The overlay window at ScreenSaver level hides this from the user.
-        SpliceKit_convertFCPXMLToNativeClipboard();
-
-        // Now paste the native data as connected storyline
         pasteHandled = [[NSApplication sharedApplication]
-            sendAction:NSSelectorFromString(@"pasteAnchored:")
-                    to:nil from:nil];
+            sendAction:NSSelectorFromString(@"pasteAnchored:") to:nil from:nil];
+        [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.5]];
+        SpliceKit_log(@"[Captions] Paste as connected: %@", pasteHandled ? @"YES" : @"NO");
 
-        // Give FCP a moment to process the paste
-        [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.3]];
+        // --- Clean up temp project ---
+        @try {
+            SpliceKitCaption_deleteSequence(tempSeq);
+            SpliceKit_log(@"[Captions] Temp project deleted");
+        } @catch (NSException *e) {
+            SpliceKit_log(@"[Captions] Temp cleanup failed: %@", e.reason);
+        }
 
-        // Remove the overlay
+        // --- Remove overlay ---
         if (overlay) {
             [overlay orderOut:nil];
-            SpliceKit_log(@"[Captions] Snapshot overlay removed");
+            SpliceKit_log(@"[Captions] Overlay removed");
         }
     });
 
-    SpliceKit_log(@"[Captions] Paste as connected: %@", pasteHandled ? @"handled" : @"not handled");
+    SpliceKit_log(@"[Captions] Pipeline complete: paste=%@", pasteHandled ? @"YES" : @"NO");
 
     // ---------------------------------------------------------------
     // Step 3: Post-process — reload Motion templates, set position, verify.
