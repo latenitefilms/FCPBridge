@@ -4590,13 +4590,21 @@ static NSDictionary *SpliceKit_handleCaptionsGenerate(NSDictionary *params) {
         NSString *pid = params[@"style"] ?: params[@"presetID"];
         SpliceKitCaptionStyle *style = [SpliceKitCaptionStyle presetWithID:pid];
         if (style) {
-            // Apply overrides via serialization round-trip
+            // Apply overrides via serialization round-trip.
+            // Map MCP param names to style dict keys.
+            NSDictionary *keyMap = @{
+                @"word_highlight": @"wordByWordHighlight",
+                @"all_caps": @"allCaps",
+                @"font_size": @"fontSize",
+                @"font_face": @"fontFace",
+                @"outline_width": @"outlineWidth",
+            };
             NSMutableDictionary *merged = [[style toDictionary] mutableCopy];
             for (NSString *key in params) {
-                if (![key isEqualToString:@"style"] && ![key isEqualToString:@"presetID"] &&
-                    ![key isEqualToString:@"maxWords"]) {
-                    merged[key] = params[key];
-                }
+                if ([key isEqualToString:@"style"] || [key isEqualToString:@"presetID"] ||
+                    [key isEqualToString:@"maxWords"]) continue;
+                NSString *mappedKey = keyMap[key] ?: key;
+                merged[mappedKey] = params[key];
             }
             style = [SpliceKitCaptionStyle fromDictionary:merged];
             [panel setStyle:style];
