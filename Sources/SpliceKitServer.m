@@ -9076,12 +9076,21 @@ BOOL SpliceKit_convertFCPXMLToNativeClipboard(void) {
 
     BOOL success = NO;
 
+    // Debug helper — append to /tmp/splicekit_paste_debug.log
+    void (^debugLog)(NSString *) = ^(NSString *msg) {
+        NSFileHandle *fh = [NSFileHandle fileHandleForWritingAtPath:@"/tmp/splicekit_paste_debug.log"];
+        if (fh) { [fh seekToEndOfFile]; [fh writeData:[[msg stringByAppendingString:@"\n"] dataUsingEncoding:NSUTF8StringEncoding]]; [fh closeFile]; }
+    };
+    debugLog([NSString stringWithFormat:@"=== CONVERT START xml=%luB ===", (unsigned long)xmlString.length]);
+
     // --- Import FCPXML ---
     NSDictionary *importResult = SpliceKit_handlePasteboardImportXML(@{@"xml": xmlString});
     if (importResult[@"error"]) {
+        debugLog([NSString stringWithFormat:@"IMPORT FAILED: %@", importResult[@"error"]]);
         SpliceKit_log(@"[FCPXMLPaste] Import failed: %@", importResult[@"error"]);
         goto cleanup;
     }
+    debugLog(@"IMPORT OK");
 
     // --- Find temp project by unique name ---
     {
@@ -9106,11 +9115,11 @@ BOOL SpliceKit_convertFCPXMLToNativeClipboard(void) {
             }
         }
         if (!tempSeq) {
+            debugLog([NSString stringWithFormat:@"TEMP NOT FOUND: %@", tempProjectName]);
             SpliceKit_log(@"[FCPXMLPaste] Temp project '%@' not found", tempProjectName);
             goto cleanup;
         }
-
-        SpliceKit_log(@"[FCPXMLPaste] Found temp project: %@", tempProjectName);
+        debugLog([NSString stringWithFormat:@"TEMP FOUND: %@", tempProjectName]);
 
         // --- Load temp project ---
         id appDelegate = [NSApp delegate];
@@ -9133,6 +9142,7 @@ BOOL SpliceKit_convertFCPXMLToNativeClipboard(void) {
             if (name && [name isEqualToString:tempProjectName]) tempLoaded = YES;
         }
         if (!tempLoaded) {
+            debugLog(@"TEMP LOAD TIMEOUT");
             SpliceKit_log(@"[FCPXMLPaste] Failed to load temp project");
             ((void (*)(id, SEL, id))objc_msgSend)(editorContainer,
                 NSSelectorFromString(@"loadEditorForSequence:"), userSequence);
@@ -9151,6 +9161,7 @@ BOOL SpliceKit_convertFCPXMLToNativeClipboard(void) {
         [[NSApplication sharedApplication] sendAction:NSSelectorFromString(@"copy:")
                                                    to:nil from:nil];
         [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.1]];
+        debugLog(@"COPIED to native clipboard");
         SpliceKit_log(@"[FCPXMLPaste] Copied items to native clipboard");
 
         // --- Improvement #6: Cache the native data ---

@@ -2307,10 +2307,9 @@ static BOOL SpliceKitCaption_pollMainThread(BOOL (^condition)(void), double time
                 ind, (unsigned long)seg.segmentIndex + 1, durStr];
             NSString *posParam = [self contentPositionParamXML];
             if (posParam.length > 0) [xml appendFormat:@"%@    %@", ind, posParam];
-            CGFloat adjustY = [self yOffsetForPosition];
-            if (fabs(adjustY) > 1.0) {
-                [xml appendFormat:@"%@    <adjust-transform position=\"0 %.0f\"/>\n", ind, adjustY];
-            }
+            // NOTE: adjust-transform is NOT included — FCP's FCPXML importer
+            // rejects it on Basic Title templates ("dragged XML could not be imported").
+            // Position is set via Content Position param and post-processing.
             [xml appendFormat:@"%@    <text><text-style ref=\"%@\">%@</text-style></text>\n",
                 ind, tsID, SpliceKitCaption_escapeXML(text)];
             [xml appendFormat:@"%@    %@\n", ind, tsDef];
