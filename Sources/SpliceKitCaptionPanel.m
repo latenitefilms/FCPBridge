@@ -2450,11 +2450,19 @@ static BOOL SpliceKitCaption_pollMainThread(BOOL (^condition)(void), double time
         [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.5]];
 
         // --- Select all + copy from temp project ---
-        [[NSApplication sharedApplication] sendAction:NSSelectorFromString(@"selectAll:") to:nil from:nil];
-        [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.2]];
-        [[NSApplication sharedApplication] sendAction:NSSelectorFromString(@"copy:") to:nil from:nil];
-        [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.2]];
-        SpliceKit_log(@"[Captions] Copied from temp project");
+        // Must target the timeline module directly — the overlay window may
+        // have stolen first responder, causing selectAll/copy to go to it
+        // instead of the timeline.
+        id tempTm = SpliceKit_getActiveTimelineModule();
+        if (tempTm) {
+            ((void (*)(id, SEL, id))objc_msgSend)(tempTm, NSSelectorFromString(@"selectAll:"), nil);
+            [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.2]];
+            ((void (*)(id, SEL, id))objc_msgSend)(tempTm, NSSelectorFromString(@"copy:"), nil);
+            [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.2]];
+            SpliceKit_log(@"[Captions] Copied from temp project (direct on timeline module)");
+        } else {
+            SpliceKit_log(@"[Captions] ERROR: no timeline module for selectAll+copy");
+        }
 
         // --- Switch back to user's project ---
         // Re-find the user's sequence fresh from the library (the saved pointer
