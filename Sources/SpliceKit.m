@@ -187,7 +187,6 @@ static void SpliceKit_checkCompatibility(void) {
 - (void)toggleViewerPinchZoom:(id)sender;
 - (void)toggleVideoOnlyKeepsAudioDisabled:(id)sender;
 - (void)toggleSuppressAutoImport:(id)sender;
-- (void)toggleUndoHistory:(id)sender;
 - (void)editLLadder:(id)sender;
 - (void)editJLadder:(id)sender;
 - (void)setDefaultConformFit:(id)sender;
@@ -413,14 +412,6 @@ static void SpliceKit_checkCompatibility(void) {
 - (void)toggleSuppressAutoImport:(id)sender {
     BOOL newState = !SpliceKit_isSuppressAutoImportEnabled();
     SpliceKit_setSuppressAutoImportEnabled(newState);
-    if ([sender isKindOfClass:[NSMenuItem class]]) {
-        [(NSMenuItem *)sender setState:newState ? NSControlStateValueOn : NSControlStateValueOff];
-    }
-}
-
-- (void)toggleUndoHistory:(id)sender {
-    BOOL newState = !SpliceKit_isHistoryEnabled();
-    SpliceKit_setHistoryEnabled(newState);
     if ([sender isKindOfClass:[NSMenuItem class]]) {
         [(NSMenuItem *)sender setState:newState ? NSControlStateValueOn : NSControlStateValueOff];
     }
@@ -685,15 +676,6 @@ static void SpliceKit_installMenu(void) {
         initWithTitle:@"Default Spatial Conform" action:nil keyEquivalent:@""];
     conformMenuItem.submenu = conformMenu;
     [optionsMenu addItem:conformMenuItem];
-
-    NSMenuItem *undoHistoryItem = [[NSMenuItem alloc]
-        initWithTitle:@"Unlimited Undo History"
-               action:@selector(toggleUndoHistory:)
-        keyEquivalent:@""];
-    undoHistoryItem.target = [SpliceKitMenuController shared];
-    undoHistoryItem.state = SpliceKit_isHistoryEnabled()
-        ? NSControlStateValueOn : NSControlStateValueOff;
-    [optionsMenu addItem:undoHistoryItem];
 
     NSMenuItem *optionsMenuItem = [[NSMenuItem alloc] initWithTitle:@"Options" action:nil keyEquivalent:@""];
     optionsMenuItem.submenu = optionsMenu;
@@ -970,9 +952,6 @@ static void SpliceKit_appDidLaunch(void) {
 
     // Swizzle J/L to use configurable speed ladders
     SpliceKit_installPlaybackSpeedSwizzle();
-
-    // Install persistent unlimited undo — captures FCPXML snapshot on every edit
-    SpliceKit_installHistorySwizzle();
 
     // Rebuild FCP's hidden Debug pane + Debug menu bar (Apple strips the NIB
     // and leaves the menu unassigned in release builds; we reconstruct both).

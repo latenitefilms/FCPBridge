@@ -3,7 +3,7 @@ ARCHS = -arch arm64 -arch x86_64
 MIN_VERSION = -mmacosx-version-min=14.0
 FRAMEWORKS = -framework Foundation -framework AppKit -framework AVFoundation -framework CoreServices
 OBJC_FLAGS = -fobjc-arc -fmodules
-LINKER_FLAGS = -undefined dynamic_lookup -dynamiclib -lsqlite3 -lz
+LINKER_FLAGS = -undefined dynamic_lookup -dynamiclib
 INSTALL_NAME = -install_name @rpath/SpliceKit.framework/Versions/A/SpliceKit
 
 SOURCES = Sources/SpliceKit.m \
