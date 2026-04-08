@@ -163,8 +163,9 @@ insert_dylib --inplace --all-yes \
     "@rpath/SpliceKit.framework/Versions/A/SpliceKit" \
     ~/Applications/SpliceKit/"Final Cut Pro.app"/Contents/MacOS/"Final Cut Pro"
 
-# Re-sign with custom entitlements (no sandbox, library validation disabled)
-codesign --force --sign - --entitlements entitlements.plist \
+# Re-sign with a local codesigning identity when available, otherwise ad-hoc
+SIGN_IDENTITY="$(security find-identity -v -p codesigning 2>/dev/null | awk '/"Apple Development:/ { print $2; exit } /"Developer ID Application:/ && developer == "" { developer = $2 } /[0-9]+\) [0-9A-F]+ "/ && first == "" { first = $2 } END { if (developer != "") print developer; else if (first != "") print first }')"
+codesign --force --sign "${SIGN_IDENTITY:--}" --entitlements entitlements.plist \
     ~/Applications/SpliceKit/"Final Cut Pro.app"
 ```
 

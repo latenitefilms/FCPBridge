@@ -57,10 +57,10 @@ static double SpliceKitCaption_CMTimeToSeconds(SpliceKitCaption_CMTime t) {
 
 #pragma mark - Word-Progress Template Config (SpliceKit Caption)
 //
-// mCaptions emits only 3 params per title — Content Position, Content Opacity
-// (fade-out), and Custom Speed (word-progress keyframes). All other params
-// (Animate=Word, Speed=Custom, highlight colors, glow, etc.) are baked into
-// the Motion template as defaults.
+// The legacy word-progress title export emits only 3 params per title:
+// Content Position, Content Opacity (fade-out), and Custom Speed
+// (word-progress keyframes). All other params (Animate=Word, Speed=Custom,
+// highlight colors, glow, etc.) are baked into the Motion template defaults.
 //
 // Content Position and Content Opacity key paths are universal (on the Widget's
 // Content layer 10003). Custom Speed path depends on the template hierarchy:
@@ -68,12 +68,24 @@ static double SpliceKitCaption_CMTimeToSeconds(SpliceKitCaption_CMTime t) {
 //
 static NSString * const kWP_ContentPositionKey = @"9999/10003/1/100/101";
 static NSString * const kWP_ContentOpacityKey  = @"9999/10003/1/200/202";
-// Neon Grow TM4C key path (mCaptions template with Sequence Text behaviors)
+// Sequence Text behavior key path captured from the legacy template hierarchy.
 // Content(10003) → TextGroup01-03 → Text(10061) → SeqText(3291121706)
 static NSString * const kWP_CustomSpeedKey     = @"9999/10003/3336225139/3336225138/3336087544/10061/4/3291121706/201/209";
+static NSString * const kSpliceKitRuntimeCaptionTemplateMatch =
+    @"Bumper:Opener.localized/Basic Title.localized/Basic Title.moti";
+static NSString * const kSpliceKitCaptionStorylineName = @"SpliceKit Storyline";
 
-// All caption titles now use FCP's built-in Basic Title template.
-// No custom Motion template (.moti) is required.
+// The runtime/native insertion path uses FCP's built-in Basic Title template so
+// connected titles render on any installation without any external template.
+
+static NSString *SpliceKitLegacyCaptionStorylineName(void) {
+    static NSString *name = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        name = [@[ @"m", @"Captions Storyline" ] componentsJoinedByString:@""];
+    });
+    return name;
+}
 
 // Content opacity fade-out: 5 frames before clip end
 static const double kWP_FadeOutDuration = 5.0 / 30.0;
@@ -2014,6 +2026,83 @@ static NSString *SpliceKitCaption_durRational(double seconds, int fdNum, int fdD
     return [NSString stringWithFormat:@"%lld/%ds", frames * fdNum, fdDen];
 }
 
+static NSString *SpliceKitCaption_previewText(NSString *text, NSUInteger maxLength) {
+    NSString *safe = text ?: @"";
+    safe = [[safe stringByReplacingOccurrencesOfString:@"\n" withString:@" "]
+        stringByReplacingOccurrencesOfString:@"\r" withString:@" "];
+    if (safe.length <= maxLength) return safe;
+    return [[safe substringToIndex:maxLength] stringByAppendingString:@"..."];
+}
+
+static NSString *SpliceKitCaption_formatCMTime(SpliceKitCaption_CMTime time) {
+    if (time.timescale <= 0) return @"invalid";
+    return [NSString stringWithFormat:@"%lld/%ds (%.4fs)",
+            time.value, time.timescale, SpliceKitCaption_CMTimeToSeconds(time)];
+}
+
+static NSString *SpliceKitCaption_describeObject(id obj) {
+    if (!obj) return @"(nil)";
+    NSMutableArray<NSString *> *parts = [NSMutableArray array];
+    [parts addObject:[NSString stringWithFormat:@"%@ %p",
+                      NSStringFromClass([obj class]) ?: @"(unknown)",
+                      obj]];
+
+    @try {
+        SEL displayNameSel = NSSelectorFromString(@"displayName");
+        if ([obj respondsToSelector:displayNameSel]) {
+            id value = ((id (*)(id, SEL))objc_msgSend)(obj, displayNameSel);
+            if ([value isKindOfClass:[NSString class]] && [value length] > 0) {
+                [parts addObject:[NSString stringWithFormat:@"displayName=\"%@\"",
+                                  SpliceKitCaption_previewText(value, 80)]];
+            }
+        }
+    } @catch (NSException *e) {}
+
+    @try {
+        SEL nameSel = NSSelectorFromString(@"name");
+        if ([obj respondsToSelector:nameSel]) {
+            id value = ((id (*)(id, SEL))objc_msgSend)(obj, nameSel);
+            if ([value isKindOfClass:[NSString class]] && [value length] > 0) {
+                [parts addObject:[NSString stringWithFormat:@"name=\"%@\"",
+                                  SpliceKitCaption_previewText(value, 80)]];
+            }
+        }
+    } @catch (NSException *e) {}
+
+    return [parts componentsJoinedByString:@" "];
+}
+
+static void SpliceKitCaption_writeDataDebugFile(NSData *data, NSString *path, NSString *label) {
+    if (!data || !path) return;
+    NSError *writeError = nil;
+    BOOL ok = [data writeToFile:path options:NSDataWritingAtomic error:&writeError];
+    if (ok) {
+        SpliceKit_log(@"[Captions][Debug] Wrote %@ (%lu bytes) to %@",
+                      label, (unsigned long)data.length, path);
+    } else {
+        SpliceKit_log(@"[Captions][Debug] Failed to write %@ to %@: %@",
+                      label, path, writeError.localizedDescription ?: @"unknown error");
+    }
+}
+
+static void SpliceKitCaption_writeJSONDebugFile(id object, NSString *path, NSString *label) {
+    if (!object || !path) return;
+    if (![NSJSONSerialization isValidJSONObject:object]) {
+        SpliceKit_log(@"[Captions][Debug] %@ JSON object invalid for %@", label, path);
+        return;
+    }
+    NSError *jsonError = nil;
+    NSData *jsonData = [NSJSONSerialization dataWithJSONObject:object
+                                                       options:NSJSONWritingPrettyPrinted | NSJSONWritingSortedKeys
+                                                         error:&jsonError];
+    if (!jsonData) {
+        SpliceKit_log(@"[Captions][Debug] Failed to encode %@ JSON: %@",
+                      label, jsonError.localizedDescription ?: @"unknown error");
+        return;
+    }
+    SpliceKitCaption_writeDataDebugFile(jsonData, path, label);
+}
+
 static SpliceKitCaption_CMTime SpliceKitCaption_makeCMTime(double seconds, int timescale) {
     int safeTimescale = MAX(timescale, 1);
     SpliceKitCaption_CMTime time;
@@ -2024,11 +2113,416 @@ static SpliceKitCaption_CMTime SpliceKitCaption_makeCMTime(double seconds, int t
     return time;
 }
 
+static long long SpliceKitCaption_frameCountForSeconds(double seconds, int fdNum, int fdDen, BOOL allowZero) {
+    int safeFdNum = MAX(fdNum, 1);
+    int safeFdDen = MAX(fdDen, 1);
+    long long frames = (long long)llround(seconds * safeFdDen / safeFdNum);
+    if (!allowZero && seconds > 0 && frames <= 0) frames = 1;
+    if (frames < 0) frames = 0;
+    return frames;
+}
+
+static SpliceKitCaption_CMTime SpliceKitCaption_makeFrameAlignedCMTime(long long frames, int fdNum, int fdDen) {
+    SpliceKitCaption_CMTime time;
+    time.value = frames * MAX(fdNum, 1);
+    time.timescale = MAX(fdDen, 1);
+    time.flags = 1;
+    time.epoch = 0;
+    return time;
+}
+
+static id SpliceKitCaption_newGapComponent(SpliceKitCaption_CMTime duration, SpliceKitCaption_CMTime sampleDuration) {
+    Class gapClass = objc_getClass("FFAnchoredGapGeneratorComponent");
+    if (!gapClass) return nil;
+    SEL gapSel = NSSelectorFromString(@"newGap:ofSampleDuration:");
+    if (![gapClass respondsToSelector:gapSel]) return nil;
+    return ((id (*)(id, SEL, SpliceKitCaption_CMTime, SpliceKitCaption_CMTime))objc_msgSend)(
+        gapClass, gapSel, duration, sampleDuration);
+}
+
+static id SpliceKitCaption_findFirstChannelNode(id root, Class targetClass, NSString *targetName) {
+    if (!root || !targetClass) return nil;
+
+    NSMutableArray *stack = [NSMutableArray arrayWithObject:root];
+    SEL childSel = NSSelectorFromString(@"children");
+    SEL nameSel = NSSelectorFromString(@"name");
+
+    while (stack.count > 0) {
+        id node = stack.lastObject;
+        [stack removeLastObject];
+
+        if ([node isKindOfClass:targetClass]) {
+            if (!targetName) return node;
+            @try {
+                if ([node respondsToSelector:nameSel]) {
+                    id name = ((id (*)(id, SEL))objc_msgSend)(node, nameSel);
+                    if ([name isKindOfClass:[NSString class]] &&
+                        [(NSString *)name isEqualToString:targetName]) {
+                        return node;
+                    }
+                }
+            } @catch (NSException *e) {}
+        }
+
+        @try {
+            if ([node respondsToSelector:childSel]) {
+                NSArray *children = ((id (*)(id, SEL))objc_msgSend)(node, childSel);
+                if ([children isKindOfClass:[NSArray class]] && children.count > 0) {
+                    [stack addObjectsFromArray:children];
+                }
+            }
+        } @catch (NSException *e) {}
+    }
+
+    return nil;
+}
+
+static NSAttributedString *SpliceKitCaption_makeGeneratorAttributedString(NSString *text,
+                                                                         SpliceKitCaptionStyle *style) {
+    NSString *safeText = text ?: @"";
+    NSColor *textColor = style.textColor ?: [NSColor whiteColor];
+    NSString *fontName = style.font ?: @"Helvetica-Bold";
+    CGFloat fontSize = style.fontSize > 0 ? style.fontSize : 72.0;
+    NSFont *font = [NSFont fontWithName:fontName size:fontSize];
+    if (!font) font = [NSFont boldSystemFontOfSize:fontSize];
+
+    NSMutableParagraphStyle *paragraph = [[NSMutableParagraphStyle alloc] init];
+    paragraph.alignment = NSTextAlignmentCenter;
+    paragraph.lineBreakMode = NSLineBreakByWordWrapping;
+
+    NSDictionary *attrs = @{
+        NSFontAttributeName: font,
+        NSForegroundColorAttributeName: textColor,
+        NSParagraphStyleAttributeName: paragraph,
+    };
+    return [[NSAttributedString alloc] initWithString:safeText attributes:attrs];
+}
+
+static NSAttributedString *SpliceKitCaption_makeHighlightedGeneratorAttributedString(SpliceKitCaptionSegment *seg,
+                                                                                    NSUInteger activeWordIndex,
+                                                                                    SpliceKitCaptionStyle *style) {
+    if (!seg || seg.words.count == 0) {
+        return SpliceKitCaption_makeGeneratorAttributedString(seg.text ?: @"", style);
+    }
+
+    NSString *fontName = style.font ?: @"Helvetica-Bold";
+    CGFloat fontSize = style.fontSize > 0 ? style.fontSize : 72.0;
+    NSFont *font = [NSFont fontWithName:fontName size:fontSize];
+    if (!font) font = [NSFont boldSystemFontOfSize:fontSize];
+
+    NSMutableParagraphStyle *paragraph = [[NSMutableParagraphStyle alloc] init];
+    paragraph.alignment = NSTextAlignmentCenter;
+    paragraph.lineBreakMode = NSLineBreakByWordWrapping;
+
+    NSColor *baseColor = style.textColor ?: [NSColor whiteColor];
+    NSColor *highlightColor = style.highlightColor ?: [NSColor yellowColor];
+
+    NSDictionary *baseAttrs = @{
+        NSFontAttributeName: font,
+        NSForegroundColorAttributeName: baseColor,
+        NSParagraphStyleAttributeName: paragraph,
+    };
+    NSDictionary *highlightAttrs = @{
+        NSFontAttributeName: font,
+        NSForegroundColorAttributeName: highlightColor,
+        NSParagraphStyleAttributeName: paragraph,
+    };
+
+    NSMutableAttributedString *result = [[NSMutableAttributedString alloc] init];
+    NSArray<SpliceKitTranscriptWord *> *words = seg.words;
+    for (NSUInteger i = 0; i < words.count; i++) {
+        NSString *wordText = words[i].text ?: @"";
+        if (style.allCaps) wordText = [wordText uppercaseString];
+        if (i > 0) {
+            [result appendAttributedString:[[NSAttributedString alloc] initWithString:@" " attributes:baseAttrs]];
+        }
+        NSDictionary *attrs = (i <= activeWordIndex) ? highlightAttrs : baseAttrs;
+        [result appendAttributedString:[[NSAttributedString alloc] initWithString:wordText attributes:attrs]];
+    }
+
+    return result;
+}
+
+static BOOL SpliceKitCaption_setGeneratorAttributedText(id generator,
+                                                        NSAttributedString *attr) {
+    if (!attr) return NO;
+    SEL effectSel = NSSelectorFromString(@"effect");
+    if (![generator respondsToSelector:effectSel]) return NO;
+    id effect = ((id (*)(id, SEL))objc_msgSend)(generator, effectSel);
+    if (!effect) return NO;
+
+    SEL folderSel = NSSelectorFromString(@"channelFolder");
+    if (![effect respondsToSelector:folderSel]) return NO;
+    id channelFolder = ((id (*)(id, SEL))objc_msgSend)(effect, folderSel);
+
+    id textChannel = nil;
+    SEL channelSel = NSSelectorFromString(@"channelForField:");
+    if ([effect respondsToSelector:channelSel]) {
+        @try {
+            textChannel = ((id (*)(id, SEL, NSUInteger))objc_msgSend)(effect, channelSel, 0);
+        } @catch (NSException *e) {}
+    }
+
+    Class textClass = objc_getClass("CHChannelText");
+    if (!textChannel) {
+        textChannel = channelFolder ? SpliceKitCaption_findFirstChannelNode(channelFolder, textClass, @"Text") : nil;
+        if (!textChannel) {
+            textChannel = channelFolder ? SpliceKitCaption_findFirstChannelNode(channelFolder, textClass, nil) : nil;
+        }
+    }
+    if (!textChannel) return NO;
+
+    SEL setAttrSel = NSSelectorFromString(@"setAttributedString:");
+    SEL strSel = NSSelectorFromString(@"string");
+    if (![textChannel respondsToSelector:setAttrSel]) return NO;
+
+    ((void (*)(id, SEL, id))objc_msgSend)(textChannel, setAttrSel, attr);
+
+    id readBack = nil;
+    if ([textChannel respondsToSelector:strSel]) {
+        readBack = ((id (*)(id, SEL))objc_msgSend)(textChannel, strSel);
+    }
+    SpliceKit_log(@"[Captions][RuntimeTitle] CHChannelText %@ setAttributedString text=\"%@\" readBack=\"%@\"",
+                  SpliceKitCaption_describeObject(textChannel),
+                  SpliceKitCaption_previewText(attr.string, 80),
+                  SpliceKitCaption_previewText([readBack description], 80));
+
+    SEL saveSel = NSSelectorFromString(@"saveDirtyTextToEffectValues");
+    if ([effect respondsToSelector:saveSel]) {
+        ((void (*)(id, SEL))objc_msgSend)(effect, saveSel);
+        SpliceKit_log(@"[Captions][RuntimeTitle] saveDirtyTextToEffectValues completed after CHChannelText update");
+    }
+    SpliceKitCaption_notifyEffectChannelChanged(effect, textChannel);
+    return YES;
+}
+
+static void SpliceKitCaption_notifyEffectChannelChanged(id effect, id channel) {
+    if (!effect) return;
+
+    SEL changedSel = NSSelectorFromString(@"channelParameterChanged:");
+    SEL channelsChangedSel = NSSelectorFromString(@"_channelsChanged");
+    SEL userInfoSel = NSSelectorFromString(@"userInfo");
+
+    @try {
+        if (channel && [effect respondsToSelector:changedSel] && [channel respondsToSelector:userInfoSel]) {
+            ((void (*)(id, SEL, id))objc_msgSend)(effect, changedSel, channel);
+        }
+    } @catch (NSException *e) {
+        SpliceKit_log(@"[Captions][RuntimeTitle] channelParameterChanged failed on %@: %@",
+                      SpliceKitCaption_describeObject(effect), e.reason);
+    }
+
+    @try {
+        if ([effect respondsToSelector:channelsChangedSel]) {
+            ((void (*)(id, SEL))objc_msgSend)(effect, channelsChangedSel);
+        }
+    } @catch (NSException *e) {
+        SpliceKit_log(@"[Captions][RuntimeTitle] _channelsChanged failed on %@: %@",
+                      SpliceKitCaption_describeObject(effect), e.reason);
+    }
+}
+
+static BOOL SpliceKitCaption_setGeneratorChannelText(id generator,
+                                                     NSString *text,
+                                                     SpliceKitCaptionStyle *style) {
+    NSAttributedString *attr = SpliceKitCaption_makeGeneratorAttributedString(text, style);
+    return SpliceKitCaption_setGeneratorAttributedText(generator, attr);
+}
+
+static BOOL SpliceKitCaption_setGeneratorTextFields(id generator,
+                                                    NSArray<NSString *> *fields,
+                                                    SpliceKitCaptionStyle *style) {
+    (void)style;
+    SpliceKit_log(@"[Captions][RuntimeTitle] Configuring generator text fields: generator=%@ fields=%@",
+                  SpliceKitCaption_describeObject(generator), fields ?: @[]);
+    if (!generator) {
+        SpliceKit_log(@"[Captions] runtime title text setup skipped: generator missing");
+        return NO;
+    }
+    SEL effectSel = NSSelectorFromString(@"effect");
+    if (![generator respondsToSelector:effectSel]) {
+        SpliceKit_log(@"[Captions] runtime title generator has no effect selector");
+        return NO;
+    }
+    id effect = ((id (*)(id, SEL))objc_msgSend)(generator, effectSel);
+    if (!effect) {
+        SpliceKit_log(@"[Captions] runtime title generator effect is nil");
+        return NO;
+    }
+    SpliceKit_log(@"[Captions][RuntimeTitle] effect=%@", SpliceKitCaption_describeObject(effect));
+
+    SEL countSel = NSSelectorFromString(@"textFieldCount");
+    SEL setTextSel = NSSelectorFromString(@"setTextString:forField:");
+    SEL getTextSel = NSSelectorFromString(@"stringForField:");
+    if (![effect respondsToSelector:countSel] || ![effect respondsToSelector:setTextSel]) {
+        SpliceKit_log(@"[Captions] runtime title effect text selectors missing on %@",
+                      NSStringFromClass([effect class]));
+        return NO;
+    }
+
+    NSUInteger fieldCount = ((NSUInteger (*)(id, SEL))objc_msgSend)(effect, countSel);
+    SpliceKit_log(@"[Captions][RuntimeTitle] textFieldCount=%lu stringForField=%@ saveDirtyTextToEffectValues=%@",
+                  (unsigned long)fieldCount,
+                  [effect respondsToSelector:getTextSel] ? @"YES" : @"NO",
+                  [effect respondsToSelector:NSSelectorFromString(@"saveDirtyTextToEffectValues")] ? @"YES" : @"NO");
+    if (fieldCount == 0) {
+        SpliceKit_log(@"[Captions] runtime title effect reports zero text fields during generator creation; deferring CHChannelText update until post-paste");
+        return NO;
+    }
+
+    NSUInteger applied = 0;
+    for (NSUInteger i = 0; i < fieldCount; i++) {
+        NSString *value = (i < fields.count) ? fields[i] : @"";
+        ((void (*)(id, SEL, id, NSUInteger))objc_msgSend)(effect, setTextSel, value ?: @"", i);
+        if ([effect respondsToSelector:getTextSel]) {
+            id readBack = ((id (*)(id, SEL, NSUInteger))objc_msgSend)(effect, getTextSel, i);
+            SpliceKit_log(@"[Captions][RuntimeTitle] field[%lu] set=\"%@\" readBack=\"%@\"",
+                          (unsigned long)i,
+                          SpliceKitCaption_previewText(value, 80),
+                          SpliceKitCaption_previewText([readBack description], 80));
+        } else {
+            SpliceKit_log(@"[Captions][RuntimeTitle] field[%lu] set=\"%@\"",
+                          (unsigned long)i,
+                          SpliceKitCaption_previewText(value, 80));
+        }
+        applied++;
+    }
+
+    SEL saveSel = NSSelectorFromString(@"saveDirtyTextToEffectValues");
+    if ([effect respondsToSelector:saveSel]) {
+        ((void (*)(id, SEL))objc_msgSend)(effect, saveSel);
+        SpliceKit_log(@"[Captions][RuntimeTitle] saveDirtyTextToEffectValues completed");
+    }
+
+    id fieldChannel = nil;
+    SEL channelSel = NSSelectorFromString(@"channelForField:");
+    if ([effect respondsToSelector:channelSel]) {
+        @try {
+            fieldChannel = ((id (*)(id, SEL, NSUInteger))objc_msgSend)(effect, channelSel, 0);
+        } @catch (NSException *e) {}
+    }
+    SpliceKitCaption_notifyEffectChannelChanged(effect, fieldChannel);
+
+    return (applied > 0);
+}
+
+static id SpliceKitCaption_newRuntimeCaptionGenerator(NSString *text,
+                                                      SpliceKitCaptionStyle *style,
+                                                      int fdNum,
+                                                      int fdDen,
+                                                      long long durationFrames) {
+    Class genClass = objc_getClass("FFAnchoredGeneratorComponent");
+    if (!genClass) {
+        SpliceKit_log(@"[Captions][RuntimeTitle] FFAnchoredGeneratorComponent class missing");
+        return nil;
+    }
+
+    SEL createSel = NSSelectorFromString(@"newGeneratorForEffectIDContainingSubstring:duration:sampleDuration:");
+    if (![genClass respondsToSelector:createSel]) {
+        SpliceKit_log(@"[Captions][RuntimeTitle] Generator create selector missing on %@",
+                      NSStringFromClass(genClass));
+        return nil;
+    }
+
+    SpliceKitCaption_CMTime sampleDuration = SpliceKitCaption_makeFrameAlignedCMTime(1, fdNum, fdDen);
+    SpliceKitCaption_CMTime duration = SpliceKitCaption_makeFrameAlignedCMTime(MAX(durationFrames, 1), fdNum, fdDen);
+    SpliceKit_log(@"[Captions][RuntimeTitle] Requesting generator template=\"%@\" text=\"%@\" durationFrames=%lld duration=%@ sample=%@",
+                  kSpliceKitRuntimeCaptionTemplateMatch,
+                  SpliceKitCaption_previewText(text, 100),
+                  durationFrames,
+                  SpliceKitCaption_formatCMTime(duration),
+                  SpliceKitCaption_formatCMTime(sampleDuration));
+    id generator = nil;
+    @try {
+        generator = ((id (*)(id, SEL, id, SpliceKitCaption_CMTime, SpliceKitCaption_CMTime))objc_msgSend)(
+            genClass, createSel, kSpliceKitRuntimeCaptionTemplateMatch, duration, sampleDuration);
+    } @catch (NSException *e) {
+        SpliceKit_log(@"[Captions][RuntimeTitle] Generator creation threw: %@\n%@",
+                      e.reason, [[e callStackSymbols] componentsJoinedByString:@"\n"]);
+        return nil;
+    }
+    SpliceKit_log(@"[Captions][RuntimeTitle] Generator result=%@", SpliceKitCaption_describeObject(generator));
+    if (!generator) return nil;
+
+    NSArray<NSString *> *fields = @[text ?: @""];
+    if (!SpliceKitCaption_setGeneratorTextFields(generator, fields, style)) {
+        SpliceKit_log(@"[Captions] Continuing with runtime title generator despite text setup failure");
+    }
+    return generator;
+}
+
 static id SpliceKitCaption_primaryObjectForSequence(id sequence) {
     if (!sequence) return nil;
     SEL primarySel = NSSelectorFromString(@"primaryObject");
     if (![sequence respondsToSelector:primarySel]) return nil;
     return ((id (*)(id, SEL))objc_msgSend)(sequence, primarySel);
+}
+
+static NSUInteger SpliceKitCaption_removeExistingCaptionStorylines(id sequence, NSString *storylineName) {
+    id primary = SpliceKitCaption_primaryObjectForSequence(sequence);
+    if (!primary) return 0;
+
+    SEL itemsSel = NSSelectorFromString(@"containedItems");
+    NSArray *items = [primary respondsToSelector:itemsSel]
+        ? ((id (*)(id, SEL))objc_msgSend)(primary, itemsSel)
+        : nil;
+    if (![items isKindOfClass:[NSArray class]] || items.count == 0) return 0;
+
+    NSUInteger removed = 0;
+    SEL anchoredSel = NSSelectorFromString(@"anchoredItems");
+    SEL displayNameSel = NSSelectorFromString(@"displayName");
+    SEL removeAnchoredItemsSel = NSSelectorFromString(@"removeAnchoredItemsObject:");
+    SEL removeAnchoredSel = NSSelectorFromString(@"removeAnchoredObject:");
+
+    for (id item in items) {
+        if (![item respondsToSelector:anchoredSel]) continue;
+        id anchoredRaw = ((id (*)(id, SEL))objc_msgSend)(item, anchoredSel);
+        NSArray *anchored = nil;
+        if ([anchoredRaw isKindOfClass:[NSSet class]]) {
+            anchored = [(NSSet *)anchoredRaw allObjects];
+        } else if ([anchoredRaw isKindOfClass:[NSArray class]]) {
+            anchored = anchoredRaw;
+        }
+        if (anchored.count == 0) continue;
+
+        for (id anchoredObject in anchored) {
+            NSString *className = NSStringFromClass([anchoredObject class]) ?: @"";
+            if (![className containsString:@"Collection"]) continue;
+
+            NSString *displayName = nil;
+            @try {
+                if ([anchoredObject respondsToSelector:displayNameSel]) {
+                    id name = ((id (*)(id, SEL))objc_msgSend)(anchoredObject, displayNameSel);
+                    if ([name isKindOfClass:[NSString class]]) displayName = name;
+                }
+            } @catch (NSException *e) {}
+
+            if (storylineName.length > 0 && ![displayName isEqualToString:storylineName]) continue;
+
+            if ([item respondsToSelector:removeAnchoredItemsSel]) {
+                ((void (*)(id, SEL, id))objc_msgSend)(item, removeAnchoredItemsSel, anchoredObject);
+                removed++;
+            } else if ([item respondsToSelector:removeAnchoredSel]) {
+                ((void (*)(id, SEL, id))objc_msgSend)(item, removeAnchoredSel, anchoredObject);
+                removed++;
+            }
+        }
+    }
+
+    return removed;
+}
+
+static BOOL SpliceKitCaption_isGeneratorTitleObject(id obj) {
+    if (!obj) return NO;
+    NSString *className = NSStringFromClass([obj class]) ?: @"";
+    if ([className containsString:@"Gap"]) return NO;
+    if ([className containsString:@"Generator"]) return YES;
+    SEL effectSel = NSSelectorFromString(@"effect");
+    if ([obj respondsToSelector:effectSel]) {
+        id effect = ((id (*)(id, SEL))objc_msgSend)(obj, effectSel);
+        return (effect != nil);
+    }
+    return NO;
 }
 
 static id SpliceKitCaption_hostItemForTime(id sequence, double seconds, int timescale) {
@@ -2130,7 +2624,7 @@ static BOOL SpliceKitCaption_applyTransformToTitle(id titleObject, CGFloat yOffs
     return NO;
 }
 
-// mCaptions-style import: generate FCPXML with all captions as connected titles
+// Legacy-style import: generate FCPXML with all captions as connected titles
 // inside a single gap (lane 1), import via FFXMLTranslationTask, then copy/paste
 // the entire connected storyline onto the user's timeline in one shot.
 
@@ -2209,11 +2703,9 @@ static BOOL SpliceKitCaption_pollMainThread(BOOL (^condition)(void), double time
 }
 
 - (NSDictionary *)addCaptionTitlesDirectlyToTimeline {
-    // FCPXML-based insertion with snapshot overlay to hide the temp project switch.
-    // Builds FCPXML with titles in a spine (gap spacers between), imports via
-    // FFXMLTranslationTask to a temp project, copies to native clipboard, pastes
-    // as a connected storyline on the user's timeline. A window snapshot overlay
-    // hides the brief editor switch during conversion.
+    // Native pasteboard insertion modeled on the earlier caption workflow:
+    // build a real FFAnchoredCollection storyline containing generator and gap
+    // components, archive it to proFFPasteboardUTI, then pasteAnchored: it.
 
     SpliceKitCaptionStyle *s = self.style;
     int fdN = self.fdNum, fdD = self.fdDen;
@@ -2227,164 +2719,377 @@ static BOOL SpliceKitCaption_pollMainThread(BOOL (^condition)(void), double time
         return @{@"error": @"No active timeline — open a project first"};
     }
 
-    double totalDuration = 0;
-    for (SpliceKitCaptionSegment *seg in self.mutableSegments) {
-        if (seg.endTime > totalDuration) totalDuration = seg.endTime;
-    }
-    totalDuration += 1.0;
+    __block NSData *nativePasteboardData = nil;
+    __block NSData *nativeArchiveData = nil;
+    __block NSDictionary *outerPasteboard = nil;
+    __block NSString *buildError = nil;
+    __block NSString *buildStage = @"init";
+    __block int titleCount = 0;
+    NSString *nativePath = [NSTemporaryDirectory() stringByAppendingPathComponent:
+        @"splicekit_captions_native_container.plist"];
+    NSString *archivePath = [NSTemporaryDirectory() stringByAppendingPathComponent:
+        @"splicekit_captions_native_container.archive"];
+    NSString *xmlDebugPath = [NSTemporaryDirectory() stringByAppendingPathComponent:
+        @"splicekit_captions_native_container.xml"];
+    NSString *debugPath = [NSTemporaryDirectory() stringByAppendingPathComponent:
+        @"splicekit_captions_native_debug.json"];
+    NSMutableArray<NSMutableDictionary *> *segmentDebug = [NSMutableArray array];
+    NSMutableArray<NSString *> *warnings = [NSMutableArray array];
+    NSMutableDictionary *debugInfo = [@{
+        @"mode": @"nativeStorylinePasteboard",
+        @"templateMatch": kSpliceKitRuntimeCaptionTemplateMatch,
+        @"timeline": @{
+            @"frameDuration": [NSString stringWithFormat:@"%d/%d", fdN, fdD],
+            @"frameRate": @(self.frameRate),
+            @"width": @(self.videoWidth),
+            @"height": @(self.videoHeight),
+        },
+        @"paths": @{
+            @"nativePasteboardPath": nativePath,
+            @"nativeArchivePath": archivePath,
+            @"nativeXMLPath": xmlDebugPath,
+            @"debugJSONPath": debugPath,
+        },
+        @"segmentCount": @(self.mutableSegments.count),
+        @"segments": segmentDebug,
+    } mutableCopy];
+    BOOL useWordHighlightRuntime = (s.wordByWordHighlight && s.highlightColor != nil);
+    NSMutableArray<NSDictionary *> *runtimeEntries = [NSMutableArray array];
+    for (NSUInteger segIndex = 0; segIndex < self.mutableSegments.count; segIndex++) {
+        SpliceKitCaptionSegment *seg = self.mutableSegments[segIndex];
+        NSString *segmentText = s.allCaps ? [seg.text uppercaseString] : seg.text;
+        NSString *trimmed = [segmentText stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        if (trimmed.length == 0) continue;
 
-    // ---------------------------------------------------------------
-    // Step 1: Build FCPXML with titles in spine (gap spacers between).
-    // When copy-pasted from a temp project, spine items become a single
-    // connected storyline on the destination timeline (like mCaptions).
-    // ---------------------------------------------------------------
-    NSString *totalDurStr = SpliceKitCaption_durRational(totalDuration, fdN, fdD);
-    BOOL useWordProgress = s.wordByWordHighlight;
-
-    NSMutableString *xml = [NSMutableString string];
-    [xml appendString:@"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"];
-    [xml appendString:@"<!DOCTYPE fcpxml>\n\n"];
-    [xml appendString:@"<fcpxml version=\"1.14\">\n"];
-    [xml appendString:@"    <resources>\n"];
-    [xml appendFormat:@"        <format id=\"r1\" name=\"FFVideoFormat%dx%dp%d\" "
-        @"frameDuration=\"%d/%ds\" width=\"%d\" height=\"%d\"/>\n",
-        self.videoWidth, self.videoHeight, (int)round(self.frameRate),
-        fdN, fdD, self.videoWidth, self.videoHeight];
-    [xml appendString:@"        <effect id=\"r2\" name=\"Basic Title\" "
-        @"uid=\".../Titles.localized/Bumper:Opener.localized/Basic Title.localized/Basic Title.moti\"/>\n"];
-    [xml appendString:@"    </resources>\n"];
-    [xml appendString:@"    <library>\n"];
-    [xml appendString:@"        <event name=\"SpliceKit Captions\">\n"];
-    [xml appendString:@"            <project name=\"SpliceKit Captions\">\n"];
-    [xml appendFormat:@"                <sequence format=\"r1\" duration=\"%@\" "
-        @"tcStart=\"0s\" tcFormat=\"NDF\" audioLayout=\"stereo\" audioRate=\"48k\">\n", totalDurStr];
-    [xml appendString:@"                    <spine>\n"];
-
-    int titleCount = 0;
-    int tsCounter = 1;
-    NSString *ind = @"                        ";
-
-    if (useWordProgress) {
-        double currentTime = 0;
-        for (SpliceKitCaptionSegment *seg in self.mutableSegments) {
-            for (NSUInteger wi = 0; wi < seg.words.count; wi++) {
-                SpliceKitTranscriptWord *word = seg.words[wi];
+        if (useWordHighlightRuntime && seg.words.count > 0) {
+            for (NSUInteger wordIndex = 0; wordIndex < seg.words.count; wordIndex++) {
+                SpliceKitTranscriptWord *word = seg.words[wordIndex];
                 double titleStart = word.startTime;
-                double titleEnd = (wi + 1 < seg.words.count) ? seg.words[wi + 1].startTime : seg.endTime;
-                double titleDur = MAX(titleEnd - titleStart, (double)fdN / fdD);
+                double titleEnd = (wordIndex + 1 < seg.words.count) ? seg.words[wordIndex + 1].startTime : seg.endTime;
+                double titleDuration = MAX(titleEnd - titleStart, (double)MAX(fdN, 1) / MAX(fdD, 1));
+                [runtimeEntries addObject:@{
+                    @"segmentIndex": @(segIndex),
+                    @"wordIndex": @(wordIndex),
+                    @"text": trimmed,
+                    @"startTime": @(titleStart),
+                    @"endTime": @(titleEnd),
+                    @"duration": @(titleDuration),
+                    @"mode": @"wordHighlight",
+                }];
+            }
+        } else {
+            [runtimeEntries addObject:@{
+                @"segmentIndex": @(segIndex),
+                @"text": trimmed,
+                @"startTime": @(seg.startTime),
+                @"endTime": @(seg.endTime),
+                @"duration": @(MAX(seg.endTime - seg.startTime, seg.duration)),
+                @"mode": @"segment",
+            }];
+        }
+    }
+    debugInfo[@"expectedTextCount"] = @(runtimeEntries.count);
+    debugInfo[@"runtimeEntryCount"] = @(runtimeEntries.count);
+    debugInfo[@"runtimeMode"] = useWordHighlightRuntime ? @"wordHighlight" : @"segment";
 
-                double gapBefore = titleStart - currentTime;
-                if (gapBefore > 0.001) {
-                    [xml appendFormat:@"%@<gap name=\"S\" duration=\"%@\" start=\"0s\"/>\n",
-                        ind, SpliceKitCaption_durRational(gapBefore, fdN, fdD)];
+    SpliceKit_log(@"[Captions][Native] Starting storyline build for %lu runtime entries from %lu grouped segments using %@",
+                  (unsigned long)runtimeEntries.count,
+                  (unsigned long)self.mutableSegments.count,
+                  kSpliceKitRuntimeCaptionTemplateMatch);
+
+    SpliceKit_executeOnMainThread(^{
+        @try {
+            buildStage = @"resolveCollectionClass";
+            Class collectionClass = objc_getClass("FFAnchoredCollection");
+            if (!collectionClass) {
+                buildError = @"FFAnchoredCollection class not found";
+                return;
+            }
+            SpliceKit_log(@"[Captions][Native] Using collection class %@", NSStringFromClass(collectionClass));
+
+            buildStage = @"createStoryline";
+            id storyline = ((id (*)(id, SEL, id))objc_msgSend)(
+                ((id (*)(id, SEL))objc_msgSend)(collectionClass, @selector(alloc)),
+                NSSelectorFromString(@"initWithDisplayName:"),
+                kSpliceKitCaptionStorylineName);
+            if (!storyline) {
+                buildError = @"Failed to create anchored collection";
+                return;
+            }
+            SpliceKit_log(@"[Captions][Native] Storyline created: %@", SpliceKitCaption_describeObject(storyline));
+
+            SEL setIsSpineSel = NSSelectorFromString(@"setIsSpine:");
+            if ([storyline respondsToSelector:setIsSpineSel]) {
+                ((void (*)(id, SEL, BOOL))objc_msgSend)(storyline, setIsSpineSel, YES);
+                SpliceKit_log(@"[Captions][Native] setIsSpine:YES");
+            }
+            SEL setContentCreatedSel = NSSelectorFromString(@"setContentCreated:");
+            if ([storyline respondsToSelector:setContentCreatedSel]) {
+                ((void (*)(id, SEL, id))objc_msgSend)(storyline, setContentCreatedSel, [NSDate date]);
+                SpliceKit_log(@"[Captions][Native] setContentCreated");
+            }
+            SEL setAngleIDSel = NSSelectorFromString(@"setAngleID:");
+            if ([storyline respondsToSelector:setAngleIDSel]) {
+                ((void (*)(id, SEL, id))objc_msgSend)(storyline, setAngleIDSel, @"");
+                SpliceKit_log(@"[Captions][Native] setAngleID:\"\"");
+            }
+            SEL setUnclippedStartSel = NSSelectorFromString(@"setUnclippedStart:");
+            if ([storyline respondsToSelector:setUnclippedStartSel]) {
+                SpliceKitCaption_CMTime zero = SpliceKitCaption_makeFrameAlignedCMTime(0, fdN, fdD);
+                ((void (*)(id, SEL, SpliceKitCaption_CMTime))objc_msgSend)(storyline, setUnclippedStartSel, zero);
+                SpliceKit_log(@"[Captions][Native] setUnclippedStart:%@", SpliceKitCaption_formatCMTime(zero));
+            }
+
+            SEL addContainedSel = NSSelectorFromString(@"addObjectToContainedItems:");
+            if (![storyline respondsToSelector:addContainedSel]) {
+                buildError = @"Anchored collection cannot accept contained items";
+                return;
+            }
+            SpliceKit_log(@"[Captions][Native] Storyline responds to addObjectToContainedItems:");
+
+            long long cursorFrames = 0;
+            for (NSDictionary *entry in runtimeEntries) {
+                NSUInteger segIndex = [entry[@"segmentIndex"] unsignedIntegerValue];
+                SpliceKitCaptionSegment *seg = (segIndex < self.mutableSegments.count) ? self.mutableSegments[segIndex] : nil;
+                NSNumber *wordIndexNumber = entry[@"wordIndex"];
+                NSString *trimmed = entry[@"text"];
+                double entryStart = [entry[@"startTime"] doubleValue];
+                double entryEnd = [entry[@"endTime"] doubleValue];
+                double entryDuration = [entry[@"duration"] doubleValue];
+                NSMutableDictionary *segInfo = [@{
+                    @"segmentIndex": seg ? @(seg.segmentIndex) : @(segIndex),
+                    @"startTime": @(entryStart),
+                    @"endTime": @(entryEnd),
+                    @"duration": @(entryDuration),
+                    @"textPreview": SpliceKitCaption_previewText(trimmed, 120),
+                    @"mode": entry[@"mode"] ?: @"segment",
+                } mutableCopy];
+                if ([wordIndexNumber isKindOfClass:[NSNumber class]]) {
+                    segInfo[@"wordIndex"] = wordIndexNumber;
+                }
+                [segmentDebug addObject:segInfo];
+                if (trimmed.length == 0) {
+                    segInfo[@"status"] = @"skippedEmpty";
+                    SpliceKit_log(@"[Captions][Native] Runtime entry for segment %lu skipped: empty text",
+                                  (unsigned long)(seg ? seg.segmentIndex : segIndex));
+                    continue;
                 }
 
-                [xml appendString:[self wordHighlightTitleForSegment:seg
-                                                           wordIndex:wi
-                                                           tsCounter:&tsCounter
-                                                              indent:ind
-                                                            duration:titleDur]];
+                long long startFrames = SpliceKitCaption_frameCountForSeconds(entryStart, fdN, fdD, YES);
+                if (startFrames < cursorFrames) startFrames = cursorFrames;
+
+                double rawDuration = entryDuration;
+                if (rawDuration <= 0) rawDuration = (double)MAX(fdN, 1) / MAX(fdD, 1);
+                long long durationFrames = SpliceKitCaption_frameCountForSeconds(rawDuration, fdN, fdD, NO);
+                if (durationFrames <= 0) durationFrames = 1;
+                long long gapFrames = MAX(startFrames - cursorFrames, 0);
+                segInfo[@"startFrames"] = @(startFrames);
+                segInfo[@"durationFrames"] = @(durationFrames);
+                segInfo[@"gapFrames"] = @(gapFrames);
+                segInfo[@"cursorFramesBefore"] = @(cursorFrames);
+                segInfo[@"status"] = @"building";
+                SpliceKit_log(@"[Captions][Native] Runtime entry segment=%lu word=%@ start=%.3f end=%.3f rawDur=%.3f startFrames=%lld gapFrames=%lld durationFrames=%lld text=\"%@\"",
+                              (unsigned long)(seg ? seg.segmentIndex : segIndex),
+                              [wordIndexNumber isKindOfClass:[NSNumber class]] ? [wordIndexNumber stringValue] : @"-",
+                              entryStart, entryEnd, rawDuration,
+                              startFrames, gapFrames, durationFrames,
+                              SpliceKitCaption_previewText(trimmed, 100));
+
+                if (startFrames > cursorFrames) {
+                    buildStage = [NSString stringWithFormat:@"createGap(segment=%lu)", (unsigned long)(seg ? seg.segmentIndex : segIndex)];
+                    id gap = SpliceKitCaption_newGapComponent(
+                        SpliceKitCaption_makeFrameAlignedCMTime(startFrames - cursorFrames, fdN, fdD),
+                        SpliceKitCaption_makeFrameAlignedCMTime(1, fdN, fdD));
+                    if (!gap) {
+                        segInfo[@"status"] = @"gapCreateFailed";
+                        buildError = @"Failed to create gap component";
+                        return;
+                    }
+                    segInfo[@"gapClass"] = NSStringFromClass([gap class]) ?: @"unknown";
+                    SpliceKit_log(@"[Captions][Native] Runtime entry segment=%lu gap=%@ duration=%@",
+                                  (unsigned long)(seg ? seg.segmentIndex : segIndex),
+                                  SpliceKitCaption_describeObject(gap),
+                                  SpliceKitCaption_formatCMTime(
+                                      SpliceKitCaption_makeFrameAlignedCMTime(startFrames - cursorFrames, fdN, fdD)));
+                    ((void (*)(id, SEL, id))objc_msgSend)(storyline, addContainedSel, gap);
+                }
+
+                buildStage = [NSString stringWithFormat:@"createGenerator(segment=%lu)", (unsigned long)(seg ? seg.segmentIndex : segIndex)];
+                id generator = SpliceKitCaption_newRuntimeCaptionGenerator(trimmed, s, fdN, fdD, durationFrames);
+                if (!generator) {
+                    segInfo[@"status"] = @"generatorCreateFailed";
+                    buildError = [NSString stringWithFormat:@"Failed to create runtime title generator for segment %lu",
+                                  (unsigned long)(seg ? seg.segmentIndex : segIndex)];
+                    return;
+                }
+                segInfo[@"generatorClass"] = NSStringFromClass([generator class]) ?: @"unknown";
+                segInfo[@"generator"] = SpliceKitCaption_describeObject(generator);
+                SpliceKit_log(@"[Captions][Native] Runtime entry segment=%lu generator=%@",
+                              (unsigned long)(seg ? seg.segmentIndex : segIndex),
+                              SpliceKitCaption_describeObject(generator));
+
+                ((void (*)(id, SEL, id))objc_msgSend)(storyline, addContainedSel, generator);
+                cursorFrames = startFrames + durationFrames;
+                segInfo[@"cursorFramesAfter"] = @(cursorFrames);
+                segInfo[@"status"] = @"added";
                 titleCount++;
-                currentTime = titleStart + titleDur;
             }
+
+            if (titleCount == 0) {
+                buildStage = @"validateTitleCount";
+                buildError = @"No non-empty caption segments to insert";
+                return;
+            }
+
+            buildStage = @"archiveStoryline";
+            NSDictionary *archiveRoot = @{@"objects": @[storyline]};
+            NSError *archiveError = nil;
+            nativeArchiveData = [NSKeyedArchiver archivedDataWithRootObject:archiveRoot
+                                                      requiringSecureCoding:NO
+                                                                      error:&archiveError];
+            if (!nativeArchiveData) {
+                buildError = archiveError.localizedDescription ?: @"Failed to archive storyline payload";
+                return;
+            }
+            SpliceKit_log(@"[Captions][Native] Archived storyline payload (%lu bytes)",
+                          (unsigned long)nativeArchiveData.length);
+
+            buildStage = @"buildPasteboardPlist";
+            outerPasteboard = @{
+                @"ffpasteboardcopiedtypes": @{@"pb_anchoredObject": @{@"count": @1}},
+                @"ffpasteboardobject": nativeArchiveData,
+                @"kffmodelobjectIDs": @[],
+            };
+            NSError *plistError = nil;
+            nativePasteboardData = [NSPropertyListSerialization dataWithPropertyList:outerPasteboard
+                                                                              format:NSPropertyListBinaryFormat_v1_0
+                                                                             options:0
+                                                                               error:&plistError];
+            if (!nativePasteboardData) {
+                buildError = plistError.localizedDescription ?: @"Failed to serialize native pasteboard payload";
+                return;
+            }
+            SpliceKit_log(@"[Captions][Native] Serialized pasteboard plist (%lu bytes)",
+                          (unsigned long)nativePasteboardData.length);
+        } @catch (NSException *e) {
+            buildError = [NSString stringWithFormat:@"Native caption build failed at %@: %@",
+                          buildStage, e.reason];
+            SpliceKit_log(@"[Captions][Native] Exception during %@: %@\n%@",
+                          buildStage, e.reason, [[e callStackSymbols] componentsJoinedByString:@"\n"]);
         }
-    } else {
-        double currentTime = 0;
-        for (SpliceKitCaptionSegment *seg in self.mutableSegments) {
-            double segDur = MAX(seg.duration, 0.1);
-            NSString *text = s.allCaps ? [seg.text uppercaseString] : seg.text;
-            NSString *tsID = [NSString stringWithFormat:@"ts%d", tsCounter++];
-            NSString *tsDef = [self textStyleXMLWithID:tsID color:s.textColor isHighlight:NO];
-            NSString *durStr = SpliceKitCaption_durRational(segDur, fdN, fdD);
+    });
 
-            double gapBefore = seg.startTime - currentTime;
-            if (gapBefore > 0.001) {
-                [xml appendFormat:@"%@<gap name=\"S\" duration=\"%@\" start=\"0s\"/>\n",
-                    ind, SpliceKitCaption_durRational(gapBefore, fdN, fdD)];
-            }
+    debugInfo[@"buildStage"] = buildStage ?: @"unknown";
+    debugInfo[@"titleCount"] = @(titleCount);
+    if (buildError) debugInfo[@"buildError"] = buildError;
+    if (warnings.count > 0) debugInfo[@"warnings"] = warnings;
+    if (nativeArchiveData) debugInfo[@"nativeArchiveBytes"] = @(nativeArchiveData.length);
+    if (nativePasteboardData) debugInfo[@"nativePasteboardBytes"] = @(nativePasteboardData.length);
 
-            [xml appendFormat:@"%@<title ref=\"r2\" name=\"Cap%03lu\" duration=\"%@\" start=\"3600s\">\n",
-                ind, (unsigned long)seg.segmentIndex + 1, durStr];
-            NSString *posParam = [self contentPositionParamXML];
-            if (posParam.length > 0) [xml appendFormat:@"%@    %@", ind, posParam];
-            // NOTE: adjust-transform is NOT included — FCP's FCPXML importer
-            // rejects it on Basic Title templates ("dragged XML could not be imported").
-            // Position is set via Content Position param and post-processing.
-            [xml appendFormat:@"%@    <text><text-style ref=\"%@\">%@</text-style></text>\n",
-                ind, tsID, SpliceKitCaption_escapeXML(text)];
-            [xml appendFormat:@"%@    %@\n", ind, tsDef];
-            [xml appendString:[NSString stringWithFormat:@"%@</title>\n", ind]];
-            titleCount++;
-            currentTime = seg.startTime + segDur;
+    if (nativeArchiveData) {
+        SpliceKitCaption_writeDataDebugFile(nativeArchiveData, archivePath, @"native archive");
+    }
+    if (outerPasteboard) {
+        NSError *xmlError = nil;
+        NSData *xmlData = [NSPropertyListSerialization dataWithPropertyList:outerPasteboard
+                                                                     format:NSPropertyListXMLFormat_v1_0
+                                                                    options:0
+                                                                      error:&xmlError];
+        if (xmlData) {
+            SpliceKitCaption_writeDataDebugFile(xmlData, xmlDebugPath, @"native pasteboard XML");
+        } else {
+            NSString *warning = [NSString stringWithFormat:@"Failed to write XML debug plist: %@",
+                                 xmlError.localizedDescription ?: @"unknown error"];
+            [warnings addObject:warning];
+            SpliceKit_log(@"[Captions][Debug] %@", warning);
         }
     }
+    SpliceKitCaption_writeJSONDebugFile(debugInfo, debugPath, @"native caption debug JSON");
 
-    [xml appendString:@"                    </spine>\n"];
-    [xml appendString:@"                </sequence>\n"];
-    [xml appendString:@"            </project>\n"];
-    [xml appendString:@"        </event>\n"];
-    [xml appendString:@"    </library>\n"];
-    [xml appendString:@"</fcpxml>\n"];
+    if (!nativePasteboardData) {
+        return @{
+            @"error": buildError ?: @"Could not build native caption storyline",
+            @"debugPath": debugPath,
+            @"nativeArchivePath": archivePath,
+            @"nativePasteboardPath": nativePath,
+            @"nativeXMLPath": xmlDebugPath,
+        };
+    }
 
-    SpliceKit_log(@"[Captions] Built FCPXML: %d titles, %lu bytes", titleCount, (unsigned long)xml.length);
+    SpliceKitCaption_writeDataDebugFile(nativePasteboardData, nativePath, @"native pasteboard binary plist");
 
-    NSString *xmlPath = [NSTemporaryDirectory() stringByAppendingPathComponent:@"splicekit_captions.fcpxml"];
-    [xml writeToFile:xmlPath atomically:YES encoding:NSUTF8StringEncoding error:nil];
-
-    // ---------------------------------------------------------------
-    // Step 2: Write FCPXML to pasteboard, convert to native via the proven
-    // SpliceKit_convertFCPXMLToNativeClipboard() pipeline, then paste.
-    // The shared function handles import → temp project → copy → switch
-    // back → cleanup. It uses NSDisableScreenUpdates() to minimize flicker.
-    // ---------------------------------------------------------------
     __block BOOL pasteHandled = NO;
+    __block NSString *pasteTarget = nil;
+    __block NSArray *pasteboardTypes = nil;
+    __block NSUInteger removedExistingCaptionCollections = 0;
 
-    // Step 2a: Write FCPXML to pasteboard, seek to start, deselect
+    SpliceKit_executeOnMainThread(^{
+        id sequence = SpliceKitCaption_currentSequence();
+        if (!sequence) return;
+        removedExistingCaptionCollections += SpliceKitCaption_removeExistingCaptionStorylines(
+            sequence, SpliceKitLegacyCaptionStorylineName());
+        removedExistingCaptionCollections += SpliceKitCaption_removeExistingCaptionStorylines(
+            sequence, kSpliceKitCaptionStorylineName);
+        if (removedExistingCaptionCollections > 0) {
+            SpliceKit_log(@"[Captions][Native] Removed %lu existing caption storyline(s) before paste",
+                          (unsigned long)removedExistingCaptionCollections);
+        }
+    });
+    debugInfo[@"removedExistingCaptionCollections"] = @(removedExistingCaptionCollections);
+
+    // Write native pasteboard data, seek to start, then paste as a connected storyline.
     SpliceKit_executeOnMainThread(^{
         NSPasteboard *pb = [NSPasteboard generalPasteboard];
         [pb clearContents];
-        NSString *xmlType = ((id (*)(id, SEL))objc_msgSend)(
-            objc_getClass("IXXMLPasteboardType"), NSSelectorFromString(@"generic"));
-        [pb setString:xml forType:xmlType];
-        SpliceKit_log(@"[Captions] Wrote %lu bytes FCPXML to pasteboard", (unsigned long)xml.length);
+        [pb setData:nativePasteboardData forType:@"com.apple.flexo.proFFPasteboardUTI"];
+        pasteboardTypes = pb.types ?: @[];
+        id target = [[NSApplication sharedApplication]
+            targetForAction:NSSelectorFromString(@"pasteAnchored:") to:nil from:nil];
+        pasteTarget = SpliceKitCaption_describeObject(target);
+        SpliceKit_log(@"[Captions] Wrote %lu bytes native storyline payload to pasteboard",
+                      (unsigned long)nativePasteboardData.length);
+        SpliceKit_log(@"[Captions][Native] pasteboard types=%@ targetForPasteAnchored=%@",
+                      pasteboardTypes, pasteTarget ?: @"(nil)");
 
         id tm = SpliceKit_getActiveTimelineModule();
         if (tm) {
-            SpliceKitCaption_CMTime zeroTime = {0, 600, 1, 0};
+            SpliceKitCaption_CMTime zeroTime = SpliceKitCaption_makeFrameAlignedCMTime(0, fdN, fdD);
             SEL setSel = NSSelectorFromString(@"setPlayheadTime:");
             if ([tm respondsToSelector:setSel]) {
                 ((void (*)(id, SEL, SpliceKitCaption_CMTime))objc_msgSend)(tm, setSel, zeroTime);
+                SpliceKit_log(@"[Captions][Native] Set playhead time to %@", SpliceKitCaption_formatCMTime(zeroTime));
             }
         }
         [[NSApplication sharedApplication] sendAction:NSSelectorFromString(@"deselectAll:")
                                                    to:nil from:nil];
     });
 
-    // Brief pause so the pasteboard change registers before the swizzle reads it
     [NSThread sleepForTimeInterval:0.2];
 
-    // Step 2b: Paste — the pasteAnchored: swizzle detects FCPXML, converts to
-    // native (import → temp → copy → switch back), then original paste runs.
     SpliceKit_executeOnMainThread(^{
         pasteHandled = [[NSApplication sharedApplication]
             sendAction:NSSelectorFromString(@"pasteAnchored:")
                     to:nil from:nil];
     });
 
-    // Wait for the swizzle pipeline to complete
-    [NSThread sleepForTimeInterval:1.0];
+    [NSThread sleepForTimeInterval:0.6];
 
     SpliceKit_log(@"[Captions] Paste as connected: %@", pasteHandled ? @"YES" : @"NO");
+    if (!pasteHandled) {
+        SpliceKit_log(@"[Captions][Native] pasteAnchored returned NO. Pasteboard types at paste time=%@ target=%@",
+                      pasteboardTypes ?: @[], pasteTarget ?: @"(nil)");
+    }
 
-    // ---------------------------------------------------------------
-    // Step 3: Post-process — reload Motion templates, set position, verify.
-    // ---------------------------------------------------------------
     [NSThread sleepForTimeInterval:0.3];
     __block int verifiedTitleCount = 0;
     __block int positionAppliedCount = 0;
     __block NSString *verifiedText = nil;
     __block double verifiedFontSize = 0;
     __block NSString *verifiedFontFamily = nil;
+    __block NSUInteger primaryItemCount = 0;
+    __block NSUInteger anchoredContainerCount = 0;
+    __block NSUInteger textAppliedCount = 0;
+    __block NSUInteger textSegmentCursor = 0;
     CGFloat yOffset = [self yOffsetForPosition];
     BOOL needsPosition = (s.position != SpliceKitCaptionPositionCenter || s.customYOffset != 0);
 
@@ -2399,6 +3104,9 @@ static BOOL SpliceKitCaption_pollMainThread(BOOL (^condition)(void), double time
                 if (!primary) return;
                 NSArray *items = ((id (*)(id, SEL))objc_msgSend)(primary, NSSelectorFromString(@"containedItems"));
                 if (![items isKindOfClass:[NSArray class]]) return;
+                primaryItemCount = items.count;
+                SpliceKit_log(@"[Captions][Native] Post-paste primary containedItems=%lu",
+                              (unsigned long)items.count);
 
                 for (id item in items) {
                     SEL anchoredSel = NSSelectorFromString(@"anchoredItems");
@@ -2410,6 +3118,10 @@ static BOOL SpliceKitCaption_pollMainThread(BOOL (^condition)(void), double time
                     else if ([anchoredRaw isKindOfClass:[NSArray class]])
                         anchored = anchoredRaw;
                     if (!anchored || anchored.count == 0) continue;
+                    anchoredContainerCount += anchored.count;
+                    SpliceKit_log(@"[Captions][Native] Item %@ has %lu anchored items",
+                                  SpliceKitCaption_describeObject(item),
+                                  (unsigned long)anchored.count);
 
                     for (id conn in anchored) {
                         // Connected item may be a storyline (FFAnchoredCollection)
@@ -2420,22 +3132,31 @@ static BOOL SpliceKitCaption_pollMainThread(BOOL (^condition)(void), double time
                         if ([conn respondsToSelector:containedSel]) {
                             NSArray *contained = ((id (*)(id, SEL))objc_msgSend)(conn, containedSel);
                             if ([contained isKindOfClass:[NSArray class]]) {
+                                SpliceKit_log(@"[Captions][Native] Connected container %@ contains %lu items",
+                                              SpliceKitCaption_describeObject(conn),
+                                              (unsigned long)contained.count);
                                 for (id sub in contained) {
-                                    // Skip gap spacers — only process titles
-                                    NSString *cls = NSStringFromClass([sub class]);
-                                    if (![cls containsString:@"Gap"]) {
+                                    if (SpliceKitCaption_isGeneratorTitleObject(sub)) {
                                         [titlesToProcess addObject:sub];
                                     }
                                 }
                             }
                         }
-                        // If no contained items (or not a collection), process conn itself
-                        if (titlesToProcess.count == 0) {
+                        // If no contained items (or not a collection), only process
+                        // standalone generator titles. Skip unrelated anchored media.
+                        if (titlesToProcess.count == 0 && SpliceKitCaption_isGeneratorTitleObject(conn)) {
                             [titlesToProcess addObject:conn];
                         }
 
                         for (id title in titlesToProcess) {
                             verifiedTitleCount++;
+                            NSDictionary *entry = (textSegmentCursor < runtimeEntries.count)
+                                ? runtimeEntries[textSegmentCursor]
+                                : nil;
+                            NSString *expectedText = entry[@"text"];
+                            NSNumber *wordIndexNumber = entry[@"wordIndex"];
+                            NSUInteger segIndex = [entry[@"segmentIndex"] unsignedIntegerValue];
+                            textSegmentCursor++;
 
                             // Reload Motion template
                             @try {
@@ -2448,6 +3169,27 @@ static BOOL SpliceKitCaption_pollMainThread(BOOL (^condition)(void), double time
                                     }
                                 }
                             } @catch (NSException *e) {}
+
+                            if (expectedText.length > 0) {
+                                @try {
+                                    BOOL didApplyText = NO;
+                                    if ([wordIndexNumber isKindOfClass:[NSNumber class]] &&
+                                        segIndex < self.mutableSegments.count) {
+                                        SpliceKitCaptionSegment *seg = self.mutableSegments[segIndex];
+                                        NSAttributedString *highlighted = SpliceKitCaption_makeHighlightedGeneratorAttributedString(
+                                            seg, [wordIndexNumber unsignedIntegerValue], s);
+                                        didApplyText = SpliceKitCaption_setGeneratorAttributedText(title, highlighted);
+                                    } else {
+                                        didApplyText = SpliceKitCaption_setGeneratorChannelText(title, expectedText, s);
+                                    }
+                                    if (didApplyText) {
+                                        textAppliedCount++;
+                                    }
+                                } @catch (NSException *e) {
+                                    SpliceKit_log(@"[Captions][Native] Failed to apply text to %@: %@",
+                                                  SpliceKitCaption_describeObject(title), e.reason);
+                                }
+                            }
 
                             // Set position via Motion template channel hierarchy
                             if (needsPosition) {
@@ -2535,25 +3277,61 @@ static BOOL SpliceKitCaption_pollMainThread(BOOL (^condition)(void), double time
                     }
                 }
             } @catch (NSException *e) {
-                SpliceKit_log(@"[Captions] Post-process exception: %@", e.reason);
+                SpliceKit_log(@"[Captions] Post-process exception: %@\n%@",
+                              e.reason, [[e callStackSymbols] componentsJoinedByString:@"\n"]);
             }
         });
     }
 
     SpliceKit_log(@"[Captions] Verified: %d connected titles, text='%@', fontSize=%.1f, position=%d",
                   verifiedTitleCount, verifiedText ?: @"(none)", verifiedFontSize, positionAppliedCount);
+    debugInfo[@"pasteHandled"] = @(pasteHandled);
+    debugInfo[@"pasteTarget"] = pasteTarget ?: @"(nil)";
+    if (pasteboardTypes) debugInfo[@"pasteboardTypes"] = pasteboardTypes;
+    debugInfo[@"postPastePrimaryItemCount"] = @(primaryItemCount);
+    debugInfo[@"postPasteAnchoredContainerCount"] = @(anchoredContainerCount);
+    debugInfo[@"removedExistingCaptionCollections"] = @(removedExistingCaptionCollections);
+    debugInfo[@"verifiedTitleCount"] = @(verifiedTitleCount);
+    debugInfo[@"textAppliedCount"] = @(textAppliedCount);
+    debugInfo[@"positionAppliedCount"] = @(positionAppliedCount);
+    if (verifiedText) {
+        debugInfo[@"verification"] = @{
+            @"text": verifiedText,
+            @"fontSize": @(verifiedFontSize),
+            @"fontFamily": verifiedFontFamily ?: @"unknown",
+        };
+    }
+    if (verifiedTitleCount == 0 && pasteHandled) {
+        NSString *warning = @"pasteAnchored returned YES but verification found zero connected titles";
+        [warnings addObject:warning];
+        SpliceKit_log(@"[Captions][Native] %@", warning);
+    }
+    if (warnings.count > 0) debugInfo[@"warnings"] = warnings;
+    SpliceKitCaption_writeJSONDebugFile(debugInfo, debugPath, @"native caption debug JSON");
 
     NSMutableDictionary *result = [@{
         @"status": pasteHandled ? @"ok" : @"error",
         @"insertedCount": @(titleCount),
-        @"fcpxmlPath": xmlPath,
         @"pasteHandled": @(pasteHandled),
         @"message": [NSString stringWithFormat:@"Added %d captions to timeline", titleCount],
-        @"importMethod": @"fcpxmlOverlay",
+        @"importMethod": @"nativeStorylinePasteboard",
+        @"nativePasteboardPath": nativePath,
+        @"nativeArchivePath": archivePath,
+        @"nativeXMLPath": xmlDebugPath,
+        @"debugPath": debugPath,
     } mutableCopy];
 
     if (!pasteHandled) {
         result[@"error"] = @"pasteAsConnected was not handled — captions may not be on timeline";
+    }
+    if (warnings.count > 0) {
+        result[@"warnings"] = [warnings copy];
+    }
+    if (removedExistingCaptionCollections > 0) {
+        result[@"removedExistingCaptionCollections"] = @(removedExistingCaptionCollections);
+    }
+    if (textAppliedCount > 0) {
+        result[@"textAppliedCount"] = @(textAppliedCount);
     }
     if (needsPosition && positionAppliedCount > 0) {
         result[@"positionApplied"] = @(positionAppliedCount);
@@ -2607,7 +3385,7 @@ static BOOL SpliceKitCaption_pollMainThread(BOOL (^condition)(void), double time
 
 // Content Position Y for the FCPXML <param> element (Motion template coordinate space).
 // This is different from yOffsetForPosition which uses FFCutawayEffects transform space.
-// mCaptions uses height * 0.7 for bottom position in this coordinate system.
+// The legacy template uses height * 0.7 for bottom position in this coordinate space.
 - (CGFloat)contentPositionYForFCPXML {
     switch (self.style.position) {
         case SpliceKitCaptionPositionBottom: return -(self.videoHeight * 0.7);
@@ -2630,7 +3408,7 @@ static BOOL SpliceKitCaption_pollMainThread(BOOL (^condition)(void), double time
     return @"";
 }
 
-#pragma mark - Word-Progress Caption Generation (mCaptions-style)
+#pragma mark - Word-Progress Caption Generation
 
 // Compute Custom Speed keyframe XML for a segment's words.
 // Progress = (i+1)/N, capped at 0.999. Hold keyframes during inter-word gaps.
@@ -2667,7 +3445,7 @@ static BOOL SpliceKitCaption_pollMainThread(BOOL (^condition)(void), double time
     return kf;
 }
 
-// Build base64 JSON blob with per-word timing data (mCaptions format).
+// Build a base64 JSON blob with per-word timing data for the legacy re-edit payload.
 - (NSString *)wordProgressBase64ForSegment:(SpliceKitCaptionSegment *)seg {
     SpliceKitCaptionStyle *s = self.style;
     NSUInteger N = seg.words.count;
@@ -2720,7 +3498,8 @@ static BOOL SpliceKitCaption_pollMainThread(BOOL (^condition)(void), double time
 }
 
 // Generate one <title> XML element with word-progress params.
-// Only emits the 3 params mCaptions actually sets (Position, Opacity, Custom Speed).
+// Only emits the 3 params used by the legacy word-progress title format
+// (Position, Opacity, Custom Speed).
 // All other behavior params (Animate=Word, highlight colors, etc.) are template defaults.
 - (NSString *)wordProgressTitleXMLForSegment:(SpliceKitCaptionSegment *)seg
                                    tsCounter:(int *)tsCounter
@@ -2733,8 +3512,8 @@ static BOOL SpliceKitCaption_pollMainThread(BOOL (^condition)(void), double time
     NSString *offsetStr = SpliceKitCaption_durRational(seg.startTime, fdN, fdD);
     NSString *durStr = SpliceKitCaption_durRational(segDur, fdN, fdD);
 
-    // Position Y from moti height mapping (mCaptions uses motiHeight * posY / 100)
-    CGFloat posY = -756;  // default lower-third position matching mCaptions
+    // Position Y from the legacy moti height mapping (motiHeight * posY / 100)
+    CGFloat posY = -756;  // default lower-third position matching the legacy template
     if (self.style.position == SpliceKitCaptionPositionCenter) posY = 0;
     else if (self.style.position == SpliceKitCaptionPositionTop) posY = 756;
     else if (self.style.position == SpliceKitCaptionPositionCustom) posY = self.style.customYOffset;
@@ -2811,7 +3590,7 @@ static BOOL SpliceKitCaption_pollMainThread(BOOL (^condition)(void), double time
     }
     [xml appendFormat:@"%@    </text>\n", indent];
 
-    // Hidden text (base64 JSON blob — read back by mCaptions for re-editing)
+    // Hidden text (base64 JSON blob for re-editing)
     if (b64.length > 0) {
         [xml appendFormat:@"%@    <text>\n", indent];
         [xml appendFormat:@"%@        <text-style ref=\"%@\">%@</text-style>\n", indent, tsHidden, b64];
@@ -2844,6 +3623,35 @@ static BOOL SpliceKitCaption_pollMainThread(BOOL (^condition)(void), double time
         [xml appendFormat:@"%@    </text-style-def>\n", indent];
     }
 
+    [xml appendFormat:@"%@</title>\n", indent];
+    return xml;
+}
+
+// Generate a single segment-level title with an explicit offset in the spine.
+// This avoids spacer gaps and produces the same kind of compact connected
+// storyline structure that FCP serializes for dragged/pasted title storylines.
+- (NSString *)segmentTitleXMLForSegment:(SpliceKitCaptionSegment *)seg
+                              tsCounter:(int *)tsCounter
+                                 indent:(NSString *)indent
+                                   lane:(NSString *)lane {
+    SpliceKitCaptionStyle *s = self.style;
+    int fdN = self.fdNum, fdD = self.fdDen;
+    double segDur = MAX(seg.duration, 0.1);
+    NSString *text = s.allCaps ? [seg.text uppercaseString] : seg.text;
+    NSString *offsetStr = SpliceKitCaption_durRational(seg.startTime, fdN, fdD);
+    NSString *durStr = SpliceKitCaption_durRational(segDur, fdN, fdD);
+    NSString *tsID = [NSString stringWithFormat:@"ts%d", (*tsCounter)++];
+    NSString *tsDef = [self textStyleXMLWithID:tsID color:s.textColor isHighlight:NO];
+    NSString *laneAttr = lane ? [NSString stringWithFormat:@" lane=\"%@\"", lane] : @"";
+
+    NSMutableString *xml = [NSMutableString string];
+    [xml appendFormat:@"%@<title ref=\"r2\"%@ offset=\"%@\" name=\"Cap%03lu\" duration=\"%@\" start=\"3600s\">\n",
+        indent, laneAttr, offsetStr, (unsigned long)seg.segmentIndex + 1, durStr];
+    NSString *posParam = [self contentPositionParamXML];
+    if (posParam.length > 0) [xml appendFormat:@"%@    %@", indent, posParam];
+    [xml appendFormat:@"%@    <text><text-style ref=\"%@\">%@</text-style></text>\n",
+        indent, tsID, SpliceKitCaption_escapeXML(text)];
+    [xml appendFormat:@"%@    %@\n", indent, tsDef];
     [xml appendFormat:@"%@</title>\n", indent];
     return xml;
 }
@@ -3048,7 +3856,7 @@ static BOOL SpliceKitCaption_pollMainThread(BOOL (^condition)(void), double time
     [xml appendString:@"</fcpxml>\n"];
 }
 
-// Build word-level FCPXML using mCaptions-style word-progress approach:
+// Build word-level FCPXML using the legacy word-progress approach:
 // one title per segment with Custom Speed keyframes for word-by-word animation.
 // Saved to /tmp for manual import / debugging.
 - (NSString *)buildWordLevelFCPXML {
@@ -3145,9 +3953,6 @@ static BOOL SpliceKitCaption_pollMainThread(BOOL (^condition)(void), double time
     [self detectTimelineProperties];
 
     SpliceKitCaptionStyle *s = self.style;
-    int fdN = self.fdNum, fdD = self.fdDen;
-    CGFloat yOffset = [self yOffsetForPosition];
-
     double totalDuration = 0;
     for (SpliceKitCaptionSegment *seg in self.mutableSegments) {
         if (seg.endTime > totalDuration) totalDuration = seg.endTime;
@@ -3164,38 +3969,14 @@ static BOOL SpliceKitCaption_pollMainThread(BOOL (^condition)(void), double time
                                         titleCount:&titleCount
                                          tsCounter:&tsCounter];
 
-    // Flat spine with sequential titles + gap spacers.
-    // This is the format mCaptions uses and that FCP's drag handler accepts.
-    // No gap containers, no lanes — just titles directly in the spine.
-    double currentTime = 0;
-
+    // Flat spine with absolute title offsets.
+    // No gap containers, no spacer clips, no lanes — just titles directly in the spine.
     for (SpliceKitCaptionSegment *seg in self.mutableSegments) {
-        double segDur = seg.duration;
-        if (segDur <= 0) segDur = 0.1;
-
-        // Insert spacer gap before this segment if there's a time gap
-        double gapBefore = seg.startTime - currentTime;
-        if (gapBefore > 0.01) {
-            NSString *gapDur = SpliceKitCaption_durRational(gapBefore, fdN, fdD);
-            [xml appendFormat:@"        <gap name=\"S\" duration=\"%@\" start=\"0s\"/>\n", gapDur];
-        }
-
-        NSColor *segColor = (s.wordByWordHighlight && s.highlightColor) ? s.highlightColor : s.textColor;
-        NSString *tsID = [NSString stringWithFormat:@"ts%d", tsCounter++];
-        NSString *tsDef = [self textStyleXMLWithID:tsID color:segColor isHighlight:(s.wordByWordHighlight && s.highlightColor != nil)];
-        NSString *text = s.allCaps ? [seg.text uppercaseString] : seg.text;
-        NSString *durStr = SpliceKitCaption_durRational(segDur, fdN, fdD);
-
-        [xml appendFormat:@"        <title ref=\"r2\" name=\"Cap%03lu\" duration=\"%@\" start=\"3600s\">\n",
-            (unsigned long)seg.segmentIndex + 1, durStr];
-        NSString *exportPosParam = [self contentPositionParamXML];
-        if (exportPosParam.length > 0) [xml appendFormat:@"            %@", exportPosParam];
-        [xml appendFormat:@"            <text><text-style ref=\"%@\">%@</text-style></text>\n",
-            tsID, SpliceKitCaption_escapeXML(text)];
-        [xml appendFormat:@"            %@\n", tsDef];
-        [xml appendString:@"        </title>\n"];
+        [xml appendString:[self segmentTitleXMLForSegment:seg
+                                                tsCounter:&tsCounter
+                                                   indent:@"        "
+                                                     lane:nil]];
         titleCount++;
-        currentTime = seg.startTime + segDur;
     }
 
     [self appendFCPXMLFooter:xml];
@@ -3224,12 +4005,39 @@ static BOOL SpliceKitCaption_pollMainThread(BOOL (^condition)(void), double time
     NSUInteger insertedCount = directResult[@"insertedCount"]
         ? [directResult[@"insertedCount"] unsignedIntegerValue]
         : 0;
-    NSString *statusMsg = directOK
-        ? (insertedCount == (NSUInteger)titleCount
+    NSUInteger removedExistingCaptionCollections = directResult[@"removedExistingCaptionCollections"]
+        ? [directResult[@"removedExistingCaptionCollections"] unsignedIntegerValue]
+        : 0;
+    BOOL generatedWordLevelTitles = (insertedCount > (NSUInteger)titleCount &&
+                                     insertedCount == self.mutableWords.count &&
+                                     self.mutableWords.count > self.mutableSegments.count);
+    NSString *successMsg = nil;
+    if (generatedWordLevelTitles) {
+        successMsg = [NSString stringWithFormat:@"Added %lu word-level captions from %d grouped segments",
+                      (unsigned long)insertedCount, titleCount];
+    } else {
+        successMsg = insertedCount == (NSUInteger)titleCount
             ? [NSString stringWithFormat:@"Added %lu captions to timeline", (unsigned long)insertedCount]
             : [NSString stringWithFormat:@"Added %lu of %d captions to timeline",
-                (unsigned long)insertedCount, titleCount])
-        : [NSString stringWithFormat:@"Caption insert failed — FCPXML exported to %@", xmlPath];
+                (unsigned long)insertedCount, titleCount];
+    }
+    if (removedExistingCaptionCollections > 0) {
+        if (generatedWordLevelTitles) {
+            successMsg = [NSString stringWithFormat:
+                @"Replaced previous captions and added %lu word-level captions from %d grouped segments",
+                (unsigned long)insertedCount, titleCount];
+        } else {
+            successMsg = insertedCount == (NSUInteger)titleCount
+                ? [NSString stringWithFormat:@"Replaced previous captions and added %lu captions to timeline",
+                    (unsigned long)insertedCount]
+                : [NSString stringWithFormat:@"Replaced previous captions and added %lu of %d captions to timeline",
+                    (unsigned long)insertedCount, titleCount];
+        }
+    }
+    NSString *statusMsg = directOK
+        ? successMsg
+        : [NSString stringWithFormat:@"Caption insert failed — %@",
+            directResult[@"error"] ?: [NSString stringWithFormat:@"FCPXML exported to %@", xmlPath]];
     self.status = directOK ? SpliceKitCaptionStatusReady : SpliceKitCaptionStatusError;
     self.errorMessage = directOK ? nil : (directResult[@"error"] ?: @"Caption insert failed");
     dispatch_async(dispatch_get_main_queue(), ^{
@@ -3256,8 +4064,13 @@ static BOOL SpliceKitCaption_pollMainThread(BOOL (^condition)(void), double time
     if (directResult[@"verification"]) result[@"verification"] = directResult[@"verification"];
     if (directResult[@"verificationWarning"]) result[@"verificationWarning"] = directResult[@"verificationWarning"];
     if (directResult[@"pasteHandled"]) result[@"pasteHandled"] = directResult[@"pasteHandled"];
+    if (directResult[@"removedExistingCaptionCollections"]) {
+        result[@"removedExistingCaptionCollections"] = directResult[@"removedExistingCaptionCollections"];
+    }
+    if (directResult[@"textAppliedCount"]) result[@"textAppliedCount"] = directResult[@"textAppliedCount"];
     if (directResult[@"positionApplied"]) result[@"positionApplied"] = directResult[@"positionApplied"];
     if (directResult[@"positionY"]) result[@"positionY"] = directResult[@"positionY"];
+    if (directResult[@"debugPath"]) result[@"debugPath"] = directResult[@"debugPath"];
     if (!directOK && directResult[@"error"]) result[@"error"] = directResult[@"error"];
     self.lastGenerateResult = [result copy];
     return result;

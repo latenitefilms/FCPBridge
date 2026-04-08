@@ -95,10 +95,22 @@ deploy: $(OUTPUT) $(SILENCE_DETECTOR)
 	@cp -n scripts/lua/examples/*.lua "$(HOME)/Library/Application Support/SpliceKit/lua/examples/" 2>/dev/null || true
 	@cp -n scripts/lua/menu/*.lua "$(HOME)/Library/Application Support/SpliceKit/lua/menu/" 2>/dev/null || true
 	@cp -n scripts/lua/lib/*.lua "$(HOME)/Library/Application Support/SpliceKit/lua/lib/" 2>/dev/null || true
-	@# Sign the framework
-	codesign --force --sign - "$(FW_DIR)"
-	@# Re-sign the app
-	codesign --force --sign - --entitlements $(ENTITLEMENTS) "$(MODDED_APP)"
+	@sign_identity=$$(security find-identity -v -p codesigning 2>/dev/null | awk '/"Apple Development:/ { print $$2; exit } /"Developer ID Application:/ && developer == "" { developer = $$2 } /[0-9]+\) [0-9A-F]+ "/ && first == "" { first = $$2 } END { if (developer != "") print developer; else if (first != "") print first }'); \
+	if [ -n "$$sign_identity" ]; then \
+		echo "Using signing identity: $$sign_identity"; \
+	else \
+		sign_identity="-"; \
+		echo "No local codesigning identity found; falling back to ad-hoc signing"; \
+	fi; \
+	if ! codesign --force --sign "$$sign_identity" "$(FW_DIR)" || \
+	   ! codesign --force --sign "$$sign_identity" --entitlements $(ENTITLEMENTS) "$(MODDED_APP)"; then \
+		if [ "$$sign_identity" = "-" ]; then \
+			exit 1; \
+		fi; \
+		echo "Developer signing failed; retrying with ad-hoc signature"; \
+		codesign --force --sign - "$(FW_DIR)"; \
+		codesign --force --sign - --entitlements $(ENTITLEMENTS) "$(MODDED_APP)"; \
+	fi
 	@codesign --verify --verbose "$(MODDED_APP)" 2>&1
 	@echo "=== Deployed successfully ==="
 

@@ -498,9 +498,15 @@ class PatcherModel: ObservableObject {
         }
         await completeStepAsync(.injectDylib)
 
-        // Step 6: Ad-hoc re-sign; only sign SpliceKit.framework + app wrapper.
+        // Step 6: Re-sign the wrapper and SpliceKit.framework only.
         // Apple frameworks keep their original signatures to avoid integrity check failures.
         await setStepAsync(.signApp)
+        var signIdentity = preferredSigningIdentity() ?? "-"
+        if signIdentity == "-" {
+            await logAsync("No local codesigning identity found; using ad-hoc signature")
+        } else {
+            await logAsync("Using signing identity: \(signIdentity)")
+        }
         let entitlements = buildDir + "/entitlements.plist"
         let entPlist = """
             <?xml version="1.0" encoding="UTF-8"?>
@@ -515,10 +521,30 @@ class PatcherModel: ObservableObject {
 
         shell("/usr/libexec/PlistBuddy -c \"Add :NSSpeechRecognitionUsageDescription string 'SpliceKit uses speech recognition to transcribe timeline audio for text-based editing.'\" '\(moddedApp)/Contents/Info.plist' 2>/dev/null")
 
-        shell("""
-            codesign --force --sign - '\(moddedApp)/Contents/Frameworks/SpliceKit.framework' 2>/dev/null
-            codesign --force --sign - --entitlements '\(entitlements)' '\(moddedApp)' 2>/dev/null
+        let quotedIdentity = shellQuote(signIdentity)
+        var signResult = shellResult("""
+            codesign --force --sign \(quotedIdentity) '\(moddedApp)/Contents/Frameworks/SpliceKit.framework' 2>&1 && \
+            codesign --force --sign \(quotedIdentity) --entitlements '\(entitlements)' '\(moddedApp)' 2>&1
             """)
+        if signResult.status != 0 && signIdentity != "-" {
+            await logAsync("Developer signing failed; retrying with ad-hoc signature")
+            if !signResult.output.isEmpty {
+                await logAsync(String(signResult.output.suffix(400)))
+            }
+            signIdentity = "-"
+            signResult = shellResult("""
+                codesign --force --sign - '\(moddedApp)/Contents/Frameworks/SpliceKit.framework' 2>&1 && \
+                codesign --force --sign - --entitlements '\(entitlements)' '\(moddedApp)' 2>&1
+                """)
+        }
+        guard signResult.status == 0 else {
+            throw PatchError.msg("Signing failed:\n\(signResult.output)")
+        }
+        if signIdentity == "-" {
+            await logAsync("Applied ad-hoc signature")
+        } else {
+            await logAsync("Applied signature: \(signIdentity)")
+        }
 
         let verify = shell("codesign --verify --verbose '\(moddedApp)' 2>&1")
         if verify.contains("valid") || verify.contains("satisfies") {
@@ -526,9 +552,6 @@ class PatcherModel: ObservableObject {
         } else {
             await logAsync("Signature note: \(verify)")
         }
-
-        shell("tccutil reset All com.apple.FinalCut 2>/dev/null")
-        await logAsync("Reset permissions for new signature")
         await completeStepAsync(.signApp)
 
         // Step 7: Skip FCP's first-launch cloud content download dialog
@@ -553,8 +576,7 @@ class PatcherModel: ObservableObject {
     // MARK: - Helpers
 
     /// Run a shell command synchronously; nonisolated for use in background tasks.
-    @discardableResult
-    nonisolated func shell(_ command: String) -> String {
+    nonisolated func shellResult(_ command: String) -> (output: String, status: Int32) {
         let process = Process()
         let pipe = Pipe()
         process.standardOutput = pipe
@@ -564,7 +586,43 @@ class PatcherModel: ObservableObject {
         try? process.run()
         process.waitUntilExit()
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        return String(data: data, encoding: .utf8) ?? ""
+        return (String(data: data, encoding: .utf8) ?? "", process.terminationStatus)
+    }
+
+    @discardableResult
+    nonisolated func shell(_ command: String) -> String {
+        shellResult(command).output
+    }
+
+    private nonisolated func shellQuote(_ value: String) -> String {
+        "'" + value.replacingOccurrences(of: "'", with: "'\\''") + "'"
+    }
+
+    private nonisolated func preferredSigningIdentity() -> String? {
+        let output = shell("/usr/bin/security find-identity -v -p codesigning 2>/dev/null")
+        let identities = output
+            .split(separator: "\n")
+            .compactMap { line -> (hash: String, label: String)? in
+                let parts = line.split(omittingEmptySubsequences: true, whereSeparator: \.isWhitespace)
+                guard parts.count >= 3,
+                      let firstQuote = line.firstIndex(of: "\""),
+                      let lastQuote = line.lastIndex(of: "\""),
+                      firstQuote != lastQuote else {
+                    return nil
+                }
+                return (
+                    hash: String(parts[1]),
+                    label: String(line[line.index(after: firstQuote)..<lastQuote])
+                )
+            }
+
+        if let identity = identities.first(where: { $0.label.hasPrefix("Apple Development:") }) {
+            return identity.hash
+        }
+        if let identity = identities.first(where: { $0.label.hasPrefix("Developer ID Application:") }) {
+            return identity.hash
+        }
+        return identities.first?.hash
     }
 
     func appendLog(_ text: String) {

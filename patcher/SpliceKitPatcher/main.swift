@@ -1,8 +1,9 @@
 // SpliceKitPatcher -- GUI patcher app for SpliceKit.
 //
 // Single-file SwiftUI app that copies FCP, compiles the SpliceKit dylib,
-// injects it via LC_LOAD_DYLIB, and re-signs with ad-hoc entitlements.
-// The result is a standalone modded FCP that loads SpliceKit on launch.
+// injects it via LC_LOAD_DYLIB, and re-signs with a local identity when
+// available or ad-hoc as a fallback. The result is a standalone modded FCP
+// that loads SpliceKit on launch.
 
 import SwiftUI
 import AppKit
@@ -418,12 +419,15 @@ class PatcherModel: ObservableObject {
         // Sign only the components we modified (SpliceKit framework and the main
         // app binary).  Apple's own frameworks must keep their original signatures
         // or internal integrity checks (e.g. ProAppSupport +[PCApp isiMovie])
-        // will abort on launch.  We always use ad-hoc signing here because
-        // re-signing Apple frameworks with a Developer ID breaks them.
-        let signIdentity = "-"
-        await logAsync("Using ad-hoc signature (preserves Apple framework signatures)")
+        // will abort on launch. We only re-sign the wrapper and SpliceKit.
+        var signIdentity = preferredSigningIdentity() ?? "-"
+        if signIdentity == "-" {
+            await logAsync("No local codesigning identity found; using ad-hoc signature")
+        } else {
+            await logAsync("Using signing identity: \(signIdentity)")
+        }
 
-        await logAsync("Signing frameworks and plugins...")
+        await logAsync("Signing SpliceKit framework and app bundle...")
         let entitlements = buildDir + "/entitlements.plist"
         let entPlist = """
             <?xml version="1.0" encoding="UTF-8"?>
@@ -441,10 +445,30 @@ class PatcherModel: ObservableObject {
         // Only sign the SpliceKit framework (ours) and the main app bundle.
         // Leave all Apple frameworks, plugins, and helpers with their original
         // Apple signatures intact.
-        shell("""
-            codesign --force --sign \(signIdentity) '\(moddedApp)/Contents/Frameworks/SpliceKit.framework' 2>/dev/null
-            codesign --force --sign \(signIdentity) --entitlements '\(entitlements)' '\(moddedApp)' 2>/dev/null
+        let quotedIdentity = shellQuote(signIdentity)
+        var signResult = shellResult("""
+            codesign --force --sign \(quotedIdentity) '\(moddedApp)/Contents/Frameworks/SpliceKit.framework' 2>&1 && \
+            codesign --force --sign \(quotedIdentity) --entitlements '\(entitlements)' '\(moddedApp)' 2>&1
             """)
+        if signResult.status != 0 && signIdentity != "-" {
+            await logAsync("Developer signing failed; retrying with ad-hoc signature")
+            if !signResult.output.isEmpty {
+                await logAsync(String(signResult.output.suffix(400)))
+            }
+            signIdentity = "-"
+            signResult = shellResult("""
+                codesign --force --sign - '\(moddedApp)/Contents/Frameworks/SpliceKit.framework' 2>&1 && \
+                codesign --force --sign - --entitlements '\(entitlements)' '\(moddedApp)' 2>&1
+                """)
+        }
+        guard signResult.status == 0 else {
+            throw PatchError.msg("Signing failed:\n\(signResult.output)")
+        }
+        if signIdentity == "-" {
+            await logAsync("Applied ad-hoc signature")
+        } else {
+            await logAsync("Applied signature: \(signIdentity)")
+        }
 
         let verify = shell("codesign --verify --verbose '\(moddedApp)' 2>&1")
         if verify.contains("valid") || verify.contains("satisfies") {
@@ -455,9 +479,6 @@ class PatcherModel: ObservableObject {
             // is disabled via entitlements.  Log instead of failing.
             await logAsync("Signature note: \(verify)")
         }
-
-        shell("tccutil reset All com.apple.FinalCut 2>/dev/null")
-        await logAsync("Reset permissions for new signature")
         await completeStepAsync(.signApp)
 
         // Step 7: Skip FCP's first-launch cloud content download dialog
@@ -482,8 +503,7 @@ class PatcherModel: ObservableObject {
     // MARK: - Helpers
 
     /// Run a shell command synchronously; nonisolated for use in background tasks.
-    @discardableResult
-    nonisolated func shell(_ command: String) -> String {
+    nonisolated func shellResult(_ command: String) -> (output: String, status: Int32) {
         let process = Process()
         let pipe = Pipe()
         process.standardOutput = pipe
@@ -493,7 +513,43 @@ class PatcherModel: ObservableObject {
         try? process.run()
         process.waitUntilExit()
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        return String(data: data, encoding: .utf8) ?? ""
+        return (String(data: data, encoding: .utf8) ?? "", process.terminationStatus)
+    }
+
+    @discardableResult
+    nonisolated func shell(_ command: String) -> String {
+        shellResult(command).output
+    }
+
+    private nonisolated func shellQuote(_ value: String) -> String {
+        "'" + value.replacingOccurrences(of: "'", with: "'\\''") + "'"
+    }
+
+    private nonisolated func preferredSigningIdentity() -> String? {
+        let output = shell("/usr/bin/security find-identity -v -p codesigning 2>/dev/null")
+        let identities = output
+            .split(separator: "\n")
+            .compactMap { line -> (hash: String, label: String)? in
+                let parts = line.split(omittingEmptySubsequences: true, whereSeparator: \.isWhitespace)
+                guard parts.count >= 3,
+                      let firstQuote = line.firstIndex(of: "\""),
+                      let lastQuote = line.lastIndex(of: "\""),
+                      firstQuote != lastQuote else {
+                    return nil
+                }
+                return (
+                    hash: String(parts[1]),
+                    label: String(line[line.index(after: firstQuote)..<lastQuote])
+                )
+            }
+
+        if let identity = identities.first(where: { $0.label.hasPrefix("Apple Development:") }) {
+            return identity.hash
+        }
+        if let identity = identities.first(where: { $0.label.hasPrefix("Developer ID Application:") }) {
+            return identity.hash
+        }
+        return identities.first?.hash
     }
 
     private func appendLog(_ text: String) {
