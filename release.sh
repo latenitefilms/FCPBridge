@@ -25,6 +25,42 @@ BUILT_APP="${BUILD_DIR}/Build/Products/Release/SpliceKit.app"
 DMG_NAME="SpliceKit-v${VERSION}.dmg"
 DMG_PATH="patcher/${DMG_NAME}"
 SPARKLE_SIGN="/tmp/bin/sign_update"
+CURRENT_BRANCH="$(git branch --show-current)"
+PUSH_REMOTE="$(git config --get branch.${CURRENT_BRANCH}.remote || echo origin)"
+PUSH_BRANCH="$(git config --get branch.${CURRENT_BRANCH}.merge | sed 's#refs/heads/##')"
+if [ -z "${PUSH_BRANCH}" ]; then
+    PUSH_BRANCH="${CURRENT_BRANCH}"
+fi
+REMOTE_URL="$(git remote get-url "${PUSH_REMOTE}")"
+RELEASE_REPO="$(printf '%s' "${REMOTE_URL}" | sed -E 's#(git@github.com:|https://github.com/)##; s#\.git$##')"
+
+resolve_built_app() {
+    local products_dir="${BUILD_DIR}/Build/Products/Release"
+    local candidate=""
+
+    while IFS= read -r app; do
+        if [ -f "${app}/Contents/Info.plist" ] && [ -d "${app}/Contents/Frameworks/Sparkle.framework" ]; then
+            candidate="${app}"
+            break
+        fi
+    done < <(find "${products_dir}" -maxdepth 1 -type d -name "*.app" | sort)
+
+    if [ -z "${candidate}" ]; then
+        while IFS= read -r app; do
+            if [ -f "${app}/Contents/Info.plist" ]; then
+                candidate="${app}"
+                break
+            fi
+        done < <(find "${products_dir}" -maxdepth 1 -type d -name "*.app" | sort)
+    fi
+
+    if [ -z "${candidate}" ]; then
+        echo "ERROR: Could not locate built app bundle in ${products_dir}" >&2
+        exit 1
+    fi
+
+    BUILT_APP="${candidate}"
+}
 
 echo "=== SpliceKit Release v${VERSION} ==="
 echo ""
@@ -58,6 +94,9 @@ xcodebuild -project "${XCODE_PROJECT}" \
     -derivedDataPath "${BUILD_DIR}" \
     ONLY_ACTIVE_ARCH=NO \
     clean build
+
+resolve_built_app
+echo "  Using app bundle: ${BUILT_APP}"
 
 echo "[5/14] Syncing bundled resources into app..."
 APP_RES="${BUILT_APP}/Contents/Resources"
@@ -188,7 +227,7 @@ NEW_ITEM="    <item>
         <p>${NOTES}</p>
       ]]></description>
       <enclosure
-        url=\"https://github.com/elliotttate/SpliceKit/releases/download/v${VERSION}/${DMG_NAME}\"
+        url=\"https://github.com/${RELEASE_REPO}/releases/download/v${VERSION}/${DMG_NAME}\"
         sparkle:edSignature=\"${SPARKLE_SIG}\"
         length=\"${FILE_SIZE}\"
         type=\"application/octet-stream\" />
@@ -218,13 +257,14 @@ print('  Appcast updated')
 echo "[13/14] Committing and pushing..."
 git add -A
 git commit -m "Release v${VERSION}: ${NOTES}"
-git push origin main
+git push "${PUSH_REMOTE}" "HEAD:${PUSH_BRANCH}"
 
 echo "[14/14] Creating GitHub release..."
 gh release create "v${VERSION}" "${DMG_PATH}" \
+    -R "${RELEASE_REPO}" \
     --title "v${VERSION}" \
     --notes "${NOTES}" \
-    2>/dev/null && RELEASE_URL=$(gh release view "v${VERSION}" --json url -q '.url') || RELEASE_URL="(check GitHub)"
+    2>/dev/null && RELEASE_URL=$(gh release view "v${VERSION}" -R "${RELEASE_REPO}" --json url -q '.url') || RELEASE_URL="(check GitHub)"
 
 echo ""
 echo "========================================="

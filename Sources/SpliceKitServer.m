@@ -1453,15 +1453,18 @@ static NSDictionary *SpliceKit_handleGetClipEffects(NSDictionary *params) {
 //
 
 id SpliceKit_getActiveTimelineModule(void) {
-    id app = ((id (*)(id, SEL))objc_msgSend)(
-        objc_getClass("NSApplication"), @selector(sharedApplication));
-    id delegate = ((id (*)(id, SEL))objc_msgSend)(app, @selector(delegate));
-    if (!delegate) return nil;
+    id editorContainer = SpliceKit_dualTimelineFocusedEditorContainer();
+    id delegate = nil;
+    if (!editorContainer) {
+        id app = ((id (*)(id, SEL))objc_msgSend)(
+            objc_getClass("NSApplication"), @selector(sharedApplication));
+        delegate = ((id (*)(id, SEL))objc_msgSend)(app, @selector(delegate));
+        if (!delegate) return nil;
 
-    // Try activeEditorContainer
-    SEL aecSel = @selector(activeEditorContainer);
-    if (![delegate respondsToSelector:aecSel]) return nil;
-    id editorContainer = ((id (*)(id, SEL))objc_msgSend)(delegate, aecSel);
+        SEL aecSel = @selector(activeEditorContainer);
+        if (![delegate respondsToSelector:aecSel]) return nil;
+        editorContainer = ((id (*)(id, SEL))objc_msgSend)(delegate, aecSel);
+    }
     if (!editorContainer) return nil;
 
     // Get timeline module from editor container
@@ -1472,6 +1475,11 @@ id SpliceKit_getActiveTimelineModule(void) {
 
     // Fallback: try activeEditorModule
     SEL aemSel = @selector(activeEditorModule);
+    if (!delegate) {
+        id app = ((id (*)(id, SEL))objc_msgSend)(
+            objc_getClass("NSApplication"), @selector(sharedApplication));
+        delegate = ((id (*)(id, SEL))objc_msgSend)(app, @selector(delegate));
+    }
     if ([delegate respondsToSelector:aemSel]) {
         return ((id (*)(id, SEL))objc_msgSend)(delegate, aemSel);
     }
@@ -1480,6 +1488,9 @@ id SpliceKit_getActiveTimelineModule(void) {
 }
 
 static id SpliceKit_getEditorContainer(void) {
+    id editorContainer = SpliceKit_dualTimelineFocusedEditorContainer();
+    if (editorContainer) return editorContainer;
+
     id app = ((id (*)(id, SEL))objc_msgSend)(
         objc_getClass("NSApplication"), @selector(sharedApplication));
     id delegate = ((id (*)(id, SEL))objc_msgSend)(app, @selector(delegate));
@@ -10478,6 +10489,34 @@ static NSDictionary *SpliceKit_handleCommandExecute(NSDictionary *params) {
     return [[SpliceKitCommandPalette sharedPalette] executeCommand:action type:type];
 }
 
+static NSDictionary *SpliceKit_handleDualTimelineStatus(NSDictionary *params) {
+    return SpliceKit_dualTimelineStatus();
+}
+
+static NSDictionary *SpliceKit_handleDualTimelineOpen(NSDictionary *params) {
+    return SpliceKit_dualTimelineOpen(params ?: @{});
+}
+
+static NSDictionary *SpliceKit_handleDualTimelineSyncRoot(NSDictionary *params) {
+    return SpliceKit_dualTimelineSyncRoot(params ?: @{});
+}
+
+static NSDictionary *SpliceKit_handleDualTimelineOpenSelectedInSecondary(NSDictionary *params) {
+    return SpliceKit_dualTimelineOpenSelectedInSecondary(params ?: @{});
+}
+
+static NSDictionary *SpliceKit_handleDualTimelineFocus(NSDictionary *params) {
+    return SpliceKit_dualTimelineFocus(params ?: @{});
+}
+
+static NSDictionary *SpliceKit_handleDualTimelineClose(NSDictionary *params) {
+    return SpliceKit_dualTimelineClose(params ?: @{});
+}
+
+static NSDictionary *SpliceKit_handleDualTimelineTogglePanel(NSDictionary *params) {
+    return SpliceKit_dualTimelineTogglePanel(params ?: @{});
+}
+
 // Forward declarations for AI engine handlers
 static NSDictionary *SpliceKit_handleCommandAIGemma(NSDictionary *params);
 static NSDictionary *SpliceKit_handleCommandAIAppleAgentic(NSDictionary *params);
@@ -17992,6 +18031,22 @@ NSDictionary *SpliceKit_handleRequest(NSDictionary *request) {
         result = SpliceKit_handleCommandAIGemma(params);
     } else if ([method isEqualToString:@"command.aiAppleAgentic"]) {
         result = SpliceKit_handleCommandAIAppleAgentic(params);
+    }
+    // dualTimeline.* namespace
+    else if ([method isEqualToString:@"dualTimeline.status"]) {
+        result = SpliceKit_handleDualTimelineStatus(params);
+    } else if ([method isEqualToString:@"dualTimeline.open"]) {
+        result = SpliceKit_handleDualTimelineOpen(params);
+    } else if ([method isEqualToString:@"dualTimeline.syncRoot"]) {
+        result = SpliceKit_handleDualTimelineSyncRoot(params);
+    } else if ([method isEqualToString:@"dualTimeline.openSelectedInSecondary"]) {
+        result = SpliceKit_handleDualTimelineOpenSelectedInSecondary(params);
+    } else if ([method isEqualToString:@"dualTimeline.focus"]) {
+        result = SpliceKit_handleDualTimelineFocus(params);
+    } else if ([method isEqualToString:@"dualTimeline.close"]) {
+        result = SpliceKit_handleDualTimelineClose(params);
+    } else if ([method isEqualToString:@"dualTimeline.togglePanel"]) {
+        result = SpliceKit_handleDualTimelineTogglePanel(params);
     }
     // browser.* namespace
     else if ([method isEqualToString:@"browser.listClips"]) {

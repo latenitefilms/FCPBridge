@@ -204,6 +204,17 @@ static void SpliceKit_checkCompatibility(void) {
 - (void)setDefaultConformFit:(id)sender;
 - (void)setDefaultConformFill:(id)sender;
 - (void)setDefaultConformNone:(id)sender;
+- (void)openSecondaryTimeline:(id)sender;
+- (void)syncSecondaryTimelineRoot:(id)sender;
+- (void)openSelectedInSecondaryTimeline:(id)sender;
+- (void)focusPrimaryTimeline:(id)sender;
+- (void)focusSecondaryTimeline:(id)sender;
+- (void)closeSecondaryTimeline:(id)sender;
+- (void)toggleSecondaryBrowser:(id)sender;
+- (void)toggleSecondaryTimelineIndex:(id)sender;
+- (void)toggleSecondaryAudioMeters:(id)sender;
+- (void)toggleSecondaryEffectsBrowser:(id)sender;
+- (void)toggleSecondaryTransitionsBrowser:(id)sender;
 @property (nonatomic, weak) NSButton *toolbarButton;
 @property (nonatomic, weak) NSButton *paletteToolbarButton;
 @property (nonatomic, strong) NSMenu *luaScriptsMenu;
@@ -533,6 +544,85 @@ static NSArray<NSNumber *> *SpliceKit_parseLadderString(NSString *str) {
     [self _updateConformMenuFromSender:sender];
 }
 
+- (void)openSecondaryTimeline:(id)sender {
+    NSDictionary *result = SpliceKit_dualTimelineOpen(@{});
+    if (result[@"error"]) {
+        SpliceKit_log(@"[DualTimeline] Open failed: %@", result[@"error"]);
+        NSBeep();
+    }
+}
+
+- (void)syncSecondaryTimelineRoot:(id)sender {
+    NSDictionary *result = SpliceKit_dualTimelineSyncRoot(@{});
+    if (result[@"error"]) {
+        SpliceKit_log(@"[DualTimeline] Sync root failed: %@", result[@"error"]);
+        NSBeep();
+    }
+}
+
+- (void)openSelectedInSecondaryTimeline:(id)sender {
+    NSDictionary *result = SpliceKit_dualTimelineOpenSelectedInSecondary(@{});
+    if (result[@"error"]) {
+        SpliceKit_log(@"[DualTimeline] Open selected failed: %@", result[@"error"]);
+        NSBeep();
+    }
+}
+
+- (void)focusPrimaryTimeline:(id)sender {
+    NSDictionary *result = SpliceKit_dualTimelineFocus(@{@"pane": @"primary"});
+    if (result[@"error"]) {
+        SpliceKit_log(@"[DualTimeline] Focus primary failed: %@", result[@"error"]);
+        NSBeep();
+    }
+}
+
+- (void)focusSecondaryTimeline:(id)sender {
+    NSDictionary *result = SpliceKit_dualTimelineFocus(@{@"pane": @"secondary"});
+    if (result[@"error"]) {
+        SpliceKit_log(@"[DualTimeline] Focus secondary failed: %@", result[@"error"]);
+        NSBeep();
+    }
+}
+
+- (void)closeSecondaryTimeline:(id)sender {
+    NSDictionary *result = SpliceKit_dualTimelineClose(@{});
+    if (result[@"error"]) {
+        SpliceKit_log(@"[DualTimeline] Close failed: %@", result[@"error"]);
+        NSBeep();
+    }
+}
+
+- (void)_toggleSecondaryPanelNamed:(NSString *)panel {
+    NSDictionary *result = SpliceKit_dualTimelineTogglePanel(@{
+        @"pane": @"secondary",
+        @"panel": panel ?: @"",
+    });
+    if (result[@"error"]) {
+        SpliceKit_log(@"[DualTimeline] Toggle %@ failed: %@", panel ?: @"panel", result[@"error"]);
+        NSBeep();
+    }
+}
+
+- (void)toggleSecondaryBrowser:(id)sender {
+    [self _toggleSecondaryPanelNamed:@"browser"];
+}
+
+- (void)toggleSecondaryTimelineIndex:(id)sender {
+    [self _toggleSecondaryPanelNamed:@"timelineIndex"];
+}
+
+- (void)toggleSecondaryAudioMeters:(id)sender {
+    [self _toggleSecondaryPanelNamed:@"audioMeters"];
+}
+
+- (void)toggleSecondaryEffectsBrowser:(id)sender {
+    [self _toggleSecondaryPanelNamed:@"effectsBrowser"];
+}
+
+- (void)toggleSecondaryTransitionsBrowser:(id)sender {
+    [self _toggleSecondaryPanelNamed:@"transitionsBrowser"];
+}
+
 - (void)_updateConformMenuFromSender:(id)sender {
     if (![sender isKindOfClass:[NSMenuItem class]]) return;
     NSMenu *menu = [(NSMenuItem *)sender menu];
@@ -619,11 +709,113 @@ static void SpliceKit_installMenu(void) {
     luaScriptsMenuItem.submenu = luaScriptsMenu;
     [bridgeMenu addItem:luaScriptsMenuItem];
 
+    // --- Dual Timeline submenu ---
+    [bridgeMenu addItem:[NSMenuItem separatorItem]];
+
+    NSMenu *dualTimelineMenu = [[NSMenu alloc] initWithTitle:@"Dual Timeline"];
+    SpliceKitMenuController *mc = [SpliceKitMenuController shared];
+
+    NSMenuItem *openSecondaryItem = [[NSMenuItem alloc]
+        initWithTitle:@"Open Secondary Timeline"
+               action:@selector(openSecondaryTimeline:)
+        keyEquivalent:@""];
+    openSecondaryItem.target = mc;
+    [dualTimelineMenu addItem:openSecondaryItem];
+
+    NSMenuItem *syncRootItem = [[NSMenuItem alloc]
+        initWithTitle:@"Clone Primary Root to Secondary"
+               action:@selector(syncSecondaryTimelineRoot:)
+        keyEquivalent:@""];
+    syncRootItem.target = mc;
+    [dualTimelineMenu addItem:syncRootItem];
+
+    NSMenuItem *openSelectedItem = [[NSMenuItem alloc]
+        initWithTitle:@"Open Selection in Secondary"
+               action:@selector(openSelectedInSecondaryTimeline:)
+        keyEquivalent:@""];
+    openSelectedItem.target = mc;
+    [dualTimelineMenu addItem:openSelectedItem];
+
+    [dualTimelineMenu addItem:[NSMenuItem separatorItem]];
+
+    NSMenuItem *focusPrimaryItem = [[NSMenuItem alloc]
+        initWithTitle:@"Focus Primary Timeline"
+               action:@selector(focusPrimaryTimeline:)
+        keyEquivalent:@""];
+    focusPrimaryItem.target = mc;
+    [dualTimelineMenu addItem:focusPrimaryItem];
+
+    NSMenuItem *focusSecondaryItem = [[NSMenuItem alloc]
+        initWithTitle:@"Focus Secondary Timeline"
+               action:@selector(focusSecondaryTimeline:)
+        keyEquivalent:@""];
+    focusSecondaryItem.target = mc;
+    [dualTimelineMenu addItem:focusSecondaryItem];
+
+    NSMenuItem *closeSecondaryItem = [[NSMenuItem alloc]
+        initWithTitle:@"Close Secondary Timeline"
+               action:@selector(closeSecondaryTimeline:)
+        keyEquivalent:@""];
+    closeSecondaryItem.target = mc;
+    [dualTimelineMenu addItem:closeSecondaryItem];
+
+    [dualTimelineMenu addItem:[NSMenuItem separatorItem]];
+
+    NSMenu *secondaryWindowMenu = [[NSMenu alloc] initWithTitle:@"Secondary Window"];
+
+    NSMenuItem *secondaryBrowserItem = [[NSMenuItem alloc]
+        initWithTitle:@"Toggle Browser"
+               action:@selector(toggleSecondaryBrowser:)
+        keyEquivalent:@""];
+    secondaryBrowserItem.target = mc;
+    [secondaryWindowMenu addItem:secondaryBrowserItem];
+
+    NSMenuItem *secondaryTimelineIndexItem = [[NSMenuItem alloc]
+        initWithTitle:@"Toggle Timeline Index"
+               action:@selector(toggleSecondaryTimelineIndex:)
+        keyEquivalent:@""];
+    secondaryTimelineIndexItem.target = mc;
+    [secondaryWindowMenu addItem:secondaryTimelineIndexItem];
+
+    NSMenuItem *secondaryAudioMetersItem = [[NSMenuItem alloc]
+        initWithTitle:@"Toggle Audio Meters"
+               action:@selector(toggleSecondaryAudioMeters:)
+        keyEquivalent:@""];
+    secondaryAudioMetersItem.target = mc;
+    [secondaryWindowMenu addItem:secondaryAudioMetersItem];
+
+    NSMenuItem *secondaryEffectsItem = [[NSMenuItem alloc]
+        initWithTitle:@"Toggle Effects Browser"
+               action:@selector(toggleSecondaryEffectsBrowser:)
+        keyEquivalent:@""];
+    secondaryEffectsItem.target = mc;
+    [secondaryWindowMenu addItem:secondaryEffectsItem];
+
+    NSMenuItem *secondaryTransitionsItem = [[NSMenuItem alloc]
+        initWithTitle:@"Toggle Transitions Browser"
+               action:@selector(toggleSecondaryTransitionsBrowser:)
+        keyEquivalent:@""];
+    secondaryTransitionsItem.target = mc;
+    [secondaryWindowMenu addItem:secondaryTransitionsItem];
+
+    NSMenuItem *secondaryWindowMenuItem = [[NSMenuItem alloc]
+        initWithTitle:@"Secondary Window"
+               action:nil
+        keyEquivalent:@""];
+    secondaryWindowMenuItem.submenu = secondaryWindowMenu;
+    [dualTimelineMenu addItem:secondaryWindowMenuItem];
+
+    NSMenuItem *dualTimelineMenuItem = [[NSMenuItem alloc]
+        initWithTitle:@"Dual Timeline"
+               action:nil
+        keyEquivalent:@""];
+    dualTimelineMenuItem.submenu = dualTimelineMenu;
+    [bridgeMenu addItem:dualTimelineMenuItem];
+
     // --- Playback Speed submenu ---
     [bridgeMenu addItem:[NSMenuItem separatorItem]];
 
     NSMenu *speedMenu = [[NSMenu alloc] initWithTitle:@"Playback Speed"];
-    SpliceKitMenuController *mc = [SpliceKitMenuController shared];
 
     NSMenuItem *lItem = [[NSMenuItem alloc]
         initWithTitle:[NSString stringWithFormat:@"L Speeds: %@",
@@ -935,6 +1127,12 @@ static void SpliceKit_appDidLaunch(void) {
 
     // Run compatibility check now that all frameworks are loaded
     SpliceKit_checkCompatibility();
+
+    // Install focused editor routing before commands and menus start querying
+    // activeEditorContainer, so the secondary timeline can participate in the
+    // normal responder path.
+    SpliceKit_installDualTimeline();
+    SpliceKit_installDualTimelineCrossWindowDrag();
 
     // Count total loaded classes
     unsigned int classCount = 0;

@@ -299,6 +299,13 @@ def test_command():
     skip("execute/show/hide/ai", "would trigger command palette")
 
 
+def test_dual_timeline():
+    print("\n[dualTimeline.*]")
+    ok("status", rpc("dualTimeline.status"),
+       lambda r: "primary" in str(_res(r)) and "secondaryIdentifier" in str(_res(r)))
+    skip("open/syncRoot/openSelected/focus/close", "would modify window focus/layout")
+
+
 def test_scene():
     print("\n[scene.detect]")
     skip("detect", "needs media on timeline")
@@ -584,6 +591,7 @@ TEST_GROUPS = {
     "object": test_object,
     "dialog": test_dialog,
     "command": test_command,
+    "dual_timeline": test_dual_timeline,
     "scene": test_scene,
     "beats": test_beats,
     "browser": test_browser,

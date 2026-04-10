@@ -7,6 +7,8 @@ LINKER_FLAGS = -undefined dynamic_lookup -dynamiclib
 INSTALL_NAME = -install_name @rpath/SpliceKit.framework/Versions/A/SpliceKit
 
 SOURCES = Sources/SpliceKit.m \
+          Sources/SpliceKitDualTimeline.m \
+          Sources/SpliceKitDualTimelineDrag.m \
           Sources/SpliceKitRuntime.m \
           Sources/SpliceKitSwizzle.m \
           Sources/SpliceKitServer.m \

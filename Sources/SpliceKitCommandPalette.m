@@ -622,6 +622,19 @@ static NSString * const kSeparatorRowID = @"FCPSeparatorRow";
     add(@"Open in Timeline", @"openInTimeline", @"timeline", SpliceKitCommandCategoryEditing, @"Clips", nil, @"Open compound/multicam clip in its own timeline", @[@"dive in", @"enter"]);
     add(@"Back to Parent", @"backToParent", @"timeline", SpliceKitCommandCategoryEditing, @"Clips", nil, @"Return to the parent timeline", @[@"go back", @"exit compound"]);
 
+    // --- Dual Timeline ---
+    add(@"Open Secondary Timeline", @"open", @"dual_timeline", SpliceKitCommandCategoryEditing, @"Dual Timeline", nil, @"Open a floating second timeline window with the primary sequence", @[@"dual timeline", @"second timeline", @"two timelines", @"secondary pane"]);
+    add(@"Clone Primary Root to Secondary", @"syncRoot", @"dual_timeline", SpliceKitCommandCategoryEditing, @"Dual Timeline", nil, @"Load the primary sequence into the secondary window and match the current root", @[@"clone root", @"sync root", @"match compound", @"same root"]);
+    add(@"Open Selection in Secondary", @"openSelectedInSecondary", @"dual_timeline", SpliceKitCommandCategoryEditing, @"Dual Timeline", nil, @"Open the selected compound or multicam item in the secondary timeline", @[@"open selected compound", @"secondary compound", @"open on other side"]);
+    add(@"Focus Primary Timeline", @"focusPrimary", @"dual_timeline", SpliceKitCommandCategoryEditing, @"Dual Timeline", nil, @"Route commands back to the main timeline window", @[@"focus main timeline", @"primary pane"]);
+    add(@"Focus Secondary Timeline", @"focusSecondary", @"dual_timeline", SpliceKitCommandCategoryEditing, @"Dual Timeline", nil, @"Route commands to the floating secondary timeline window", @[@"focus second timeline", @"secondary pane"]);
+    add(@"Close Secondary Timeline", @"close", @"dual_timeline", SpliceKitCommandCategoryEditing, @"Dual Timeline", nil, @"Close the floating secondary timeline window", @[@"close second timeline", @"remove dual timeline"]);
+    add(@"Toggle Secondary Browser", @"toggleSecondaryBrowser", @"dual_timeline", SpliceKitCommandCategoryEditing, @"Dual Timeline", nil, @"Show or hide the Browser in the secondary timeline window", @[@"secondary browser", @"second browser"]);
+    add(@"Toggle Secondary Timeline Index", @"toggleSecondaryTimelineIndex", @"dual_timeline", SpliceKitCommandCategoryEditing, @"Dual Timeline", nil, @"Show or hide the Timeline Index in the secondary timeline window", @[@"secondary timeline index", @"second index"]);
+    add(@"Toggle Secondary Audio Meters", @"toggleSecondaryAudioMeters", @"dual_timeline", SpliceKitCommandCategoryEditing, @"Dual Timeline", nil, @"Show or hide Audio Meters in the secondary timeline window", @[@"secondary audio meters", @"second meters"]);
+    add(@"Toggle Secondary Effects Browser", @"toggleSecondaryEffectsBrowser", @"dual_timeline", SpliceKitCommandCategoryEditing, @"Dual Timeline", nil, @"Show or hide the Effects browser in the secondary timeline window", @[@"secondary effects", @"second effects"]);
+    add(@"Toggle Secondary Transitions Browser", @"toggleSecondaryTransitionsBrowser", @"dual_timeline", SpliceKitCommandCategoryEditing, @"Dual Timeline", nil, @"Show or hide the Transitions browser in the secondary timeline window", @[@"secondary transitions", @"second transitions"]);
+
     // --- Snapping & Guides ---
     add(@"Snapping On", @"toggleSnappingUp", @"timeline", SpliceKitCommandCategoryEditing, @"View", nil, @"Force snapping on", @[@"snap on"]);
     add(@"Snapping Off", @"toggleSnappingDown", @"timeline", SpliceKitCommandCategoryEditing, @"View", nil, @"Force snapping off", @[@"snap off"]);
@@ -1574,6 +1587,32 @@ static NSString * const kSeparatorRowID = @"FCPSeparatorRow";
         SpliceKit_setDefaultSpatialConformType(next);
         result = @{@"action": action, @"status": @"ok",
                    @"defaultSpatialConformType": next};
+    } else if ([type isEqualToString:@"dual_timeline"]) {
+        if ([action isEqualToString:@"open"]) {
+            result = SpliceKit_dualTimelineOpen(@{});
+        } else if ([action isEqualToString:@"syncRoot"]) {
+            result = SpliceKit_dualTimelineSyncRoot(@{});
+        } else if ([action isEqualToString:@"openSelectedInSecondary"]) {
+            result = SpliceKit_dualTimelineOpenSelectedInSecondary(@{});
+        } else if ([action isEqualToString:@"focusPrimary"]) {
+            result = SpliceKit_dualTimelineFocus(@{@"pane": @"primary"});
+        } else if ([action isEqualToString:@"focusSecondary"]) {
+            result = SpliceKit_dualTimelineFocus(@{@"pane": @"secondary"});
+        } else if ([action isEqualToString:@"close"]) {
+            result = SpliceKit_dualTimelineClose(@{});
+        } else if ([action isEqualToString:@"toggleSecondaryBrowser"]) {
+            result = SpliceKit_dualTimelineTogglePanel(@{@"pane": @"secondary", @"panel": @"browser"});
+        } else if ([action isEqualToString:@"toggleSecondaryTimelineIndex"]) {
+            result = SpliceKit_dualTimelineTogglePanel(@{@"pane": @"secondary", @"panel": @"timelineIndex"});
+        } else if ([action isEqualToString:@"toggleSecondaryAudioMeters"]) {
+            result = SpliceKit_dualTimelineTogglePanel(@{@"pane": @"secondary", @"panel": @"audioMeters"});
+        } else if ([action isEqualToString:@"toggleSecondaryEffectsBrowser"]) {
+            result = SpliceKit_dualTimelineTogglePanel(@{@"pane": @"secondary", @"panel": @"effectsBrowser"});
+        } else if ([action isEqualToString:@"toggleSecondaryTransitionsBrowser"]) {
+            result = SpliceKit_dualTimelineTogglePanel(@{@"pane": @"secondary", @"panel": @"transitionsBrowser"});
+        } else {
+            result = @{@"error": [NSString stringWithFormat:@"Unknown dual timeline action: %@", action]};
+        }
     }
 
     if (!result) {

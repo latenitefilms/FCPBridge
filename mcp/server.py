@@ -44,6 +44,14 @@ Or manually if needed:
   4. Get editor container via NSApp -> delegate -> activeEditorContainer
   5. Call loadEditorForSequence: on the container with the sequence handle
 
+## Dual Timeline
+Use the dual_timeline_* tools to open a floating second editor window:
+  - dual_timeline_open() -- load the primary sequence into the secondary window
+  - dual_timeline_sync_root() -- match the primary editor's current root
+  - dual_timeline_open_selected_in_secondary() -- open the selected compound/multicam on the other side
+  - dual_timeline_focus("primary"/"secondary") -- route commands to a specific editor
+  - dual_timeline_close() -- close the floating secondary window
+
 ## Positioning the Playhead
 Use playback_action() to navigate before performing edits:
   - goToStart, goToEnd -- jump to boundaries
@@ -2629,6 +2637,89 @@ def open_project(name: str, event: str = "") -> str:
     if _err(r):
         return f"Error: {r.get('error', r)}"
     return _fmt(r)
+
+
+# ============================================================
+# Dual Timeline
+# ============================================================
+# Floating secondary timeline window backed by a second
+# PEEditorContainerModule. Commands route to the focused pane.
+
+@mcp.tool()
+def dual_timeline_status() -> str:
+    """Inspect the primary/secondary timeline panes and current focused pane."""
+    return _call_or_error("dualTimeline.status")
+
+
+@mcp.tool()
+def dual_timeline_open(source: str = "primary", focus: bool = False) -> str:
+    """Open a floating secondary timeline window with a sequence loaded.
+
+    Args:
+        source: Which pane to copy the sequence from.
+                "primary" (default), "focused", or "secondary"
+        focus: When true, move keyboard focus to the secondary timeline after opening.
+               When false, restore focus back to the primary timeline after loading.
+    """
+    params = {"source": source, "focus": focus}
+    return _call_or_error("dualTimeline.open", **params)
+
+
+@mcp.tool()
+def dual_timeline_sync_root(source: str = "primary", focus: bool = False) -> str:
+    """Clone the source pane's current root into the secondary timeline.
+
+    Useful for matching a primary pane that has drilled into a compound clip
+    or multicam angle while keeping the two playheads independent afterward.
+    """
+    params = {"source": source, "focus": focus}
+    return _call_or_error("dualTimeline.syncRoot", **params)
+
+
+@mcp.tool()
+def dual_timeline_open_selected_in_secondary(source: str = "primary", focus: bool = True) -> str:
+    """Open the selected compound clip / multicam item in the secondary timeline.
+
+    The selection is taken from the source pane. This is the fastest way to keep
+    the main timeline on one side while drilling into a nested item on the other.
+    """
+    params = {"source": source, "focus": focus}
+    return _call_or_error("dualTimeline.openSelectedInSecondary", **params)
+
+
+@mcp.tool()
+def dual_timeline_focus(pane: str) -> str:
+    """Focus a specific timeline pane so subsequent commands target it.
+
+    Args:
+        pane: "primary" or "secondary"
+    """
+    return _call_or_error("dualTimeline.focus", pane=pane)
+
+
+@mcp.tool()
+def dual_timeline_close(focus_primary: bool = True) -> str:
+    """Close the floating secondary timeline window.
+
+    Args:
+        focus_primary: When true, move focus back to the primary timeline after closing.
+    """
+    return _call_or_error("dualTimeline.close", focusPrimary=focus_primary)
+
+
+@mcp.tool()
+def dual_timeline_toggle_panel(panel: str, pane: str = "secondary") -> str:
+    """Toggle a container-local panel on a specific timeline pane.
+
+    Supported panels:
+        "browser", "timelineIndex", "audioMeters",
+        "effectsBrowser", "transitionsBrowser"
+
+    Args:
+        panel: Panel identifier to toggle.
+        pane: "primary" or "secondary". Defaults to "secondary".
+    """
+    return _call_or_error("dualTimeline.togglePanel", pane=pane, panel=panel)
 
 
 # ============================================================

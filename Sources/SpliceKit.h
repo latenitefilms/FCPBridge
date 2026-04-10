@@ -157,6 +157,25 @@ void SpliceKit_installDefaultSpatialConformType(void);
 void SpliceKit_setDefaultSpatialConformType(NSString *value);
 NSString *SpliceKit_getDefaultSpatialConformType(void);
 
+#pragma mark - Dual Timeline
+
+// Floating secondary timeline window support. This keeps a second
+// PEEditorContainerModule alive and routes app actions to whichever timeline
+// window currently has focus.
+void SpliceKit_installDualTimeline(void);
+void SpliceKit_installDualTimelineCrossWindowDrag(void);
+NSString *SpliceKit_dualTimelineSecondaryIdentifier(void);
+id SpliceKit_dualTimelineFocusedEditorContainer(void);
+id SpliceKit_dualTimelinePrimaryEditorContainer(void);
+id SpliceKit_dualTimelineSecondaryEditorContainer(BOOL createIfNeeded);
+NSDictionary *SpliceKit_dualTimelineStatus(void);
+NSDictionary *SpliceKit_dualTimelineOpen(NSDictionary *params);
+NSDictionary *SpliceKit_dualTimelineSyncRoot(NSDictionary *params);
+NSDictionary *SpliceKit_dualTimelineOpenSelectedInSecondary(NSDictionary *params);
+NSDictionary *SpliceKit_dualTimelineFocus(NSDictionary *params);
+NSDictionary *SpliceKit_dualTimelineClose(NSDictionary *params);
+NSDictionary *SpliceKit_dualTimelineTogglePanel(NSDictionary *params);
+
 #pragma mark - Lua Scripting
 
 // Initialize the embedded Lua 5.4 VM and start the file watcher.
