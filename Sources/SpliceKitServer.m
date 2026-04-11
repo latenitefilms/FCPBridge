@@ -6930,6 +6930,7 @@ static NSDictionary *SpliceKit_handleOptionsGet(NSDictionary *params) {
         @"viewerPinchZoom": @(SpliceKit_isViewerPinchZoomEnabled()),
         @"videoOnlyKeepsAudioDisabled": @(SpliceKit_isVideoOnlyKeepsAudioDisabledEnabled()),
         @"suppressAutoImport": @(SpliceKit_isSuppressAutoImportEnabled()),
+        @"springLoadedBlade": @(SpliceKit_isSpringLoadedBladeEnabled()),
         @"lLadder": SpliceKit_getLLadder(),
         @"jLadder": SpliceKit_getJLadder(),
         @"defaultSpatialConformType": SpliceKit_getDefaultSpatialConformType(),
@@ -6965,6 +6966,12 @@ static NSDictionary *SpliceKit_handleOptionsSet(NSDictionary *params) {
         SpliceKit_setSuppressAutoImportEnabled([enabled boolValue]);
         return @{@"status": @"ok",
                  @"suppressAutoImport": @(SpliceKit_isSuppressAutoImportEnabled())};
+    } else if ([option isEqualToString:@"springLoadedBlade"]) {
+        NSNumber *enabled = params[@"enabled"];
+        if (!enabled) return @{@"error": @"'enabled' parameter required (true/false)"};
+        SpliceKit_setSpringLoadedBladeEnabled([enabled boolValue]);
+        return @{@"status": @"ok",
+                 @"springLoadedBlade": @(SpliceKit_isSpringLoadedBladeEnabled())};
     } else if ([option isEqualToString:@"lLadder"]) {
         NSArray *value = params[@"value"];
         if (!value) return @{@"error": @"'value' parameter required (array of numbers)"};
@@ -12880,6 +12887,128 @@ static NSDictionary *SpliceKit_handleToolSelect(NSDictionary *params) {
     }
 
     return SpliceKit_sendAppAction(selector);
+}
+
+#pragma mark - Spring-Loaded Blade Tool
+//
+// Hold Option to temporarily switch to the blade tool. Release to revert to the
+// previous tool. Uses NSEvent flagsChanged monitor — no UI automation.
+//
+
+static NSString * const kSpliceKitSpringLoadedBlade = @"SpliceKitSpringLoadedBlade";
+static id sSpringLoadedBladeMonitor = nil;
+static BOOL sSpringLoadedBladeActive = NO;       // Option is held, blade tool is engaged
+static NSString *sSpringLoadedBladePreviousTool = nil;  // tool selector to restore on release
+
+// Map from selectTool* selectors back to tool names (for logging)
+static NSString *SpliceKit_currentToolSelector(void) {
+    // Query the timeline module's edit mode to determine current tool.
+    // FFAnchoredTimelineModule tracks editMode as an int:
+    //   0=arrow, 1=trim, 2=placement, 3=range, 4=zoom, 5=hand, 6=blade
+    // We read it via the validate pattern: check which selectTool* action is "on".
+    __block NSString *currentSelector = @"selectToolArrow:";
+
+    SpliceKit_executeOnMainThread(^{
+        @try {
+            id app = ((id (*)(id, SEL))objc_msgSend)(
+                objc_getClass("NSApplication"), @selector(sharedApplication));
+
+            // Try each tool selector — the one that validates as "on" is current.
+            // FCP uses NSMenuItem validation to track tool state.
+            NSArray *toolSelectors = @[
+                @"selectToolArrow:",
+                @"selectToolTrim:",
+                @"selectToolBlade:",
+                @"selectToolPlacement:",
+                @"selectToolHand:",
+                @"selectToolZoom:",
+                @"selectToolRangeSelection:",
+            ];
+
+            for (NSString *selName in toolSelectors) {
+                SEL sel = NSSelectorFromString(selName);
+                // Create a temporary menu item to validate against
+                NSMenuItem *item = [[NSMenuItem alloc] initWithTitle:@"" action:sel keyEquivalent:@""];
+                // Find the target responder
+                id target = ((id (*)(id, SEL, SEL, id, id))objc_msgSend)(
+                    app, @selector(targetForAction:to:from:), sel, nil, nil);
+                if (target && [target respondsToSelector:@selector(validateMenuItem:)]) {
+                    BOOL valid = ((BOOL (*)(id, SEL, id))objc_msgSend)(
+                        target, @selector(validateMenuItem:), item);
+                    if (valid && item.state == NSControlStateValueOn) {
+                        currentSelector = selName;
+                        break;
+                    }
+                }
+            }
+        } @catch (NSException *e) {
+            SpliceKit_log(@"[SpringBlade] Failed to detect current tool: %@", e.reason);
+        }
+    });
+
+    return currentSelector;
+}
+
+void SpliceKit_installSpringLoadedBlade(void) {
+    if (sSpringLoadedBladeMonitor) return;  // Already installed
+
+    sSpringLoadedBladeMonitor = [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskFlagsChanged
+        handler:^NSEvent *(NSEvent *event) {
+            BOOL optionDown = (event.modifierFlags & NSEventModifierFlagOption) != 0;
+
+            if (optionDown && !sSpringLoadedBladeActive) {
+                // Option just pressed — save current tool and switch to blade
+                NSString *current = SpliceKit_currentToolSelector();
+                if (![current isEqualToString:@"selectToolBlade:"]) {
+                    sSpringLoadedBladePreviousTool = current;
+                    sSpringLoadedBladeActive = YES;
+                    SpliceKit_sendAppAction(@"selectToolBlade:");
+                    SpliceKit_log(@"[SpringBlade] Option held — switched to blade (was %@)", current);
+                }
+            } else if (!optionDown && sSpringLoadedBladeActive) {
+                // Option released — restore previous tool
+                sSpringLoadedBladeActive = NO;
+                if (sSpringLoadedBladePreviousTool) {
+                    SpliceKit_sendAppAction(sSpringLoadedBladePreviousTool);
+                    SpliceKit_log(@"[SpringBlade] Option released — restored %@", sSpringLoadedBladePreviousTool);
+                    sSpringLoadedBladePreviousTool = nil;
+                }
+            }
+
+            return event;  // Always pass through — don't consume modifier events
+        }];
+
+    SpliceKit_log(@"[SpringBlade] Installed: hold Option for blade, release to revert");
+}
+
+void SpliceKit_uninstallSpringLoadedBlade(void) {
+    if (sSpringLoadedBladeMonitor) {
+        [NSEvent removeMonitor:sSpringLoadedBladeMonitor];
+        sSpringLoadedBladeMonitor = nil;
+    }
+    // If blade is currently active, restore previous tool
+    if (sSpringLoadedBladeActive && sSpringLoadedBladePreviousTool) {
+        SpliceKit_sendAppAction(sSpringLoadedBladePreviousTool);
+    }
+    sSpringLoadedBladeActive = NO;
+    sSpringLoadedBladePreviousTool = nil;
+    SpliceKit_log(@"[SpringBlade] Uninstalled");
+}
+
+BOOL SpliceKit_isSpringLoadedBladeEnabled(void) {
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    id storedValue = [defaults objectForKey:kSpliceKitSpringLoadedBlade];
+    if (!storedValue) return YES;  // Default enabled
+    return [defaults boolForKey:kSpliceKitSpringLoadedBlade];
+}
+
+void SpliceKit_setSpringLoadedBladeEnabled(BOOL enabled) {
+    [[NSUserDefaults standardUserDefaults] setBool:enabled forKey:kSpliceKitSpringLoadedBlade];
+    if (enabled) {
+        SpliceKit_installSpringLoadedBlade();
+    } else {
+        SpliceKit_uninstallSpringLoadedBlade();
+    }
 }
 
 #pragma mark - Dialog Detection & Interaction

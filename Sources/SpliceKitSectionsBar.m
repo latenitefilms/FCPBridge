@@ -1043,31 +1043,102 @@ typedef NS_ENUM(NSInteger, SBDragMode) {
     SpliceKit_log(@"[Sections] Removed all sections");
 }
 
-#pragma mark - Persistence
+#pragma mark - Persistence (saved inside FCP library bundle)
+
+// Returns the path to the sections JSON file inside the FCP library bundle.
+// Format: <library.fcpbundle>/SpliceKit/<sequence-uid>.sections.json
+// This ensures sections travel with the library when it's moved or shared.
+- (NSString *)sectionsFilePath {
+    id tm = SpliceKit_getActiveTimelineModule();
+    if (!tm) return nil;
+    id sequence = ((id (*)(id, SEL))objc_msgSend)(tm, @selector(sequence));
+    if (!sequence) return nil;
+
+    // Get the sequence's unique identifier
+    SEL uidSel = NSSelectorFromString(@"uid");
+    NSString *seqUID = nil;
+    if ([sequence respondsToSelector:uidSel]) {
+        seqUID = ((id (*)(id, SEL))objc_msgSend)(sequence, uidSel);
+    }
+    if (!seqUID) {
+        SEL dnSel = NSSelectorFromString(@"displayName");
+        if ([sequence respondsToSelector:dnSel]) {
+            seqUID = ((id (*)(id, SEL))objc_msgSend)(sequence, dnSel);
+        }
+    }
+    if (!seqUID) return nil;
+
+    // Find the library URL by walking: sequence → library → URL
+    id library = nil;
+    SEL libSel = NSSelectorFromString(@"library");
+    if ([sequence respondsToSelector:libSel]) {
+        library = ((id (*)(id, SEL))objc_msgSend)(sequence, libSel);
+    }
+    if (!library) {
+        // Fallback: get from FFLibraryDocument
+        Class libDocClass = objc_getClass("FFLibraryDocument");
+        if (libDocClass) {
+            SEL copySel = NSSelectorFromString(@"copyActiveLibraries");
+            if ([libDocClass respondsToSelector:copySel]) {
+                NSArray *libs = ((id (*)(id, SEL))objc_msgSend)((id)libDocClass, copySel);
+                if ([libs isKindOfClass:[NSArray class]] && libs.count > 0) {
+                    library = libs[0];
+                }
+            }
+        }
+    }
+
+    NSURL *libURL = nil;
+    SEL urlSel = NSSelectorFromString(@"URL");
+    if (library && [library respondsToSelector:urlSel]) {
+        libURL = ((id (*)(id, SEL))objc_msgSend)(library, urlSel);
+    }
+    if (!libURL) {
+        // Fallback to Application Support
+        NSString *fallback = [NSHomeDirectory() stringByAppendingPathComponent:
+            @"Library/Application Support/SpliceKit/sections"];
+        [[NSFileManager defaultManager] createDirectoryAtPath:fallback
+                                  withIntermediateDirectories:YES attributes:nil error:nil];
+        return [fallback stringByAppendingPathComponent:
+            [NSString stringWithFormat:@"%@.sections.json", seqUID]];
+    }
+
+    // Create SpliceKit subfolder inside the library bundle
+    NSString *skDir = [[libURL path] stringByAppendingPathComponent:@"SpliceKit"];
+    [[NSFileManager defaultManager] createDirectoryAtPath:skDir
+                              withIntermediateDirectories:YES attributes:nil error:nil];
+
+    return [skDir stringByAppendingPathComponent:
+        [NSString stringWithFormat:@"%@.sections.json", seqUID]];
+}
 
 - (void)saveSections {
-    id sequence = nil;
-    id tm = SpliceKit_getActiveTimelineModule();
-    if (tm) sequence = ((id (*)(id, SEL))objc_msgSend)(tm, @selector(sequence));
-    if (!sequence) return;
+    NSString *path = [self sectionsFilePath];
+    if (!path) return;
 
-    NSDictionary *state = SpliceKit_loadSequenceState(sequence) ?: @{};
-    NSMutableDictionary *newState = [state mutableCopy];
-    newState[@"structureSections"] = [self sectionsAsArray];
-    SpliceKit_saveSequenceState(sequence, newState, nil);
+    NSArray *arr = [self sectionsAsArray];
+    NSError *error = nil;
+    NSData *data = [NSJSONSerialization dataWithJSONObject:arr
+                                                  options:NSJSONWritingPrettyPrinted
+                                                    error:&error];
+    if (data) {
+        [data writeToFile:path atomically:YES];
+        SpliceKit_log(@"[Sections] Saved %lu sections to %@", (unsigned long)arr.count, path);
+    }
 }
 
 - (void)loadSections {
-    id sequence = nil;
-    id tm = SpliceKit_getActiveTimelineModule();
-    if (tm) sequence = ((id (*)(id, SEL))objc_msgSend)(tm, @selector(sequence));
-    if (!sequence) return;
+    NSString *path = [self sectionsFilePath];
+    if (!path) return;
 
-    NSDictionary *state = SpliceKit_loadSequenceState(sequence);
-    NSArray *saved = state[@"structureSections"];
-    if ([saved isKindOfClass:[NSArray class]] && saved.count > 0) {
-        [self setSectionsFromArray:saved];
-        SpliceKit_log(@"[Sections] Loaded %lu sections from state", (unsigned long)saved.count);
+    NSData *data = [NSData dataWithContentsOfFile:path];
+    if (!data) return;
+
+    NSError *error = nil;
+    NSArray *arr = [NSJSONSerialization JSONObjectWithData:data options:0 error:&error];
+    if ([arr isKindOfClass:[NSArray class]] && arr.count > 0) {
+        [self setSectionsFromArray:arr];
+        SpliceKit_log(@"[Sections] Loaded %lu sections from %@", (unsigned long)arr.count, path);
     }
 }
 

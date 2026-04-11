@@ -192,6 +192,7 @@ static void SpliceKit_checkCompatibility(void) {
 + (instancetype)shared;
 - (void)toggleTranscriptPanel:(id)sender;
 - (void)toggleCaptionPanel:(id)sender;
+- (void)toggleSections:(id)sender;
 - (void)toggleCommandPalette:(id)sender;
 - (void)toggleLuaPanel:(id)sender;
 - (void)runLuaScript:(id)sender;
@@ -280,6 +281,26 @@ static void SpliceKit_checkCompatibility(void) {
     } else {
         ((void (*)(id, SEL))objc_msgSend)(panel, @selector(showPanel));
     }
+}
+
+- (void)toggleSections:(id)sender {
+    // Toggle the sections bar. If it's visible, hide it. If hidden, show it
+    // (loading saved sections from the current project if available).
+    NSDictionary *state = SpliceKit_handleSectionsGet(@{});
+    BOOL installed = [state[@"installed"] boolValue];
+    if (installed) {
+        SpliceKit_handleSectionsHide(@{});
+    } else {
+        SpliceKit_handleSectionsShow(@{});
+    }
+}
+
+- (BOOL)validateMenuItem:(NSMenuItem *)menuItem {
+    if (menuItem.action == @selector(toggleSections:)) {
+        NSDictionary *state = SpliceKit_handleSectionsGet(@{});
+        menuItem.state = [state[@"installed"] boolValue] ? NSControlStateValueOn : NSControlStateValueOff;
+    }
+    return YES;
 }
 
 #pragma mark - Lua Scripts Menu
@@ -697,6 +718,14 @@ static void SpliceKit_installMenu(void) {
     luaItem.keyEquivalentModifierMask = NSEventModifierFlagControl | NSEventModifierFlagOption;
     luaItem.target = [SpliceKitMenuController shared];
     [bridgeMenu addItem:luaItem];
+
+    NSMenuItem *sectionsItem = [[NSMenuItem alloc]
+        initWithTitle:@"Sections"
+               action:@selector(toggleSections:)
+        keyEquivalent:@"s"];
+    sectionsItem.keyEquivalentModifierMask = NSEventModifierFlagControl | NSEventModifierFlagOption;
+    sectionsItem.target = [SpliceKitMenuController shared];
+    [bridgeMenu addItem:sectionsItem];
 
     // --- Lua Scripts submenu (dynamically populated) ---
     NSMenu *luaScriptsMenu = [[NSMenu alloc] initWithTitle:@"Lua Scripts"];
@@ -1170,6 +1199,11 @@ static void SpliceKit_appDidLaunch(void) {
     // to intercept the handler methods themselves rather than the observer registration.
     if (SpliceKit_isSuppressAutoImportEnabled()) {
         SpliceKit_installSuppressAutoImport();
+    }
+
+    // Install spring-loaded blade (hold Option → blade, release → revert) if enabled
+    if (SpliceKit_isSpringLoadedBladeEnabled()) {
+        SpliceKit_installSpringLoadedBlade();
     }
 
     // Install default spatial conform swizzle if set to non-default value

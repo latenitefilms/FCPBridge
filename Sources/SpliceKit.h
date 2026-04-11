@@ -149,6 +149,13 @@ void SpliceKit_installSuppressAutoImport(void);
 void SpliceKit_setSuppressAutoImportEnabled(BOOL enabled);
 BOOL SpliceKit_isSuppressAutoImportEnabled(void);
 
+// Spring-loaded blade — hold Option to temporarily switch to blade tool,
+// release to revert to the previous tool. Enabled by default.
+void SpliceKit_installSpringLoadedBlade(void);
+void SpliceKit_uninstallSpringLoadedBlade(void);
+void SpliceKit_setSpringLoadedBladeEnabled(BOOL enabled);
+BOOL SpliceKit_isSpringLoadedBladeEnabled(void);
+
 // Playback speed configuration — configurable J/L speed ladders
 // L ladder: speeds for each successive L press (default: 1, 2, 4, 8, 16, 32)
 // J ladder: speeds for each successive J press, stored positive, applied negative
