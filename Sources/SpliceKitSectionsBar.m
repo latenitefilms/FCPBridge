@@ -123,6 +123,8 @@ typedef NS_ENUM(NSInteger, SBDragMode) {
 @property (nonatomic) double dragAnchorOffset;           // for move: offset from section start to click point
 @property (nonatomic) NSUInteger dragInsertIndex;        // for move: where the dragged section will land
 @property (nonatomic) CGFloat lastClickX;                // debug: last click X position
+@property (nonatomic) CGFloat dragGhostX;                // for move: current mouse X for ghost drawing
+@property (nonatomic, strong) SpliceKitSection *dragGhostSection; // copy of section being dragged (for ghost rendering)
 + (instancetype)shared;
 - (void)updateFromTimeline;
 - (void)setSectionsFromArray:(NSArray<NSDictionary *> *)arr;
@@ -351,22 +353,69 @@ typedef NS_ENUM(NSInteger, SBDragMode) {
         }
     }
 
-    // Draw insertion indicator during move drag (bright vertical line)
-    if (_isDragging && _dragInsertIndex != NSNotFound && _dragSection) {
-        CGFloat insertX = 0;
-        if (_dragInsertIndex < _sections.count) {
-            insertX = [self xForTime:_sections[_dragInsertIndex].startTime];
-        } else if (_sections.count > 0) {
-            insertX = [self xForTime:_sections.lastObject.endTime];
-        }
-
+    // During a move drag: draw the ghost (transparent copy) at the cursor position
+    // and a yellow insertion line showing where it will land
+    if (_isDragging && _dragGhostSection) {
         CGContextRef cgCtx = [[NSGraphicsContext currentContext] CGContext];
         if (cgCtx) {
+            // Compute ghost dimensions
+            double ghostDur = _dragGhostSection.endTime - _dragGhostSection.startTime;
+            double tpp = [self timePerPixelSeconds];
+            if (tpp <= 0) tpp = 0.05;
+            CGFloat ghostW = MAX(10, (CGFloat)(ghostDur / tpp));
+            CGFloat ghostX = _dragGhostX - _dragAnchorOffset;
+
+            // Draw ghost section (semi-transparent)
+            NSColor *ghostColor = [_dragGhostSection.color colorUsingColorSpace:[NSColorSpace sRGBColorSpace]];
+            CGFloat cr = 0.5, cg2 = 0.5, cb = 0.5;
+            if (ghostColor) { cr = ghostColor.redComponent; cg2 = ghostColor.greenComponent; cb = ghostColor.blueComponent; }
+
+            CGContextSaveGState(cgCtx);
+            CGRect ghostRect = CGRectMake(ghostX, 1, ghostW, bounds.size.height - 2);
+            CGPathRef ghostPath = CGPathCreateWithRoundedRect(ghostRect, 3, 3, NULL);
+
+            // Semi-transparent fill
+            CGContextSetRGBFillColor(cgCtx, cr, cg2, cb, 0.45);
+            CGContextAddPath(cgCtx, ghostPath);
+            CGContextFillPath(cgCtx);
+
+            // Dashed border
+            CGContextAddPath(cgCtx, ghostPath);
+            CGContextSetRGBStrokeColor(cgCtx, 1.0, 1.0, 1.0, 0.6);
+            CGFloat dashes[] = {4, 3};
+            CGContextSetLineDash(cgCtx, 0, dashes, 2);
+            CGContextSetLineWidth(cgCtx, 1.0);
+            CGContextStrokePath(cgCtx);
+            CGPathRelease(ghostPath);
+
+            // Ghost label
+            CGContextSetLineDash(cgCtx, 0, NULL, 0); // reset dash
+            CGContextRestoreGState(cgCtx);
+
+            if (ghostW > 20) {
+                NSDictionary *ghostLabelAttrs = @{
+                    NSFontAttributeName: [NSFont boldSystemFontOfSize:10],
+                    NSForegroundColorAttributeName: [NSColor colorWithWhite:1.0 alpha:0.7],
+                };
+                CGFloat textY = (bounds.size.height - 13) / 2;
+                [_dragGhostSection.label drawAtPoint:NSMakePoint(ghostX + 6, textY) withAttributes:ghostLabelAttrs];
+            }
+
+            // Draw insertion line at the target position
+            CGFloat insertX = 0;
+            if (_dragInsertIndex != NSNotFound) {
+                if (_dragInsertIndex < _sections.count) {
+                    insertX = [self xForTime:_sections[_dragInsertIndex].startTime];
+                } else if (_sections.count > 0) {
+                    insertX = [self xForTime:_sections.lastObject.endTime];
+                }
+            }
+
             CGContextSaveGState(cgCtx);
             // Bright yellow insertion line
-            CGContextSetRGBFillColor(cgCtx, 1.0, 0.9, 0.0, 1.0);
+            CGContextSetRGBFillColor(cgCtx, 1.0, 0.85, 0.0, 1.0);
             CGContextFillRect(cgCtx, CGRectMake(insertX - 1.5, 0, 3, bounds.size.height));
-            // Small triangle indicator at top
+            // Triangle at top
             CGContextMoveToPoint(cgCtx, insertX - 5, 0);
             CGContextAddLineToPoint(cgCtx, insertX + 5, 0);
             CGContextAddLineToPoint(cgCtx, insertX, 6);
@@ -514,49 +563,41 @@ typedef NS_ENUM(NSInteger, SBDragMode) {
     if (mode == SBDragModeMove) {
         [[NSCursor closedHandCursor] set];
 
-        // Preserve the cursor's position inside the dragged block so slot
-        // selection is based on the block itself rather than the raw pointer.
+        // Store ghost info for rendering during drag
+        _dragGhostSection = sec;
         _dragAnchorOffset = MAX(0.0, MIN(loc.x - x1, x2 - x1));
+        _dragGhostX = loc.x;
 
-        // Remove the section from the live array but keep the remaining
-        // sections in their current positions during the drag. Collapsing
-        // the layout immediately biases insertion toward the right and makes
-        // leftward reordering difficult to reach.
-        NSUInteger originalIdx = [_sections indexOfObject:sec];
+        // Compute the ghost width in pixels (stays constant during drag)
+        double draggedDuration = sec.endTime - sec.startTime;
+        double tpp = [self timePerPixelSeconds];
+        if (tpp <= 0) tpp = 0.05;
+        CGFloat ghostWidthPx = MAX(10.0, (CGFloat)(draggedDuration / tpp));
+
+        // Remove from the live array but DON'T re-tile yet.
+        // The remaining sections stay at their original positions during
+        // the drag so the layout doesn't jump. Re-tiling happens on drop.
         [_sections removeObject:sec];
-        _dragInsertIndex = MIN(originalIdx, _sections.count);
-        [self setNeedsDisplay:YES];
-
-        // Re-tile remaining sections contiguously (close the gap left by removal)
-        double cursor = 0;
-        for (SpliceKitSection *s in _sections) {
-            double dur = s.endTime - s.startTime;
-            s.startTime = cursor;
-            s.endTime = cursor + dur;
-            cursor += dur;
-        }
+        _dragInsertIndex = NSNotFound;
         [self setNeedsDisplay:YES];
 
         // Track mouse in a local loop
-        NSUInteger insertIdx = _dragInsertIndex;
+        NSUInteger insertIdx = 0;
         while (YES) {
             NSEvent *nextEvent = [self.window nextEventMatchingMask:
                 NSEventMaskLeftMouseDragged | NSEventMaskLeftMouseUp];
             if (!nextEvent) break;
 
-            // Use raw mouse X in the panel — simple and direct
             NSPoint eLoc = [self localPointForEvent:nextEvent];
-            CGFloat mouseX = eLoc.x;
+            _dragGhostX = eLoc.x;
 
-            // Find insertion index: compare mouse X against each remaining
-            // section's midpoint. Insert before the first section whose
-            // midpoint is to the right of the mouse.
-            insertIdx = _sections.count; // default: end
+            // Find insertion index
+            insertIdx = _sections.count;
             for (NSUInteger i = 0; i < _sections.count; i++) {
-                CGFloat x1 = [self xForTime:_sections[i].startTime];
-                CGFloat x2 = [self xForTime:_sections[i].endTime];
-                CGFloat midX = (x1 + x2) / 2.0;
-                if (mouseX < midX) {
+                CGFloat sx1 = [self xForTime:_sections[i].startTime];
+                CGFloat sx2 = [self xForTime:_sections[i].endTime];
+                CGFloat midX = (sx1 + sx2) / 2.0;
+                if (eLoc.x < midX) {
                     insertIdx = i;
                     break;
                 }
@@ -572,13 +613,18 @@ typedef NS_ENUM(NSInteger, SBDragMode) {
         [_sections insertObject:sec atIndex:insertIdx];
 
         // Re-tile everything contiguously
-        cursor = 0;
-        for (SpliceKitSection *s in _sections) {
-            double dur = s.endTime - s.startTime;
-            s.startTime = cursor;
-            s.endTime = cursor + dur;
-            cursor += dur;
+        {
+            double c = 0;
+            for (SpliceKitSection *s in _sections) {
+                double dur = s.endTime - s.startTime;
+                s.startTime = c;
+                s.endTime = c + dur;
+                c += dur;
+            }
         }
+
+        // Clear ghost
+        _dragGhostSection = nil;
 
         _isDragging = NO;
         _dragSection = nil;
