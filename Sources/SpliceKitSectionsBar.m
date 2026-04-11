@@ -290,8 +290,8 @@ typedef NS_ENUM(NSInteger, SBDragMode) {
 - (void)drawRect:(NSRect)dirtyRect {
     NSRect bounds = self.bounds;
 
-    // Dark background fills entire bar
-    [[NSColor colorWithCalibratedRed:0.12 green:0.12 blue:0.12 alpha:1.0] set];
+    // Semi-transparent background so the ruler is visible behind
+    [[NSColor colorWithCalibratedRed:0.12 green:0.12 blue:0.12 alpha:0.5] set];
     NSRectFill(bounds);
 
     if (_sections.count == 0) return;
@@ -323,7 +323,7 @@ typedef NS_ENUM(NSInteger, SBDragMode) {
             CGRect cgRect = CGRectMake(x1, 1, width, bounds.size.height - 2);
             CGPathRef roundedPath = CGPathCreateWithRoundedRect(cgRect, 3, 3, NULL);
             CGContextAddPath(cgCtx, roundedPath);
-            CGContextSetRGBFillColor(cgCtx, cr, cg2, cb, 1.0);
+            CGContextSetRGBFillColor(cgCtx, cr, cg2, cb, 0.5);
             CGContextFillPath(cgCtx);
 
             // Border
@@ -551,7 +551,12 @@ typedef NS_ENUM(NSInteger, SBDragMode) {
     SBDragMode mode = [self dragModeAtPoint:loc forSection:&sec];
 
     if (mode == SBDragModeNone || !sec) {
-        SpliceKit_log(@"[Sections][DOWN] NO HIT at locX=%.1f", loc.x);
+        // Double-click on empty area → create a new section
+        if (event.clickCount >= 2) {
+            NSMenuItem *fakeItem = [[NSMenuItem alloc] init];
+            fakeItem.representedObject = @([self timeForX:loc.x]);
+            [self addSectionAtClick:fakeItem];
+        }
         return;
     }
 
@@ -561,6 +566,13 @@ typedef NS_ENUM(NSInteger, SBDragMode) {
     CGFloat x2 = [self xForTime:sec.endTime];
     SpliceKit_log(@"[Sections][DOWN] mode=%@ section='%@' locX=%.1f x1=%.1f x2=%.1f width=%.1f",
                   modeStr, sec.label, loc.x, x1, x2, x2-x1);
+
+    // Double-click on a section → rename it
+    if (event.clickCount >= 2 && mode == SBDragModeMove) {
+        _clickedSection = sec;
+        [self renameSection:nil];
+        return;
+    }
 
     _dragSection = sec;
     _dragMode = mode;

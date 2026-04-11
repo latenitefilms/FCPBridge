@@ -455,6 +455,7 @@ static NSString * const kSeparatorRowID = @"FCPSeparatorRow";
 
     // --- Transitions ---
     add(@"Add Default Transition", @"addTransition", @"timeline", SpliceKitCommandCategoryEffects, @"Transitions", @"Cmd+T", @"Add default transition (Cross Dissolve)", @[@"cross dissolve", @"fade"]);
+    add(@"Add Default Transition to All Clips", @"addTransitionToAll", @"timeline", SpliceKitCommandCategoryEffects, @"Transitions", nil, @"Add default transition between every clip on the timeline", @[@"transition all", @"cross dissolve all", @"fade all", @"transition every"]);
     add(@"Browse Transitions...", @"browseTransitions", @"transition_browse", SpliceKitCommandCategoryEffects, @"Transitions", nil, @"Search and apply a specific transition by name", @[@"find transition", @"list transitions"]);
     add(@"Browse Effects...", @"browseEffects", @"effect_browse", SpliceKitCommandCategoryEffects, @"Effects", nil, @"Search and apply an effect by name", @[@"find effect", @"filter", @"plugin"]);
     add(@"Browse Generators...", @"browseGenerators", @"generator_browse", SpliceKitCommandCategoryEffects, @"Generators", nil, @"Search and apply a generator", @[@"background", @"solid"]);
@@ -1207,17 +1208,45 @@ static NSString * const kSeparatorRowID = @"FCPSeparatorRow";
 // weighted 1.0, keyword matches 0.8, detail matches 0.5.
 //
 
+// Strip common stop words so natural-language queries like "add the default
+// transition to all clips" match "Add Default Transition to All Clips" even
+// though 'h' (from "the") doesn't appear in the target.
+static NSString *FCPStripStopWords(NSString *query) {
+    static NSSet *stopWords = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        stopWords = [NSSet setWithObjects:
+            @"the", @"a", @"an", @"my", @"this", @"that", @"please",
+            @"can", @"you", @"i", @"me", @"it", @"its", @"with",
+            @"for", @"on", @"of", @"is", @"and", @"or", nil];
+    });
+    NSMutableArray *words = [[query componentsSeparatedByString:@" "] mutableCopy];
+    NSMutableArray *filtered = [NSMutableArray array];
+    for (NSString *word in words) {
+        if (word.length > 0 && ![stopWords containsObject:[word lowercaseString]]) {
+            [filtered addObject:word];
+        }
+    }
+    return filtered.count > 0 ? [filtered componentsJoinedByString:@" "] : query;
+}
+
 - (NSArray<SpliceKitCommand *> *)searchCommands:(NSString *)query {
     if (query.length == 0) return self.allCommands;
+
+    // Try both raw query and stop-word-stripped version
+    NSString *cleaned = FCPStripStopWords(query);
+    BOOL hasCleaned = ![cleaned isEqualToString:query];
 
     NSMutableArray<SpliceKitCommand *> *results = [NSMutableArray array];
     for (SpliceKitCommand *cmd in self.allCommands) {
         // Score against name
         CGFloat nameScore = FCPFuzzyScore(query, cmd.name);
+        if (hasCleaned) nameScore = MAX(nameScore, FCPFuzzyScore(cleaned, cmd.name));
         // Score against keywords
         CGFloat keywordScore = 0;
         for (NSString *kw in cmd.keywords) {
             CGFloat s = FCPFuzzyScore(query, kw);
+            if (hasCleaned) s = MAX(s, FCPFuzzyScore(cleaned, kw));
             if (s > keywordScore) keywordScore = s;
         }
         // Score against category

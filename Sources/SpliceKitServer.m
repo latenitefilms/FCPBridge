@@ -1567,6 +1567,9 @@ static NSDictionary *SpliceKit_sendEditorAction(NSString *selectorName) {
 // friendly action name like "blade" or "addColorBoard", and we map it to
 // the actual ObjC selector on FFAnchoredTimelineModule.
 //
+// Forward declaration — defined later in the transition helpers section
+static NSUInteger SpliceKit_transitionCount(id timeline);
+
 // The actionMap below is essentially a reverse-engineered API surface of
 // FCP's editing engine. These were found by disassembling Flexo.framework
 // and looking at IB action connections, responder chain handlers, and
@@ -2026,6 +2029,63 @@ NSDictionary *SpliceKit_handleTimelineAction(NSDictionary *params) {
             }
         });
         return undoResult;
+    }
+
+    // Add transition to ALL edit points: select all → addTransition
+    // FCP natively adds transitions at every edit point when all clips are selected.
+    if ([action isEqualToString:@"addTransitionToAll"]) {
+        __block NSDictionary *allResult = nil;
+        SpliceKit_executeOnMainThread(^{
+            @try {
+                id timelineModule = SpliceKit_getActiveTimelineModule();
+                if (!timelineModule) {
+                    allResult = @{@"error": @"No active timeline module"};
+                    return;
+                }
+
+                NSUInteger before = SpliceKit_transitionCount(timelineModule);
+
+                // Select all clips
+                SEL selectAllSel = @selector(selectAll:);
+                if ([timelineModule respondsToSelector:selectAllSel]) {
+                    ((void (*)(id, SEL, id))objc_msgSend)(timelineModule, selectAllSel, nil);
+                } else {
+                    [[NSApplication sharedApplication] sendAction:selectAllSel to:nil from:nil];
+                }
+
+                // Let selection register
+                [[NSRunLoop currentRunLoop] runUntilDate:
+                    [NSDate dateWithTimeIntervalSinceNow:0.15]];
+
+                // Add transition — FCP adds to all edit points when all clips selected
+                SEL addSel = @selector(addTransition:);
+                if ([timelineModule respondsToSelector:addSel]) {
+                    ((void (*)(id, SEL, id))objc_msgSend)(timelineModule, addSel, nil);
+                } else {
+                    [[NSApplication sharedApplication] sendAction:addSel to:nil from:nil];
+                }
+
+                // Wait for transitions to appear
+                [[NSRunLoop currentRunLoop] runUntilDate:
+                    [NSDate dateWithTimeIntervalSinceNow:0.5]];
+
+                NSUInteger after = SpliceKit_transitionCount(timelineModule);
+                NSUInteger added = (after > before) ? (after - before) : 0;
+
+                SpliceKit_log(@"[Transition] Added %lu transitions to all edit points (total: %lu)",
+                              (unsigned long)added, (unsigned long)after);
+
+                allResult = @{
+                    @"action": @"addTransitionToAll",
+                    @"status": @"ok",
+                    @"transitionsAdded": @(added),
+                    @"totalTransitions": @(after)
+                };
+            } @catch (NSException *e) {
+                allResult = @{@"error": [NSString stringWithFormat:@"Exception: %@", e.reason]};
+            }
+        });
+        return allResult ?: @{@"error": @"Failed to add transitions to all clips"};
     }
 
     NSString *selector = actionMap[action];
