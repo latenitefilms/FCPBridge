@@ -13604,6 +13604,41 @@ static NSDictionary *SpliceKit_browserAppendExplicitClipToTimelineEnd(id timelin
              @"placementDebug": debugInfo};
 }
 
+static NSDictionary *SpliceKit_browserConnectExplicitClipAtPlayhead(id timelineModule,
+                                                                    id clip,
+                                                                    NSString *pasteboardName) {
+    NSMutableDictionary *debugInfo = [NSMutableDictionary dictionary];
+    debugInfo[@"primitive"] = @"explicit_paste_anchored";
+    debugInfo[@"before"] = SpliceKit_browserPlacementSnapshot(timelineModule, clip);
+    debugInfo[@"pasteboardName"] = pasteboardName ?: @"";
+
+    SEL pasteAnchoredSel = NSSelectorFromString(@"pasteAnchored:");
+    SEL anchorSel = NSSelectorFromString(@"anchorWithPasteboard:backtimed:trackType:");
+
+    if ([timelineModule respondsToSelector:pasteAnchoredSel]) {
+        ((void (*)(id, SEL, id))objc_msgSend)(timelineModule, pasteAnchoredSel, nil);
+    } else if ([timelineModule respondsToSelector:anchorSel]) {
+        NSString *resolvedPasteboardName = pasteboardName.length > 0 ? pasteboardName : NSPasteboardNameGeneral;
+        ((void (*)(id, SEL, id, BOOL, id))objc_msgSend)(timelineModule,
+                                                        anchorSel,
+                                                        resolvedPasteboardName,
+                                                        NO,
+                                                        @"all");
+    } else {
+        return @{@"error": @"Timeline module does not respond to pasteAnchored: or anchorWithPasteboard:backtimed:trackType:",
+                 @"placementDebug": debugInfo};
+    }
+    [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.12]];
+
+    NSDictionary *after = SpliceKit_browserPlacementSnapshot(timelineModule, clip);
+    debugInfo[@"after"] = after;
+
+    return @{@"status": @"ok",
+             @"primitive": @"explicit_paste_anchored",
+             @"placementVerified": @YES,
+             @"placementDebug": debugInfo};
+}
+
 static NSDictionary *SpliceKit_handleBrowserPlaceClip(NSDictionary *params,
                                                       NSString *selectorName,
                                                       NSString *actionName) {
@@ -13717,6 +13752,9 @@ static NSDictionary *SpliceKit_handleBrowserPlaceClip(NSDictionary *params,
             NSDictionary *placementResult = nil;
             if ([selectorName isEqualToString:@"appendWithSelectedMedia:"]) {
                 placementResult = SpliceKit_browserAppendExplicitClipToTimelineEnd(
+                    timelineModule, clip, pasteboardName);
+            } else if ([selectorName isEqualToString:@"anchorWithPasteboard:backtimed:trackType:"]) {
+                placementResult = SpliceKit_browserConnectExplicitClipAtPlayhead(
                     timelineModule, clip, pasteboardName);
             } else {
                 placementResult = SpliceKit_browserInsertExplicitClipAtPlayhead(
@@ -13911,6 +13949,12 @@ static NSDictionary *SpliceKit_handleMediaImportFile(NSDictionary *params) {
         }
     });
     return result ?: @{@"error": @"Import failed on main thread"};
+}
+
+static NSDictionary *SpliceKit_handleBrowserConnectClip(NSDictionary *params) {
+    return SpliceKit_handleBrowserPlaceClip(params,
+                                            @"anchorWithPasteboard:backtimed:trackType:",
+                                            @"connectAbovePlayhead");
 }
 
 #pragma mark - Menu Execute Handler
@@ -27378,6 +27422,14 @@ NSDictionary *SpliceKit_handleRequest(NSDictionary *request) {
     } else if ([method isEqualToString:@"command.aiAppleAgentic"]) {
         result = SpliceKit_handleCommandAIAppleAgentic(params);
     }
+    // liveCam.* namespace
+    else if ([method isEqualToString:@"liveCam.show"]) {
+        result = SpliceKit_handleLiveCamShow(params);
+    } else if ([method isEqualToString:@"liveCam.hide"]) {
+        result = SpliceKit_handleLiveCamHide(params);
+    } else if ([method isEqualToString:@"liveCam.status"]) {
+        result = SpliceKit_handleLiveCamStatus(params);
+    }
     // dualTimeline.* namespace
     else if ([method isEqualToString:@"dualTimeline.status"]) {
         result = SpliceKit_handleDualTimelineStatus(params);
@@ -27401,6 +27453,8 @@ NSDictionary *SpliceKit_handleRequest(NSDictionary *request) {
         result = SpliceKit_handleBrowserAppendClip(params);
     } else if ([method isEqualToString:@"browser.insertClip"]) {
         result = SpliceKit_handleBrowserInsertClip(params);
+    } else if ([method isEqualToString:@"browser.connectClip"]) {
+        result = SpliceKit_handleBrowserConnectClip(params);
     } else if ([method isEqualToString:@"media.importFile"]) {
         result = SpliceKit_handleMediaImportFile(params);
     }

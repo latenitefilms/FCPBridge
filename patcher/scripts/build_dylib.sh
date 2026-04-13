@@ -16,6 +16,7 @@ if [ -n "${BUILT_PRODUCTS_DIR:-}" ]; then
 else
     BUILD_OUT="$REPO_DIR/build/SpliceKit_prebuilt"
 fi
+CANONICAL_DYLIB_OUT="$REPO_DIR/build/SpliceKit"
 
 mkdir -p "$BUILD_OUT"
 

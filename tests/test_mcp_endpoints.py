@@ -363,6 +363,26 @@ def test_transcript():
          "would modify transcript state")
 
 
+def test_livecam():
+    print("\n[liveCam.*]")
+    status = rpc("liveCam.status")
+    ok("status", status, lambda resp: isinstance(_res(resp), dict))
+
+    show = rpc("liveCam.show")
+    ok("show", show, lambda resp: isinstance(_res(resp), dict) and "visible" in _res(resp))
+
+    status_after_show = rpc("liveCam.status")
+    ok("status after show", status_after_show,
+       lambda resp: isinstance(_res(resp), dict) and _res(resp).get("visible") is True)
+
+    hide = rpc("liveCam.hide")
+    ok("hide", hide, lambda resp: isinstance(_res(resp), dict) and "visible" in _res(resp))
+
+    status_after_hide = rpc("liveCam.status")
+    ok("status after hide", status_after_hide,
+       lambda resp: isinstance(_res(resp), dict) and _res(resp).get("visible") is False)
+
+
 def test_options():
     print("\n[options.*]")
     ok("get", rpc("options.get"))
@@ -615,6 +635,7 @@ TEST_GROUPS = {
     "titles": test_titles,
     "stabilize": test_stabilize,
     "transcript": test_transcript,
+    "livecam": test_livecam,
     "options": test_options,
     "flexmusic": test_flexmusic,
     "montage": test_montage,

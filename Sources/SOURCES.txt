@@ -30,3 +30,4 @@ SpliceKitPlugins.m
 SpliceKitMixerPanel.m
 SpliceKitSidebarCoalesce.m
 SpliceKitURLImport.m
+SpliceKitLiveCam.m

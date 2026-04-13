@@ -1,7 +1,7 @@
 CC = clang
 ARCHS = -arch arm64 -arch x86_64
 MIN_VERSION = -mmacosx-version-min=14.0
-FRAMEWORKS = -framework Foundation -framework AppKit -framework AVFoundation -framework CoreServices -framework Metal
+FRAMEWORKS = -framework Foundation -framework AppKit -framework AVFoundation -framework CoreServices -framework CoreImage -framework Metal -framework MetalKit -framework QuartzCore -framework Vision
 MODULE_CACHE_DIR = $(BUILD_DIR)/ModuleCache
 OBJC_FLAGS = -fobjc-arc -fmodules -fmodules-cache-path=$(abspath $(MODULE_CACHE_DIR))
 OBJCXX_FLAGS = $(OBJC_FLAGS) -std=c++17
@@ -276,6 +276,8 @@ deploy: $(OUTPUT) $(SILENCE_DETECTOR) $(STRUCTURE_ANALYZER) $(MIXER_APP) braw-pr
 		> "$(FW_DIR)/Versions/A/Resources/Info.plist"
 	@# Add speech recognition usage description for transcript feature
 	@/usr/libexec/PlistBuddy -c "Add :NSSpeechRecognitionUsageDescription string 'SpliceKit uses speech recognition to transcribe timeline audio for text-based editing.'" "$(MODDED_APP)/Contents/Info.plist" 2>/dev/null || true
+	@/usr/libexec/PlistBuddy -c "Add :NSCameraUsageDescription string 'SpliceKit LiveCam uses the camera for native webcam recording inside Final Cut Pro.'" "$(MODDED_APP)/Contents/Info.plist" 2>/dev/null || true
+	@/usr/libexec/PlistBuddy -c "Add :NSMicrophoneUsageDescription string 'SpliceKit LiveCam uses the microphone for native webcam capture inside Final Cut Pro.'" "$(MODDED_APP)/Contents/Info.plist" 2>/dev/null || true
 	@# Deploy tools
 	@mkdir -p "$(TOOLS_DIR)"
 	@$(MAKE) url-import-tools

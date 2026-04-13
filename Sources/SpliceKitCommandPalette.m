@@ -659,6 +659,10 @@ static NSString * const kSeparatorRowID = @"FCPSeparatorRow";
     add(@"Audio Mixer", @"openMixer", @"mixer", SpliceKitCommandCategoryEditing, @"Audio", @"Ctrl+Opt+M", @"Open audio mixer with volume faders for clips at playhead", @[@"fader", @"volume", @"mix", @"levels"]);
     add(@"Close Audio Mixer", @"closeMixer", @"mixer", SpliceKitCommandCategoryEditing, @"Audio", nil, @"Close the audio mixer panel", @[]);
 
+    // --- LiveCam ---
+    add(@"Open LiveCam", @"openLiveCam", @"livecam", SpliceKitCommandCategoryExport, @"LiveCam", nil, @"Open the native webcam booth for direct-to-Library or direct-to-Timeline capture", @[@"camera", @"webcam", @"record to timeline", @"reaction cam", @"live booth"]);
+    add(@"Close LiveCam", @"closeLiveCam", @"livecam", SpliceKitCommandCategoryExport, @"LiveCam", nil, @"Close the LiveCam panel", @[@"hide camera", @"close webcam"]);
+
     // ===================================================================
     // NEW: Comprehensive MCP actions added to command palette
     // ===================================================================
@@ -1525,6 +1529,18 @@ static NSString *FCPStripStopWords(NSString *query) {
             if ([action isEqualToString:@"openMixer"]) {
                 ((void (*)(id, SEL))objc_msgSend)(panel, @selector(showPanel));
             } else if ([action isEqualToString:@"closeMixer"]) {
+                ((void (*)(id, SEL))objc_msgSend)(panel, @selector(hidePanel));
+            }
+        });
+        result = @{@"action": action, @"status": @"ok"};
+    } else if ([type isEqualToString:@"livecam"]) {
+        SpliceKit_executeOnMainThread(^{
+            Class panelClass = objc_getClass("SpliceKitLiveCamPanel");
+            if (!panelClass) return;
+            id panel = ((id (*)(id, SEL))objc_msgSend)((id)panelClass, @selector(sharedPanel));
+            if ([action isEqualToString:@"openLiveCam"]) {
+                ((void (*)(id, SEL))objc_msgSend)(panel, @selector(showPanel));
+            } else if ([action isEqualToString:@"closeLiveCam"]) {
                 ((void (*)(id, SEL))objc_msgSend)(panel, @selector(hidePanel));
             }
         });

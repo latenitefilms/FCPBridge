@@ -105,6 +105,9 @@ class MCPToolAnnotationTests(unittest.TestCase):
             "mixer_open_bus_effect",
             "mixer_set_bus_effect_enabled",
             "mixer_remove_bus_effect",
+            "open_livecam",
+            "close_livecam",
+            "get_livecam_status",
         }
         self.assertTrue(expected.issubset(self.tools.keys()))
 
@@ -122,6 +125,9 @@ class MCPToolAnnotationTests(unittest.TestCase):
             "call_method": {"readOnlyHint": False, "destructiveHint": True},
             "manage_handles": {"readOnlyHint": False, "destructiveHint": False},
             "list_handles": {"readOnlyHint": True, "destructiveHint": False},
+            "open_livecam": {"readOnlyHint": False, "destructiveHint": False},
+            "close_livecam": {"readOnlyHint": False, "destructiveHint": False},
+            "get_livecam_status": {"readOnlyHint": True, "destructiveHint": False},
         }
         for name, expected in checks.items():
             annotations = self.tools[name]["annotations"]
@@ -670,6 +676,28 @@ class MCPToolAnnotationTests(unittest.TestCase):
     def test_build_song_cut_rejects_invalid_pace(self):
         result = self.module.build_song_cut(pace="slow")
         self.assertIn('pace must be one of', result)
+
+    def test_livecam_wrappers_forward_expected_bridge_calls(self):
+        calls = []
+
+        def fake_call(method, **params):
+            calls.append((method, params))
+            return {"method": method, "params": params}
+
+        self.module.bridge.call = fake_call
+
+        self.module.open_livecam()
+        self.module.close_livecam()
+        self.module.get_livecam_status()
+
+        self.assertEqual(
+            calls,
+            [
+                ("liveCam.show", {}),
+                ("liveCam.hide", {}),
+                ("liveCam.status", {}),
+            ],
+        )
 
 
 if __name__ == "__main__":

@@ -208,6 +208,7 @@ READ_ONLY_TOOLS = {
     "list_effects",
     "list_transitions",
     "search_commands",
+    "get_livecam_status",
     "list_menus",
     "get_inspector_properties",
     "get_title_text",
@@ -245,6 +246,7 @@ READ_ONLY_TOOLS = {
     "plugin_list_methods",
     "reload_plugin_tools",
     "mixer_get_state",
+    "import_url_status",
 }
 
 DESTRUCTIVE_TOOLS = {
@@ -320,6 +322,8 @@ DESTRUCTIVE_TOOLS = {
     "mixer_apply_bus_effect",
     "mixer_set_bus_effect_enabled",
     "mixer_remove_bus_effect",
+    "import_url",
+    "cancel_import_url",
 }
 
 IDEMPOTENT_LOCAL_WRITE_TOOLS = {
@@ -337,6 +341,8 @@ IDEMPOTENT_LOCAL_WRITE_TOOLS = {
     "select_clip_in_lane",
     "mixer_volume_begin",
     "mixer_volume_end",
+    "open_livecam",
+    "close_livecam",
 }
 
 CUSTOM_TOOL_TITLES = {
@@ -381,6 +387,9 @@ CUSTOM_TOOL_TITLES = {
     "move_transcript_words": "Move Transcript Words",
     "close_transcript": "Close Transcript Panel",
     "search_transcript": "Search Transcript",
+    "open_livecam": "Open LiveCam",
+    "close_livecam": "Close LiveCam",
+    "get_livecam_status": "Get LiveCam Status",
     "delete_transcript_silences": "Delete Transcript Silences",
     "set_silence_threshold": "Set Silence Threshold",
     "show_command_palette": "Show Command Palette",
@@ -449,6 +458,9 @@ CUSTOM_TOOL_TITLES = {
     "stabilize_subject": "Stabilize Subject",
     "insert_title": "Insert Title",
     "set_transcript_engine": "Set Transcript Engine",
+    "import_url": "Import Media URL",
+    "import_url_status": "URL Import Status",
+    "cancel_import_url": "Cancel URL Import",
     "open_captions": "Open Captions Panel",
     "close_captions": "Close Captions Panel",
     "get_caption_state": "Get Caption State",
@@ -2916,6 +2928,33 @@ def hide_command_palette() -> str:
     if _err(r):
         return f"Error: {r.get('error', r)}"
     return "Command palette closed."
+
+
+@mcp.tool(annotations=_tool_annotations("open_livecam"))
+def open_livecam() -> str:
+    """Open the LiveCam panel inside Final Cut Pro."""
+    r = bridge.call("liveCam.show")
+    if _err(r):
+        return f"Error: {r.get('error', r)}"
+    return _fmt(r)
+
+
+@mcp.tool(annotations=_tool_annotations("close_livecam"))
+def close_livecam() -> str:
+    """Close the LiveCam panel."""
+    r = bridge.call("liveCam.hide")
+    if _err(r):
+        return f"Error: {r.get('error', r)}"
+    return _fmt(r)
+
+
+@mcp.tool(annotations=_tool_annotations("get_livecam_status"))
+def get_livecam_status() -> str:
+    """Get the current LiveCam panel state, selected devices, recording flags, and destination."""
+    r = bridge.call("liveCam.status")
+    if _err(r):
+        return f"Error: {r.get('error', r)}"
+    return _fmt(r)
 
 
 @mcp.tool(annotations=_tool_annotations("search_commands"))
