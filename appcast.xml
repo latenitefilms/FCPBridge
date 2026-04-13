@@ -6,6 +6,22 @@
     <description>SpliceKit Patcher release updates</description>
     <language>en</language>
     <item>
+      <title>SpliceKit v3.1.9</title>
+      <sparkle:version>3.1.9</sparkle:version>
+      <sparkle:shortVersionString>3.1.9</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <pubDate>Mon, 13 Apr 2026 18:10:57 +0000</pubDate>
+      <description><![CDATA[
+        <h2>What's New in 3.1.9</h2>
+        <p>Fix patcher signing on macOS 15.7.3 — apply full entitlements (app-sandbox=false, disable-library-validation, allow-dyld-environment-variables, get-task-allow) to prevent CloudKit crash. Add plain-English explainer doc.</p>
+      ]]></description>
+      <enclosure
+        url="https://github.com/elliotttate/SpliceKit/releases/download/v3.1.9/SpliceKit-v3.1.9.dmg"
+        sparkle:edSignature="Bx/GntRXBGf/aWRlyYLLFkzr7DAKSYbBZSe90r6E/M7yGulFiqKaadImNt0soI0IYzIz6zQYdGa6PTWc6Z0ACA=="
+        length="14096994"
+        type="application/octet-stream" />
+    </item>
+    <item>
       <title>SpliceKit v3.1.8</title>
       <sparkle:version>3.1.8</sparkle:version>
       <sparkle:shortVersionString>3.1.8</sparkle:shortVersionString>
