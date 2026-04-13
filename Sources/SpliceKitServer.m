@@ -12932,6 +12932,514 @@ static NSDictionary *SpliceKit_handleRolesAssign(NSDictionary *params) {
     return SpliceKit_handleMenuExecute(@{@"menuPath": @[@"Modify", menuCategory, roleName]});
 }
 
+#pragma mark - Mixer Handlers
+
+// Helper: get effectStack from a clip, handling compound clips
+static id SpliceKit_getClipEffectStack(id clip) {
+    if (!clip) return nil;
+
+    // If clip is a collection (compound/storyline), get the first media component's effectStack
+    if ([clip isKindOfClass:objc_getClass("FFAnchoredCollection")]) {
+        @try {
+            id items = [clip valueForKey:@"containedItems"];
+            if ([items isKindOfClass:[NSArray class]] && [(NSArray *)items count] > 0) {
+                id firstItem = [(NSArray *)items firstObject];
+                if ([firstItem respondsToSelector:@selector(effectStack)]) {
+                    id es = ((id (*)(id, SEL))objc_msgSend)(firstItem, @selector(effectStack));
+                    if (es) return es;
+                }
+            }
+        } @catch (NSException *e) {}
+    }
+
+    // Direct effectStack access
+    if ([clip respondsToSelector:@selector(effectStack)]) {
+        return ((id (*)(id, SEL))objc_msgSend)(clip, @selector(effectStack));
+    }
+    return nil;
+}
+
+// Helper: read volume (dB and linear) from a clip.
+// FCP stores audio effects in a separate effectStack accessed via audioEffectsForIdentifier:
+// (not the main effectStack which is for video effects).
+static void SpliceKit_readVolume(id clip, id effectStack, NSMutableDictionary *out) {
+    if (!clip && !effectStack) return;
+
+    // Strategy 1: Use audioEffectsForIdentifier: on the clip (correct FCP pattern)
+    if (clip) {
+        @try {
+            SEL aeSel = NSSelectorFromString(@"audioEffectsForIdentifier:");
+            if ([clip respondsToSelector:aeSel]) {
+                // identifier 0 = primary audio effect stack
+                id audioES = ((id (*)(id, SEL, unsigned long long))objc_msgSend)(clip, aeSel, 0ULL);
+                if (audioES) {
+                    SEL volSel = NSSelectorFromString(@"audioLevelChannel");
+                    if ([audioES respondsToSelector:volSel]) {
+                        id volChan = ((id (*)(id, SEL))objc_msgSend)(audioES, volSel);
+                        if (volChan) {
+                            double linear = SpliceKit_channelValue(volChan);
+                            out[@"volumeLinear"] = @(linear);
+                            out[@"volumeDB"] = (linear > 0) ? @(20.0 * log10(linear)) : @(-INFINITY);
+                            out[@"volumeChannelHandle"] = SpliceKit_storeHandle(volChan);
+                            out[@"audioEffectStackHandle"] = SpliceKit_storeHandle(audioES);
+                            return;
+                        }
+                    }
+                }
+            }
+        } @catch (NSException *e) {}
+    }
+
+    // Strategy 2: Fallback to effectStack.audioLevelChannel (for clips where the above doesn't work)
+    if (effectStack) {
+        @try {
+            SEL volSel = NSSelectorFromString(@"audioLevelChannel");
+            if ([effectStack respondsToSelector:volSel]) {
+                id volChan = ((id (*)(id, SEL))objc_msgSend)(effectStack, volSel);
+                if (volChan) {
+                    double linear = SpliceKit_channelValue(volChan);
+                    out[@"volumeLinear"] = @(linear);
+                    out[@"volumeDB"] = (linear > 0) ? @(20.0 * log10(linear)) : @(-INFINITY);
+                    out[@"volumeChannelHandle"] = SpliceKit_storeHandle(volChan);
+                    return;
+                }
+            }
+        } @catch (NSException *e) {}
+    }
+}
+
+// Helper: try to read audio role from a clip via KVC / selectors
+static NSString *SpliceKit_readClipRole(id clip) {
+    if (!clip) return nil;
+
+    // Try various known selectors for role reading
+    NSArray *trySelectors = @[@"primaryAudioRole", @"audioRole", @"role"];
+    for (NSString *selName in trySelectors) {
+        @try {
+            SEL sel = NSSelectorFromString(selName);
+            if (sel == NULL) continue;
+            if ([clip respondsToSelector:sel]) {
+                id roleObj = ((id (*)(id, SEL))objc_msgSend)(clip, sel);
+                if ([roleObj isKindOfClass:[NSString class]]) return (NSString *)roleObj;
+                // If it's a role object, try to get its name
+                if (roleObj && [roleObj respondsToSelector:@selector(displayName)]) {
+                    id name = ((id (*)(id, SEL))objc_msgSend)(roleObj, @selector(displayName));
+                    if ([name isKindOfClass:[NSString class]]) return (NSString *)name;
+                }
+                if (roleObj && [roleObj respondsToSelector:@selector(localizedName)]) {
+                    id name = ((id (*)(id, SEL))objc_msgSend)(roleObj, @selector(localizedName));
+                    if ([name isKindOfClass:[NSString class]]) return (NSString *)name;
+                }
+            }
+        } @catch (NSException *e) { continue; }
+    }
+
+    // KVC fallback
+    @try {
+        id val = [clip valueForKey:@"primaryAudioRole"];
+        if ([val isKindOfClass:[NSString class]]) return (NSString *)val;
+        if (val && [val respondsToSelector:@selector(displayName)]) {
+            id name = ((id (*)(id, SEL))objc_msgSend)(val, @selector(displayName));
+            if ([name isKindOfClass:[NSString class]]) return (NSString *)name;
+        }
+    } @catch (NSException *e) {}
+
+    return nil;
+}
+
+// mixer.getState — enumerate clips at playhead with volumes, lanes, roles
+static NSDictionary *SpliceKit_handleMixerGetState(NSDictionary *params) {
+    __block NSDictionary *result = nil;
+    SpliceKit_executeOnMainThread(^{
+        @try {
+            id timeline = SpliceKit_getActiveTimelineModule();
+            if (!timeline) {
+                result = @{@"error": @"No active timeline module. Is a project open?"};
+                return;
+            }
+
+            id sequence = nil;
+            if ([timeline respondsToSelector:@selector(sequence)]) {
+                sequence = ((id (*)(id, SEL))objc_msgSend)(timeline, @selector(sequence));
+            }
+            if (!sequence) {
+                result = @{@"error": @"No sequence in timeline."};
+                return;
+            }
+
+            // Get playhead time
+            SpliceKit_CMTime playhead = {0, 1, 0, 0};
+            if ([timeline respondsToSelector:@selector(playheadTime)]) {
+                playhead = ((SpliceKit_CMTime (*)(id, SEL))STRET_MSG)(timeline, @selector(playheadTime));
+            }
+            double playheadSec = (playhead.timescale > 0) ? (double)playhead.value / playhead.timescale : 0;
+
+            // Get primaryObject (spine container)
+            id primaryObj = nil;
+            if ([sequence respondsToSelector:@selector(primaryObject)]) {
+                primaryObj = ((id (*)(id, SEL))objc_msgSend)(sequence, @selector(primaryObject));
+            }
+            if (!primaryObj) {
+                result = @{@"error": @"No primary object on sequence"};
+                return;
+            }
+
+            // Get spine items
+            id spineItems = nil;
+            if ([primaryObj respondsToSelector:@selector(containedItems)]) {
+                spineItems = ((id (*)(id, SEL))objc_msgSend)(primaryObj, @selector(containedItems));
+            }
+            if (!spineItems || ![spineItems isKindOfClass:[NSArray class]]) {
+                result = @{@"error": @"No spine items found"};
+                return;
+            }
+
+            SEL erSel = NSSelectorFromString(@"effectiveRangeOfObject:");
+            BOOL canGetRange = [primaryObj respondsToSelector:erSel];
+
+            // Collect all clips overlapping the playhead (spine + connected)
+            NSMutableArray *faders = [NSMutableArray array];
+
+            for (id item in (NSArray *)spineItems) {
+                // Check if this spine item overlaps the playhead
+                BOOL spineOverlaps = NO;
+                double spineStart = 0, spineEnd = 0;
+
+                if (canGetRange) {
+                    @try {
+                        SpliceKit_CMTimeRange range = ((SpliceKit_CMTimeRange (*)(id, SEL, id))STRET_MSG)(
+                            primaryObj, erSel, item);
+                        spineStart = (range.start.timescale > 0)
+                            ? (double)range.start.value / range.start.timescale : 0;
+                        double dur = (range.duration.timescale > 0)
+                            ? (double)range.duration.value / range.duration.timescale : 0;
+                        spineEnd = spineStart + dur;
+                        if (playheadSec >= spineStart - 0.001 && playheadSec <= spineEnd + 0.001) {
+                            spineOverlaps = YES;
+                        }
+                    } @catch (NSException *e) {}
+                }
+
+                // Add spine item (lane 0) if it overlaps and is not a gap/transition
+                if (spineOverlaps) {
+                    NSString *cls = NSStringFromClass([item class]);
+                    BOOL isGap = [cls containsString:@"Gap"];
+                    BOOL isTransition = [cls containsString:@"Transition"];
+                    if (!isGap && !isTransition) {
+                        NSMutableDictionary *fader = [NSMutableDictionary dictionary];
+                        fader[@"clipHandle"] = SpliceKit_storeHandle(item);
+                        fader[@"lane"] = @(0);
+                        fader[@"class"] = cls;
+                        fader[@"startSeconds"] = @(spineStart);
+                        fader[@"endSeconds"] = @(spineEnd);
+
+                        if ([item respondsToSelector:@selector(displayName)]) {
+                            id name = ((id (*)(id, SEL))objc_msgSend)(item, @selector(displayName));
+                            fader[@"name"] = name ?: @"";
+                        }
+
+                        id es = SpliceKit_getClipEffectStack(item);
+                        if (es) {
+                            fader[@"effectStackHandle"] = SpliceKit_storeHandle(es);
+                        }
+                        SpliceKit_readVolume(item, es, fader);
+
+                        NSString *role = SpliceKit_readClipRole(item);
+                        if (role) fader[@"role"] = role;
+
+                        [faders addObject:fader];
+                    }
+                }
+
+                // Check connected clips (anchoredItems) on this spine item
+                SEL anchoredSel = NSSelectorFromString(@"anchoredItems");
+                if ([item respondsToSelector:anchoredSel]) {
+                    id anchored = ((id (*)(id, SEL))objc_msgSend)(item, anchoredSel);
+                    // anchoredItems can be NSSet or NSArray
+                    NSArray *anchoredArr = nil;
+                    if ([anchored isKindOfClass:[NSArray class]]) {
+                        anchoredArr = (NSArray *)anchored;
+                    } else if ([anchored isKindOfClass:[NSSet class]]) {
+                        anchoredArr = [(NSSet *)anchored allObjects];
+                    }
+
+                    if (anchoredArr) {
+                        for (id connected in anchoredArr) {
+                            // Get absolute time range for connected clip
+                            BOOL connOverlaps = NO;
+                            double connStart = 0, connEnd = 0;
+
+                            if (canGetRange) {
+                                @try {
+                                    SpliceKit_CMTimeRange range = ((SpliceKit_CMTimeRange (*)(id, SEL, id))STRET_MSG)(
+                                        primaryObj, erSel, connected);
+                                    connStart = (range.start.timescale > 0)
+                                        ? (double)range.start.value / range.start.timescale : 0;
+                                    double dur = (range.duration.timescale > 0)
+                                        ? (double)range.duration.value / range.duration.timescale : 0;
+                                    connEnd = connStart + dur;
+                                    if (playheadSec >= connStart - 0.001 && playheadSec <= connEnd + 0.001) {
+                                        connOverlaps = YES;
+                                    }
+                                } @catch (NSException *e) {}
+                            }
+
+                            // Fallback: use anchoredOffset + duration
+                            if (!connOverlaps && !canGetRange) {
+                                @try {
+                                    SEL offSel = NSSelectorFromString(@"anchoredOffset");
+                                    if ([connected respondsToSelector:offSel]) {
+                                        SpliceKit_CMTime offset = ((SpliceKit_CMTime (*)(id, SEL))STRET_MSG)(connected, offSel);
+                                        SpliceKit_CMTime dur = ((SpliceKit_CMTime (*)(id, SEL))STRET_MSG)(connected, @selector(duration));
+                                        connStart = (offset.timescale > 0) ? (double)offset.value / offset.timescale : 0;
+                                        double durSec = (dur.timescale > 0) ? (double)dur.value / dur.timescale : 0;
+                                        connEnd = connStart + durSec;
+                                        if (playheadSec >= connStart - 0.001 && playheadSec <= connEnd + 0.001) {
+                                            connOverlaps = YES;
+                                        }
+                                    }
+                                } @catch (NSException *e) {}
+                            }
+
+                            if (!connOverlaps) continue;
+
+                            NSString *cls = NSStringFromClass([connected class]);
+                            BOOL isTransition = [cls containsString:@"Transition"];
+                            if (isTransition) continue;
+
+                            long long lane = 0;
+                            if ([connected respondsToSelector:@selector(anchoredLane)]) {
+                                lane = ((long long (*)(id, SEL))objc_msgSend)(connected, @selector(anchoredLane));
+                            }
+
+                            NSMutableDictionary *fader = [NSMutableDictionary dictionary];
+                            fader[@"clipHandle"] = SpliceKit_storeHandle(connected);
+                            fader[@"lane"] = @(lane);
+                            fader[@"class"] = cls;
+                            fader[@"startSeconds"] = @(connStart);
+                            fader[@"endSeconds"] = @(connEnd);
+
+                            if ([connected respondsToSelector:@selector(displayName)]) {
+                                id name = ((id (*)(id, SEL))objc_msgSend)(connected, @selector(displayName));
+                                fader[@"name"] = name ?: @"";
+                            }
+
+                            id es = SpliceKit_getClipEffectStack(connected);
+                            if (es) {
+                                fader[@"effectStackHandle"] = SpliceKit_storeHandle(es);
+                            }
+                            SpliceKit_readVolume(connected, es, fader);
+
+                            NSString *role = SpliceKit_readClipRole(connected);
+                            if (role) fader[@"role"] = role;
+
+                            [faders addObject:fader];
+                        }
+                    }
+                }
+            }
+
+            // Sort by lane descending (highest lane = fader 0), then by name
+            [faders sortUsingComparator:^NSComparisonResult(NSDictionary *a, NSDictionary *b) {
+                long long laneA = [a[@"lane"] longLongValue];
+                long long laneB = [b[@"lane"] longLongValue];
+                if (laneA != laneB) return (laneB > laneA) ? NSOrderedAscending : NSOrderedDescending;
+                return [a[@"name"] compare:b[@"name"] ?: @""];
+            }];
+
+            // Assign fader indices (limit to 10)
+            NSInteger count = MIN((NSInteger)faders.count, 10);
+            NSMutableArray *indexed = [NSMutableArray array];
+            for (NSInteger i = 0; i < count; i++) {
+                NSMutableDictionary *f = [faders[i] mutableCopy];
+                f[@"index"] = @(i);
+                [indexed addObject:f];
+            }
+
+            result = @{
+                @"playheadSeconds": @(playheadSec),
+                @"faders": indexed,
+                @"count": @(indexed.count),
+                @"totalClipsAtPlayhead": @(faders.count)
+            };
+        } @catch (NSException *e) {
+            result = @{@"error": [NSString stringWithFormat:@"Exception: %@", e.reason]};
+        }
+    });
+    return result;
+}
+
+// mixer.setVolume — set volume on a specific channel handle
+static NSDictionary *SpliceKit_handleMixerSetVolume(NSDictionary *params) {
+    NSString *handle = params[@"handle"];
+    if (!handle) return @{@"error": @"handle parameter required (volumeChannelHandle from mixer.getState)"};
+
+    // Accept either dB or linear
+    NSNumber *dbVal = params[@"volumeDB"];
+    NSNumber *linearVal = params[@"volumeLinear"];
+    if (!dbVal && !linearVal) return @{@"error": @"volumeDB or volumeLinear parameter required"};
+
+    double linear;
+    if (linearVal) {
+        linear = [linearVal doubleValue];
+    } else {
+        double db = [dbVal doubleValue];
+        linear = (db <= -144.0) ? 0.0 : pow(10.0, db / 20.0);
+    }
+
+    // Clamp to FCP's valid range (0.0 to ~12 dB = ~3.98)
+    if (linear < 0.0) linear = 0.0;
+    if (linear > 3.98) linear = 3.98;
+
+    __block NSDictionary *result = nil;
+    SpliceKit_executeOnMainThread(^{
+        @try {
+            id channel = SpliceKit_resolveHandle(handle);
+            if (!channel) {
+                result = @{@"error": @"Handle not found — clip may have changed. Call mixer.getState to refresh."};
+                return;
+            }
+
+            BOOL ok = SpliceKit_setChannelValue(channel, linear);
+            if (ok) {
+                double readback = SpliceKit_channelValue(channel);
+                result = @{
+                    @"ok": @YES,
+                    @"volumeLinear": @(readback),
+                    @"volumeDB": (readback > 0) ? @(20.0 * log10(readback)) : @(-INFINITY)
+                };
+            } else {
+                result = @{@"error": @"Failed to set channel value"};
+            }
+        } @catch (NSException *e) {
+            result = @{@"error": [NSString stringWithFormat:@"Exception: %@", e.reason]};
+        }
+    });
+    return result;
+}
+
+// Active undo transactions for mixer fader drags
+static NSMutableDictionary *sMixerUndoTransactions = nil;
+
+// mixer.volumeBegin — open undo transaction for a fader drag
+static NSDictionary *SpliceKit_handleMixerVolumeBegin(NSDictionary *params) {
+    NSString *effectStackHandle = params[@"effectStackHandle"];
+    // Also accept audioEffectStackHandle (preferred for mixer)
+    if (!effectStackHandle) effectStackHandle = params[@"audioEffectStackHandle"];
+    if (!effectStackHandle) return @{@"error": @"effectStackHandle or audioEffectStackHandle parameter required"};
+
+    __block NSDictionary *result = nil;
+    SpliceKit_executeOnMainThread(^{
+        @try {
+            id effectStack = SpliceKit_resolveHandle(effectStackHandle);
+            if (!effectStack) {
+                result = @{@"error": @"effectStackHandle not found"};
+                return;
+            }
+
+            // Open undo transaction
+            SEL beginSel = NSSelectorFromString(@"actionBegin:animationHint:deferUpdates:");
+            if ([effectStack respondsToSelector:beginSel]) {
+                ((void (*)(id, SEL, id, id, BOOL))objc_msgSend)(
+                    effectStack, beginSel, @"Adjust Volume", nil, YES);
+            }
+
+            // Track this transaction
+            if (!sMixerUndoTransactions) sMixerUndoTransactions = [NSMutableDictionary dictionary];
+            sMixerUndoTransactions[effectStackHandle] = @YES;
+
+            result = @{@"ok": @YES, @"effectStackHandle": effectStackHandle};
+        } @catch (NSException *e) {
+            result = @{@"error": [NSString stringWithFormat:@"Exception: %@", e.reason]};
+        }
+    });
+    return result;
+}
+
+// mixer.volumeEnd — close undo transaction for a fader drag
+static NSDictionary *SpliceKit_handleMixerVolumeEnd(NSDictionary *params) {
+    NSString *effectStackHandle = params[@"effectStackHandle"];
+    if (!effectStackHandle) effectStackHandle = params[@"audioEffectStackHandle"];
+    if (!effectStackHandle) return @{@"error": @"effectStackHandle or audioEffectStackHandle parameter required"};
+
+    __block NSDictionary *result = nil;
+    SpliceKit_executeOnMainThread(^{
+        @try {
+            id effectStack = SpliceKit_resolveHandle(effectStackHandle);
+            if (!effectStack) {
+                result = @{@"error": @"effectStackHandle not found"};
+                return;
+            }
+
+            // Close undo transaction
+            SEL endSel = NSSelectorFromString(@"actionEnd:save:error:");
+            if ([effectStack respondsToSelector:endSel]) {
+                ((void (*)(id, SEL, id, BOOL, id))objc_msgSend)(
+                    effectStack, endSel, @"Adjust Volume", YES, nil);
+            }
+
+            // Remove from tracking
+            [sMixerUndoTransactions removeObjectForKey:effectStackHandle];
+
+            result = @{@"ok": @YES};
+        } @catch (NSException *e) {
+            result = @{@"error": [NSString stringWithFormat:@"Exception: %@", e.reason]};
+        }
+    });
+    return result;
+}
+
+// mixer.setAllVolumes — batch set multiple fader volumes in one undo transaction
+static NSDictionary *SpliceKit_handleMixerSetAllVolumes(NSDictionary *params) {
+    NSArray *volumes = params[@"volumes"]; // [{handle, volumeDB or volumeLinear}, ...]
+    if (!volumes || ![volumes isKindOfClass:[NSArray class]] || volumes.count == 0) {
+        return @{@"error": @"volumes array required: [{handle, volumeDB or volumeLinear}, ...]"};
+    }
+
+    __block NSDictionary *result = nil;
+    SpliceKit_executeOnMainThread(^{
+        @try {
+            NSMutableArray *results = [NSMutableArray array];
+            for (NSDictionary *entry in volumes) {
+                NSString *handle = entry[@"handle"];
+                if (!handle) { [results addObject:@{@"error": @"missing handle"}]; continue; }
+
+                id channel = SpliceKit_resolveHandle(handle);
+                if (!channel) { [results addObject:@{@"error": @"handle not found"}]; continue; }
+
+                NSNumber *dbVal = entry[@"volumeDB"];
+                NSNumber *linearVal = entry[@"volumeLinear"];
+                double linear;
+                if (linearVal) {
+                    linear = [linearVal doubleValue];
+                } else if (dbVal) {
+                    double db = [dbVal doubleValue];
+                    linear = (db <= -144.0) ? 0.0 : pow(10.0, db / 20.0);
+                } else {
+                    [results addObject:@{@"error": @"volumeDB or volumeLinear required"}];
+                    continue;
+                }
+
+                if (linear < 0.0) linear = 0.0;
+                if (linear > 3.98) linear = 3.98;
+
+                BOOL ok = SpliceKit_setChannelValue(channel, linear);
+                double readback = ok ? SpliceKit_channelValue(channel) : 0;
+                [results addObject:@{
+                    @"handle": handle,
+                    @"ok": @(ok),
+                    @"volumeLinear": @(readback),
+                    @"volumeDB": (readback > 0) ? @(20.0 * log10(readback)) : @(-INFINITY)
+                }];
+            }
+            result = @{@"ok": @YES, @"results": results};
+        } @catch (NSException *e) {
+            result = @{@"error": [NSString stringWithFormat:@"Exception: %@", e.reason]};
+        }
+    });
+    return result;
+}
+
 #pragma mark - Share/Export Handler
 
 static NSDictionary *SpliceKit_handleShareExport(NSDictionary *params) {
@@ -19604,6 +20112,18 @@ NSDictionary *SpliceKit_handleRequest(NSDictionary *request) {
     // roles.* namespace
     else if ([method isEqualToString:@"roles.assign"]) {
         result = SpliceKit_handleRolesAssign(params);
+    }
+    // mixer.* namespace
+    else if ([method isEqualToString:@"mixer.getState"]) {
+        result = SpliceKit_handleMixerGetState(params);
+    } else if ([method isEqualToString:@"mixer.setVolume"]) {
+        result = SpliceKit_handleMixerSetVolume(params);
+    } else if ([method isEqualToString:@"mixer.volumeBegin"]) {
+        result = SpliceKit_handleMixerVolumeBegin(params);
+    } else if ([method isEqualToString:@"mixer.volumeEnd"]) {
+        result = SpliceKit_handleMixerVolumeEnd(params);
+    } else if ([method isEqualToString:@"mixer.setAllVolumes"]) {
+        result = SpliceKit_handleMixerSetAllVolumes(params);
     }
     // share.* namespace
     else if ([method isEqualToString:@"share.export"]) {

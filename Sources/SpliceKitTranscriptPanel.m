@@ -902,6 +902,7 @@ static double CMTimeToSeconds(SpliceKitTranscript_CMTime t) {
 
     NSMutableDictionary *section = [@{
         @"status": @"ready",
+        @"formatVersion": @2,
         @"frameRate": @(self.frameRate),
         @"silenceThreshold": @(self.silenceThreshold),
         @"speakerDetectionEnabled": @(self.speakerDetectionEnabled),
@@ -950,6 +951,9 @@ static double CMTimeToSeconds(SpliceKitTranscript_CMTime t) {
     NSDictionary *state = SpliceKit_loadSequenceState(sequence);
     NSDictionary *transcript = [state[@"transcript"] isKindOfClass:[NSDictionary class]] ? state[@"transcript"] : nil;
     NSArray *wordDicts = [transcript[@"words"] isKindOfClass:[NSArray class]] ? transcript[@"words"] : nil;
+    NSString *engineName = [transcript[@"engine"] isKindOfClass:[NSString class]] ? transcript[@"engine"] : nil;
+    NSInteger formatVersion = [transcript[@"formatVersion"] respondsToSelector:@selector(integerValue)]
+        ? [transcript[@"formatVersion"] integerValue] : 0;
 
     // Check if the sequence changed — if so, clear stale transcript from previous project
     NSString *sequenceKey = [state[@"sequenceIdentity"] isKindOfClass:[NSDictionary class]]
@@ -973,6 +977,30 @@ static double CMTimeToSeconds(SpliceKitTranscript_CMTime t) {
     }
 
     if (!transcript || wordDicts.count == 0) return;
+
+    // Older FCP Native transcripts stored source-relative word times, which causes
+    // playback highlighting to jump between clips after restoring cached state.
+    if ([engineName isEqualToString:@"fcpNative"] && formatVersion < 2) {
+        NSMutableDictionary *mutableState = [state mutableCopy] ?: [NSMutableDictionary dictionary];
+        [mutableState removeObjectForKey:@"transcript"];
+        SpliceKit_saveSequenceState(sequence, mutableState, nil);
+
+        @synchronized (self.mutableWords) {
+            [self.mutableWords removeAllObjects];
+        }
+        [self.mutableSilences removeAllObjects];
+        self.fullText = nil;
+        self.status = SpliceKitTranscriptStatusIdle;
+        self.errorMessage = nil;
+        self.lastRestoredSequenceKey = sequenceKey;
+
+        if (self.panel) {
+            [self rebuildTextView];
+            self.deleteSilencesButton.enabled = NO;
+            [self updateStatusUI:@"Transcript needs refresh after update. Tap Refresh to rebuild."];
+        }
+        return;
+    }
 
     if (sequenceKey.length > 0 &&
         [self.lastRestoredSequenceKey isEqualToString:sequenceKey] &&
@@ -1007,7 +1035,6 @@ static double CMTimeToSeconds(SpliceKitTranscript_CMTime t) {
         [self detectSilences];
     }
 
-    NSString *engineName = transcript[@"engine"];
     if ([engineName isEqualToString:@"fcpNative"]) {
         self.engine = SpliceKitTranscriptEngineFCPNative;
     } else if ([engineName isEqualToString:@"appleSpeech"]) {
@@ -1449,9 +1476,10 @@ static double CMTimeToSeconds(SpliceKitTranscript_CMTime t) {
 
 #pragma mark - Transcribe Timeline
 //
-// Main entry point for transcription. Walks every clip in the timeline,
-// extracts the source media URL, and feeds it to the selected engine.
-// All clips are processed in a single batch so the model only loads once.
+// Main entry point for transcription. Walks the primary storyline plus any
+// anchored (connected) clips, extracts the source media URL, and feeds it to
+// the selected engine. All clips are processed in a single batch so the model
+// only loads once.
 //
 
 - (void)transcribeTimeline {
@@ -1487,12 +1515,17 @@ static double CMTimeToSeconds(SpliceKitTranscript_CMTime t) {
     });
 }
 
-// Walks the spine (primary storyline) and collects every clip's media URL,
-// timeline position, trim offset, and duration. Handles nested containers
-// (compound clips, multicams) by looking for the first media component inside.
-- (void)collectClipsFrom:(NSArray *)items atTimeline:(double *)timelinePos into:(NSMutableArray *)clipInfos {
+// Walks the spine (primary storyline) and also pulls in anchoredItems from each
+// spine item so connected clips on higher/lower lanes are transcribable.
+// Primary storyline timing still advances sequentially, but connected clips use
+// absolute positions via effectiveRangeOfObject: so they do not perturb spine time.
+- (void)collectClipsFrom:(NSArray *)items
+            primaryObject:(id)primaryObject
+               atTimeline:(double *)timelinePos
+                     into:(NSMutableArray *)clipInfos {
     for (id item in items) {
         NSString *className = NSStringFromClass([item class]);
+        double itemTimelineStart = *timelinePos;
 
         double clipDuration = 0;
         if ([item respondsToSelector:@selector(duration)]) {
@@ -1505,39 +1538,147 @@ static double CMTimeToSeconds(SpliceKitTranscript_CMTime t) {
         BOOL isTransition = [className containsString:@"Transition"];
 
         if (isMedia && clipDuration > 0) {
-            [self addMediaClip:item duration:clipDuration atTimeline:*timelinePos into:clipInfos];
-            *timelinePos += clipDuration;
+            [self addTimelineObject:item
+                   defaultTimeline:itemTimelineStart
+                      primaryObject:primaryObject
+                               into:clipInfos];
 
         } else if (isCollection && clipDuration > 0) {
-            SpliceKit_log(@"[Transcript] Collection: %@ (%.2fs) at %.2fs", className, clipDuration, *timelinePos);
+            [self addTimelineObject:item
+                   defaultTimeline:itemTimelineStart
+                      primaryObject:primaryObject
+                               into:clipInfos];
+        }
 
-            id innerMedia = [self findFirstMediaInContainer:item];
-            if (innerMedia) {
-                double collTrimStart = 0;
-                SEL crSel = NSSelectorFromString(@"clippedRange");
-                if ([item respondsToSelector:crSel]) {
-                    NSMethodSignature *sig = [item methodSignatureForSelector:crSel];
-                    if (sig && [sig methodReturnLength] == sizeof(SpliceKitTranscript_CMTimeRange)) {
-                        SpliceKitTranscript_CMTimeRange range;
-                        NSInvocation *inv = [NSInvocation invocationWithMethodSignature:sig];
-                        [inv setTarget:item];
-                        [inv setSelector:crSel];
-                        [inv invoke];
-                        [inv getReturnValue:&range];
-                        collTrimStart = CMTimeToSeconds(range.start);
-                        SpliceKit_log(@"[Transcript]   collection clippedRange: start=%.2fs dur=%.2fs",
-                                      collTrimStart, CMTimeToSeconds(range.duration));
-                    }
-                }
-                [self addMediaClip:innerMedia duration:clipDuration trimStart:collTrimStart
-                        atTimeline:*timelinePos into:clipInfos];
-            }
-            *timelinePos += clipDuration;
+        for (id anchoredItem in [self anchoredItemsForTimelineItem:item]) {
+            [self addTimelineObject:anchoredItem
+                   defaultTimeline:itemTimelineStart
+                      primaryObject:primaryObject
+                               into:clipInfos];
+        }
 
-        } else if (!isTransition) {
+        if (!isTransition) {
             *timelinePos += clipDuration;
         }
     }
+}
+
+- (NSArray *)anchoredItemsForTimelineItem:(id)item {
+    SEL anchoredSel = NSSelectorFromString(@"anchoredItems");
+    if (![item respondsToSelector:anchoredSel]) return @[];
+
+    id anchoredRaw = ((id (*)(id, SEL))objc_msgSend)(item, anchoredSel);
+    if ([anchoredRaw isKindOfClass:[NSArray class]]) return anchoredRaw;
+    if ([anchoredRaw isKindOfClass:[NSSet class]]) return [(NSSet *)anchoredRaw allObjects];
+    return @[];
+}
+
+- (BOOL)effectiveRangeForTimelineObject:(id)item
+                          primaryObject:(id)primaryObject
+                                  start:(double *)startOut
+                               duration:(double *)durationOut {
+    if (startOut) *startOut = 0;
+    if (durationOut) *durationOut = 0;
+    if (!item || !primaryObject) return NO;
+
+    SEL erSel = NSSelectorFromString(@"effectiveRangeOfObject:");
+    if (![primaryObject respondsToSelector:erSel]) return NO;
+
+    @try {
+        SpliceKitTranscript_CMTimeRange range =
+            ((SpliceKitTranscript_CMTimeRange (*)(id, SEL, id))STRET_MSG)(primaryObject, erSel, item);
+        double start = CMTimeToSeconds(range.start);
+        double duration = CMTimeToSeconds(range.duration);
+        if (duration <= 0) return NO;
+        if (startOut) *startOut = start;
+        if (durationOut) *durationOut = duration;
+        return YES;
+    } @catch (__unused NSException *e) {
+        return NO;
+    }
+}
+
+- (double)anchoredOffsetForTimelineObject:(id)item {
+    SEL offsetSel = NSSelectorFromString(@"anchoredOffset");
+    if (![item respondsToSelector:offsetSel]) return -1;
+
+    @try {
+        SpliceKitTranscript_CMTime offset =
+            ((SpliceKitTranscript_CMTime (*)(id, SEL))STRET_MSG)(item, offsetSel);
+        return CMTimeToSeconds(offset);
+    } @catch (__unused NSException *e) {
+        return -1;
+    }
+}
+
+- (void)addTimelineObject:(id)item
+          defaultTimeline:(double)defaultTimelinePos
+             primaryObject:(id)primaryObject
+                      into:(NSMutableArray *)clipInfos {
+    if (!item) return;
+
+    NSString *className = NSStringFromClass([item class]) ?: @"";
+    BOOL isMedia = [className containsString:@"MediaComponent"];
+    BOOL isCollection = [className containsString:@"Collection"];
+    // FFAnchoredClip is an FFAnchoredMediaRef (has media/clipRef directly) — not a
+    // container. Treat it as a media clip, not a collection to dig into.
+    BOOL isMediaRef = [className containsString:@"AnchoredClip"] || [className containsString:@"MediaRef"];
+    if (!isMedia && !isCollection && !isMediaRef) return;
+
+    double clipDuration = 0;
+    if ([item respondsToSelector:@selector(duration)]) {
+        SpliceKitTranscript_CMTime d = ((SpliceKitTranscript_CMTime (*)(id, SEL))STRET_MSG)(item, @selector(duration));
+        clipDuration = CMTimeToSeconds(d);
+    }
+    if (clipDuration <= 0) return;
+
+    double timelineStart = defaultTimelinePos;
+    double effectiveDuration = clipDuration;
+    if (![self effectiveRangeForTimelineObject:item
+                                  primaryObject:primaryObject
+                                          start:&timelineStart
+                                       duration:&effectiveDuration]) {
+        double anchoredOffset = [self anchoredOffsetForTimelineObject:item];
+        if (anchoredOffset >= 0) timelineStart = anchoredOffset;
+    }
+
+    if (isMedia || isMediaRef) {
+        [self addMediaClip:item
+              timelineObject:item
+                   duration:effectiveDuration
+                 atTimeline:timelineStart
+                       into:clipInfos];
+        return;
+    }
+
+    SpliceKit_log(@"[Transcript] Collection: %@ (%.2fs) at %.2fs", className, effectiveDuration, timelineStart);
+
+    id innerMedia = [self findFirstMediaInContainer:item];
+    if (!innerMedia) return;
+
+    double collTrimStart = 0;
+    SEL crSel = NSSelectorFromString(@"clippedRange");
+    if ([item respondsToSelector:crSel]) {
+        NSMethodSignature *sig = [item methodSignatureForSelector:crSel];
+        if (sig && [sig methodReturnLength] == sizeof(SpliceKitTranscript_CMTimeRange)) {
+            SpliceKitTranscript_CMTimeRange range;
+            NSInvocation *inv = [NSInvocation invocationWithMethodSignature:sig];
+            [inv setTarget:item];
+            [inv setSelector:crSel];
+            [inv invoke];
+            [inv getReturnValue:&range];
+            collTrimStart = CMTimeToSeconds(range.start);
+            SpliceKit_log(@"[Transcript]   collection clippedRange: start=%.2fs dur=%.2fs",
+                          collTrimStart, CMTimeToSeconds(range.duration));
+        }
+    }
+
+    [self addMediaClip:innerMedia
+          timelineObject:item
+               duration:effectiveDuration
+              trimStart:collTrimStart
+             atTimeline:timelineStart
+                   into:clipInfos];
 }
 
 - (id)findFirstMediaInContainer:(id)container {
@@ -1566,6 +1707,10 @@ static double CMTimeToSeconds(SpliceKitTranscript_CMTime t) {
 }
 
 - (void)addMediaClip:(id)clip duration:(double)clipDuration atTimeline:(double)timelinePos into:(NSMutableArray *)clipInfos {
+    [self addMediaClip:clip timelineObject:clip duration:clipDuration atTimeline:timelinePos into:clipInfos];
+}
+
+- (void)addMediaClip:(id)clip timelineObject:(id)timelineObject duration:(double)clipDuration atTimeline:(double)timelinePos into:(NSMutableArray *)clipInfos {
     double trimStart = 0;
     SEL unclippedSel = NSSelectorFromString(@"unclippedRange");
     if ([clip respondsToSelector:unclippedSel]) {
@@ -1580,10 +1725,25 @@ static double CMTimeToSeconds(SpliceKitTranscript_CMTime t) {
             trimStart = CMTimeToSeconds(range.start);
         }
     }
-    [self addMediaClip:clip duration:clipDuration trimStart:trimStart atTimeline:timelinePos into:clipInfos];
+    [self addMediaClip:clip
+          timelineObject:timelineObject
+               duration:clipDuration
+              trimStart:trimStart
+             atTimeline:timelinePos
+                   into:clipInfos];
 }
 
 - (void)addMediaClip:(id)clip duration:(double)clipDuration trimStart:(double)trimStart
+          atTimeline:(double)timelinePos into:(NSMutableArray *)clipInfos {
+    [self addMediaClip:clip
+          timelineObject:clip
+               duration:clipDuration
+              trimStart:trimStart
+             atTimeline:timelinePos
+                   into:clipInfos];
+}
+
+- (void)addMediaClip:(id)clip timelineObject:(id)timelineObject duration:(double)clipDuration trimStart:(double)trimStart
           atTimeline:(double)timelinePos into:(NSMutableArray *)clipInfos {
     NSMutableDictionary *info = [NSMutableDictionary dictionary];
     info[@"timelineStart"] = @(timelinePos);
@@ -1591,6 +1751,8 @@ static double CMTimeToSeconds(SpliceKitTranscript_CMTime t) {
     info[@"handle"] = SpliceKit_storeHandle(clip);
     info[@"className"] = NSStringFromClass([clip class]);
     info[@"trimStart"] = @(trimStart);
+    if (timelineObject) info[@"timelineObject"] = timelineObject;
+    if (clip) info[@"mediaObject"] = clip;
 
     if ([clip respondsToSelector:@selector(displayName)]) {
         id name = ((id (*)(id, SEL))objc_msgSend)(clip, @selector(displayName));
@@ -1609,6 +1771,32 @@ static double CMTimeToSeconds(SpliceKitTranscript_CMTime t) {
     [clipInfos addObject:info];
 }
 
+- (NSArray *)collectClipInfosForSequence:(id)sequence primaryObject:(id)primaryObject errorMessage:(NSString **)errorMessageOut {
+    if (errorMessageOut) *errorMessageOut = nil;
+    if (!sequence) {
+        if (errorMessageOut) *errorMessageOut = @"No sequence in timeline.";
+        return nil;
+    }
+    if (!primaryObject) {
+        if (errorMessageOut) *errorMessageOut = @"No primary object in sequence.";
+        return nil;
+    }
+
+    id items = nil;
+    if ([primaryObject respondsToSelector:@selector(containedItems)]) {
+        items = ((id (*)(id, SEL))objc_msgSend)(primaryObject, @selector(containedItems));
+    }
+    if (!items || ![items isKindOfClass:[NSArray class]]) {
+        if (errorMessageOut) *errorMessageOut = @"No items on timeline.";
+        return nil;
+    }
+
+    NSMutableArray *clipInfos = [NSMutableArray array];
+    double timelinePos = 0;
+    [self collectClipsFrom:(NSArray *)items primaryObject:primaryObject atTimeline:&timelinePos into:clipInfos];
+    return [clipInfos copy];
+}
+
 - (void)performTimelineTranscription {
     if (self.engine == SpliceKitTranscriptEngineFCPNative) {
         [self performFCPNativeTranscription];
@@ -1617,6 +1805,39 @@ static double CMTimeToSeconds(SpliceKitTranscript_CMTime t) {
     } else {
         [self performAppleSpeechTranscription];
     }
+}
+
+- (id)transcriptAssetCandidateForClipInfo:(NSDictionary *)clipInfo assetsSelector:(SEL)assetsSel {
+    id candidate = clipInfo[@"timelineObject"] ?: clipInfo[@"mediaObject"];
+    if (![candidate respondsToSelector:assetsSel]) {
+        candidate = clipInfo[@"mediaObject"];
+    }
+    return [candidate respondsToSelector:assetsSel] ? candidate : nil;
+}
+
+- (NSString *)mediaPathForTranscriptAsset:(id)asset {
+    if (!asset) return nil;
+
+    NSArray<NSString *> *pathsToTry = @[
+        @"resolvedURL",
+        @"originalMediaURL",
+        @"URL",
+        @"assetMediaReference.resolvedURL",
+        @"media.originalMediaURL",
+        @"originalMediaRep.URL",
+    ];
+
+    for (NSString *keyPath in pathsToTry) {
+        @try {
+            id value = [asset valueForKeyPath:keyPath];
+            if ([value isKindOfClass:[NSURL class]]) {
+                return [(NSURL *)value path];
+            }
+        } @catch (__unused NSException *e) {
+        }
+    }
+
+    return nil;
 }
 
 #pragma mark - FCP Native Transcription (AASpeechAnalyzer via FFTranscriptionCoordinator)
@@ -1629,6 +1850,8 @@ static double CMTimeToSeconds(SpliceKitTranscript_CMTime t) {
     // [clip assets] (an NSSet of FFAsset) then unions them all together.
     // We replicate that exact pattern here.
     __block NSArray *assetArray = nil;
+    __block NSMapTable *clipInfosByAsset = nil;
+    __block NSDictionary<NSString *, NSArray<NSDictionary *> *> *clipInfosByPath = nil;
 
     SpliceKit_executeOnMainThread(^{
         @try {
@@ -1648,26 +1871,16 @@ static double CMTimeToSeconds(SpliceKitTranscript_CMTime t) {
             }
 
             id sequence = ((id (*)(id, SEL))objc_msgSend)(timeline, @selector(sequence));
-            if (!sequence) {
-                [self setErrorState:@"No sequence in timeline."];
-                return;
-            }
+            id primaryObj = [sequence respondsToSelector:@selector(primaryObject)]
+                ? ((id (*)(id, SEL))objc_msgSend)(sequence, @selector(primaryObject))
+                : nil;
 
-            id primaryObj = nil;
-            if ([sequence respondsToSelector:@selector(primaryObject)]) {
-                primaryObj = ((id (*)(id, SEL))objc_msgSend)(sequence, @selector(primaryObject));
-            }
-            if (!primaryObj) {
-                [self setErrorState:@"No primary object in sequence."];
-                return;
-            }
-
-            id items = nil;
-            if ([primaryObj respondsToSelector:@selector(containedItems)]) {
-                items = ((id (*)(id, SEL))objc_msgSend)(primaryObj, @selector(containedItems));
-            }
-            if (!items || ![items isKindOfClass:[NSArray class]]) {
-                [self setErrorState:@"No items on timeline."];
+            NSString *collectError = nil;
+            NSArray *clipInfos = [self collectClipInfosForSequence:sequence
+                                                      primaryObject:primaryObj
+                                                       errorMessage:&collectError];
+            if (!clipInfos) {
+                [self setErrorState:collectError ?: @"No items on timeline."];
                 return;
             }
 
@@ -1675,16 +1888,38 @@ static double CMTimeToSeconds(SpliceKitTranscript_CMTime t) {
             // (like FFAnchoredObject subclasses). It internally calls [clip assets]
             // to get FFAsset objects. We pass the containedItems directly.
             // Also include the sequence itself as a fallback.
-            NSMutableArray *clipObjects = [NSMutableArray array];
+            NSMutableOrderedSet *clipObjects = [NSMutableOrderedSet orderedSet];
             SEL assetsSel = NSSelectorFromString(@"assets");
+            clipInfosByAsset = [NSMapTable strongToStrongObjectsMapTable];
+            NSMutableDictionary<NSString *, NSMutableArray<NSDictionary *> *> *mutableClipInfosByPath = [NSMutableDictionary dictionary];
 
-            for (id item in (NSArray *)items) {
-                if ([item respondsToSelector:assetsSel]) {
-                    id itemAssets = ((id (*)(id, SEL))objc_msgSend)(item, assetsSel);
+            for (NSDictionary *clipInfo in clipInfos) {
+                NSURL *mediaURL = clipInfo[@"mediaURL"];
+                if (mediaURL.path.length > 0) {
+                    NSMutableArray *clipsForPath = mutableClipInfosByPath[mediaURL.path];
+                    if (!clipsForPath) {
+                        clipsForPath = [NSMutableArray array];
+                        mutableClipInfosByPath[mediaURL.path] = clipsForPath;
+                    }
+                    [clipsForPath addObject:clipInfo];
+                }
+
+                id candidate = [self transcriptAssetCandidateForClipInfo:clipInfo assetsSelector:assetsSel];
+                if (candidate) {
+                    id itemAssets = ((id (*)(id, SEL))objc_msgSend)(candidate, assetsSel);
                     if ([itemAssets isKindOfClass:[NSSet class]] && [(NSSet *)itemAssets count] > 0) {
-                        [clipObjects addObject:item];
+                        [clipObjects addObject:candidate];
                         SpliceKit_log(@"[Transcript] Item %@ has %lu assets",
-                            NSStringFromClass([item class]), (unsigned long)[(NSSet *)itemAssets count]);
+                            NSStringFromClass([candidate class]), (unsigned long)[(NSSet *)itemAssets count]);
+
+                        for (id asset in (NSSet *)itemAssets) {
+                            NSMutableArray *clipsForAsset = [clipInfosByAsset objectForKey:asset];
+                            if (!clipsForAsset) {
+                                clipsForAsset = [NSMutableArray array];
+                                [clipInfosByAsset setObject:clipsForAsset forKey:asset];
+                            }
+                            [clipsForAsset addObject:clipInfo];
+                        }
                     }
                 }
             }
@@ -1695,9 +1930,10 @@ static double CMTimeToSeconds(SpliceKitTranscript_CMTime t) {
                 SpliceKit_log(@"[Transcript] Using sequence as clip source");
             }
 
-            assetArray = clipObjects;
+            assetArray = [clipObjects array];
+            clipInfosByPath = [mutableClipInfosByPath copy];
             SpliceKit_log(@"[Transcript] Collected %lu clip objects for transcription",
-                (unsigned long)assetArray.count);
+                          (unsigned long)assetArray.count);
 
         } @catch (NSException *e) {
             [self setErrorState:[NSString stringWithFormat:@"Error reading timeline: %@", e.reason]];
@@ -1788,10 +2024,25 @@ static double CMTimeToSeconds(SpliceKitTranscript_CMTime t) {
                     NSSelectorFromString(@"objectForKey:"), asset);
                 if (!transcript) continue;
 
+                NSArray<NSDictionary *> *matchingClipInfos = [clipInfosByAsset objectForKey:asset];
+                if (matchingClipInfos.count == 0) {
+                    NSString *assetPath = [self mediaPathForTranscriptAsset:asset];
+                    if (assetPath.length > 0) {
+                        matchingClipInfos = clipInfosByPath[assetPath];
+                    }
+                }
+                if (matchingClipInfos.count == 0) {
+                    SpliceKit_log(@"[Transcript] No clip mapping found for FCP transcript asset %@",
+                                  NSStringFromClass([asset class]));
+                    continue;
+                }
+
                 // Get phrases from transcript
                 id phrases = ((id (*)(id, SEL))objc_msgSend)(transcript,
                     NSSelectorFromString(@"phrases"));
                 if (!phrases || ![phrases isKindOfClass:[NSArray class]]) continue;
+
+                NSMutableArray<NSDictionary *> *assetWords = [NSMutableArray array];
 
                 for (id phrase in (NSArray *)phrases) {
                     // Get words from phrase
@@ -1820,14 +2071,43 @@ static double CMTimeToSeconds(SpliceKitTranscript_CMTime t) {
                         double duration = CMTimeToSeconds(timeRange.duration);
 
                         if (duration <= 0) continue;
+                        [assetWords addObject:@{
+                            @"text": text,
+                            @"startTime": @(startTime),
+                            @"duration": @(duration),
+                        }];
+                    }
+                }
+
+                for (NSDictionary *clipInfo in matchingClipInfos) {
+                    double timelineStart = [clipInfo[@"timelineStart"] doubleValue];
+                    double trimStart = [clipInfo[@"trimStart"] doubleValue];
+                    double clipDuration = [clipInfo[@"duration"] doubleValue];
+                    NSString *clipHandle = clipInfo[@"handle"];
+                    NSURL *mediaURL = clipInfo[@"mediaURL"];
+                    NSString *sourcePath = mediaURL.path ?: [self mediaPathForTranscriptAsset:asset];
+
+                    for (NSDictionary *assetWord in assetWords) {
+                        double startTime = [assetWord[@"startTime"] doubleValue];
+                        double duration = [assetWord[@"duration"] doubleValue];
+                        if (startTime < trimStart || startTime >= trimStart + clipDuration) {
+                            continue;
+                        }
+
+                        double timelineDuration = MIN(duration, (trimStart + clipDuration) - startTime);
+                        if (timelineDuration <= 0) continue;
 
                         SpliceKitTranscriptWord *word = [[SpliceKitTranscriptWord alloc] init];
-                        word.text = text;
-                        word.startTime = startTime;
-                        word.duration = duration;
+                        word.text = assetWord[@"text"] ?: @"";
+                        word.startTime = timelineStart + (startTime - trimStart);
+                        word.duration = timelineDuration;
                         word.confidence = 1.0; // FCP native doesn't provide per-word confidence
-                        word.speaker = @"Unknown";
+                        word.clipHandle = clipHandle;
+                        word.clipTimelineStart = timelineStart;
+                        word.sourceMediaOffset = trimStart;
                         word.sourceMediaTime = startTime; // FCP native times are source-relative
+                        word.sourceMediaPath = sourcePath;
+                        word.speaker = @"Unknown";
 
                         @synchronized (self.mutableWords) {
                             [self.mutableWords addObject:word];
@@ -1910,38 +2190,23 @@ static double CMTimeToSeconds(SpliceKitTranscript_CMTime t) {
             }
 
             id sequence = ((id (*)(id, SEL))objc_msgSend)(timeline, @selector(sequence));
-            if (!sequence) {
-                [self setErrorState:@"No sequence in timeline."];
+            id primaryObj = [sequence respondsToSelector:@selector(primaryObject)]
+                ? ((id (*)(id, SEL))objc_msgSend)(sequence, @selector(primaryObject))
+                : nil;
+
+            NSString *collectError = nil;
+            clips = [self collectClipInfosForSequence:sequence
+                                         primaryObject:primaryObj
+                                          errorMessage:&collectError];
+            if (!clips) {
+                [self setErrorState:collectError ?: @"No items on timeline."];
                 return;
             }
 
-            id primaryObj = nil;
-            if ([sequence respondsToSelector:@selector(primaryObject)]) {
-                primaryObj = ((id (*)(id, SEL))objc_msgSend)(sequence, @selector(primaryObject));
+            for (NSDictionary *clipInfo in clips) {
+                double clipEnd = [clipInfo[@"timelineStart"] doubleValue] + [clipInfo[@"duration"] doubleValue];
+                if (clipEnd > totalDuration) totalDuration = clipEnd;
             }
-            if (!primaryObj) {
-                [self setErrorState:@"No primary object in sequence."];
-                return;
-            }
-
-            id items = nil;
-            if ([primaryObj respondsToSelector:@selector(containedItems)]) {
-                items = ((id (*)(id, SEL))objc_msgSend)(primaryObj, @selector(containedItems));
-            }
-            if (!items || ![items isKindOfClass:[NSArray class]]) {
-                [self setErrorState:@"No items on timeline."];
-                return;
-            }
-
-            NSMutableArray *clipInfos = [NSMutableArray array];
-            double timelinePos = 0;
-
-            [self collectClipsFrom:(NSArray *)items
-                       atTimeline:&timelinePos
-                             into:clipInfos];
-
-            totalDuration = timelinePos;
-            clips = [clipInfos copy];
 
         } @catch (NSException *e) {
             [self setErrorState:[NSString stringWithFormat:@"Error reading timeline: %@", e.reason]];
@@ -2261,24 +2526,18 @@ static double CMTimeToSeconds(SpliceKitTranscript_CMTime t) {
             id sequence = ((id (*)(id, SEL))objc_msgSend)(timeline, @selector(sequence));
             if (!sequence) { [self setErrorState:@"No sequence in timeline."]; return; }
 
-            id primaryObj = nil;
-            if ([sequence respondsToSelector:@selector(primaryObject)]) {
-                primaryObj = ((id (*)(id, SEL))objc_msgSend)(sequence, @selector(primaryObject));
-            }
-            if (!primaryObj) { [self setErrorState:@"No primary object in sequence."]; return; }
+            id primaryObj = [sequence respondsToSelector:@selector(primaryObject)]
+                ? ((id (*)(id, SEL))objc_msgSend)(sequence, @selector(primaryObject))
+                : nil;
 
-            id items = nil;
-            if ([primaryObj respondsToSelector:@selector(containedItems)]) {
-                items = ((id (*)(id, SEL))objc_msgSend)(primaryObj, @selector(containedItems));
+            NSString *collectError = nil;
+            clips = [self collectClipInfosForSequence:sequence
+                                         primaryObject:primaryObj
+                                          errorMessage:&collectError];
+            if (!clips) {
+                [self setErrorState:collectError ?: @"No items on timeline."];
+                return;
             }
-            if (!items || ![items isKindOfClass:[NSArray class]]) {
-                [self setErrorState:@"No items on timeline."]; return;
-            }
-
-            NSMutableArray *clipInfos = [NSMutableArray array];
-            double timelinePos = 0;
-            [self collectClipsFrom:(NSArray *)items atTimeline:&timelinePos into:clipInfos];
-            clips = [clipInfos copy];
         } @catch (NSException *e) {
             [self setErrorState:[NSString stringWithFormat:@"Error reading timeline: %@", e.reason]];
         }
@@ -2894,6 +3153,34 @@ static double CMTimeToSeconds(SpliceKitTranscript_CMTime t) {
         }
     } @catch (NSException *e) {
         SpliceKit_log(@"[Transcript] Exception getting media URL (chain 1): %@", e.reason);
+    }
+
+    // Chain 1b: FFAnchoredClip -> clipRef (FFClipRef) -> assets -> FFAsset -> originalMediaURL
+    // FFAnchoredClip is a media reference, not a container. Its .media returns FFClipRef
+    // which doesn't have file URLs directly, but its .assets set contains FFAsset objects.
+    @try {
+        SEL clipRefSel = NSSelectorFromString(@"clipRef");
+        if ([clip respondsToSelector:clipRefSel]) {
+            id clipRef = ((id (*)(id, SEL))objc_msgSend)(clip, clipRefSel);
+            if (clipRef) {
+                SEL assetsSel = NSSelectorFromString(@"assets");
+                if ([clipRef respondsToSelector:assetsSel]) {
+                    id assets = ((id (*)(id, SEL))objc_msgSend)(clipRef, assetsSel);
+                    NSArray *assetArray = nil;
+                    if ([assets isKindOfClass:[NSSet class]]) assetArray = [(NSSet *)assets allObjects];
+                    else if ([assets isKindOfClass:[NSArray class]]) assetArray = assets;
+                    for (id asset in assetArray) {
+                        SEL omSel = NSSelectorFromString(@"originalMediaURL");
+                        if ([asset respondsToSelector:omSel]) {
+                            id url = ((id (*)(id, SEL))objc_msgSend)(asset, omSel);
+                            if ([url isKindOfClass:[NSURL class]]) return url;
+                        }
+                    }
+                }
+            }
+        }
+    } @catch (NSException *e) {
+        SpliceKit_log(@"[Transcript] Exception getting media URL (chain 1b clipRef): %@", e.reason);
     }
 
     // Chain 2: clip.assetMediaReference -> resolvedURL
@@ -3982,37 +4269,10 @@ static double CMTimeToSeconds(SpliceKitTranscript_CMTime t) {
         });
     }
 
-    // Update data model locally: shift all word times by cumulative removed durations
-    @synchronized (self.mutableWords) {
-        // Rebuild all word times from scratch based on which silences were removed
-        // Go through silences in forward order (original times) and compute shift
-        double cumulativeShift = 0;
-        NSUInteger silIdx = 0;
-
-        // toDelete is sorted descending, reverse it for forward processing
-        NSArray *forwardSilences = [[toDelete reverseObjectEnumerator] allObjects];
-
-        for (SpliceKitTranscriptWord *word in self.mutableWords) {
-            // Advance past silences that ended before this word
-            while (silIdx < forwardSilences.count) {
-                SpliceKitTranscriptSilence *s = forwardSilences[silIdx];
-                if (s.endTime <= word.startTime) {
-                    cumulativeShift += s.duration;
-                    silIdx++;
-                } else {
-                    break;
-                }
-            }
-            word.startTime -= cumulativeShift;
-        }
-
-        // Re-index
-        for (NSUInteger i = 0; i < self.mutableWords.count; i++) {
-            self.mutableWords[i].wordIndex = i;
-        }
-    }
-
-    [self detectSilences];
+    // Re-read the actual clip layout after the ripple deletes instead of trying
+    // to infer every timestamp shift locally. This keeps clipTimelineStart and
+    // sourceMediaOffset consistent with the real timeline state.
+    [self resyncTimestampsFromTimeline];
     dispatch_async(dispatch_get_main_queue(), ^{
         [self rebuildTextView];
         self.spinner.hidden = YES;
@@ -4211,22 +4471,10 @@ static double CMTimeToSeconds(SpliceKitTranscript_CMTime t) {
             id sequence = ((id (*)(id, SEL))objc_msgSend)(timeline, @selector(sequence));
             if (!sequence) return;
 
-            id primaryObj = nil;
-            if ([sequence respondsToSelector:@selector(primaryObject)]) {
-                primaryObj = ((id (*)(id, SEL))objc_msgSend)(sequence, @selector(primaryObject));
-            }
-            if (!primaryObj) return;
-
-            id items = nil;
-            if ([primaryObj respondsToSelector:@selector(containedItems)]) {
-                items = ((id (*)(id, SEL))objc_msgSend)(primaryObj, @selector(containedItems));
-            }
-            if (!items || ![items isKindOfClass:[NSArray class]]) return;
-
-            NSMutableArray *infos = [NSMutableArray array];
-            double timelinePos = 0;
-            [self collectClipsFrom:(NSArray *)items atTimeline:&timelinePos into:infos];
-            clipInfos = [infos copy];
+            id primaryObj = [sequence respondsToSelector:@selector(primaryObject)]
+                ? ((id (*)(id, SEL))objc_msgSend)(sequence, @selector(primaryObject))
+                : nil;
+            clipInfos = [self collectClipInfosForSequence:sequence primaryObject:primaryObj errorMessage:nil];
         } @catch (NSException *e) {
             SpliceKit_log(@"[Transcript] Resync error: %@", e.reason);
         }

@@ -239,6 +239,7 @@ READ_ONLY_TOOLS = {
     "plugin_list",
     "plugin_list_methods",
     "reload_plugin_tools",
+    "mixer_get_state",
 }
 
 DESTRUCTIVE_TOOLS = {
@@ -304,6 +305,8 @@ DESTRUCTIVE_TOOLS = {
     "lua_reset",
     "lua_watch",
     "raw_call",
+    "mixer_set_volume",
+    "mixer_set_all_volumes",
 }
 
 IDEMPOTENT_LOCAL_WRITE_TOOLS = {
@@ -319,6 +322,8 @@ IDEMPOTENT_LOCAL_WRITE_TOOLS = {
     "set_transcript_engine",
     "open_project",
     "select_clip_in_lane",
+    "mixer_volume_begin",
+    "mixer_volume_end",
 }
 
 CUSTOM_TOOL_TITLES = {
@@ -1315,7 +1320,8 @@ def generate_fcpxml(event_name: str = "SpliceKit Event", project_name: str = "Sp
     if not spine_items:
         spine_items = [{"type": "gap", "duration": 10.0}]
 
-    # Check if we have any title or transition items (OTIO can't model these natively)
+    # Keep the direct builder for title/transition synthesis. The custom `items`
+    # input schema is intentionally tiny and relies on FCP-specific defaults.
     has_fcpxml_only_items = any(i.get("type") in ("title", "transition") for i in spine_items)
 
     if has_fcpxml_only_items:
@@ -1372,7 +1378,7 @@ def generate_fcpxml(event_name: str = "SpliceKit Event", project_name: str = "Sp
 
     # Serialize to FCPXML via the adapter
     try:
-        xml = otio.adapters.write_to_string(timeline, "fcpx_xml")
+        xml = _otio_write_fcpx_string(timeline)
     except Exception as e:
         # Fall back to direct construction on adapter failure
         return _generate_fcpxml_direct(event_name, project_name, frame_rate, width, height, spine_items, markers)
@@ -2752,6 +2758,126 @@ def assign_role(type: str, role: str) -> str:
 
 
 # ============================================================
+# Mixer (Audio Faders)
+# ============================================================
+# Real-time audio mixer with per-clip volume faders.
+# Returns clips overlapping the playhead with volume levels.
+
+@mcp.tool(annotations=_tool_annotations("mixer_get_state"))
+def mixer_get_state() -> str:
+    """Get current mixer state: all clips overlapping the playhead with their volumes.
+
+    Returns up to 10 faders, sorted by lane (highest/topmost clip = fader 0).
+    Each fader includes clipHandle, volumeChannelHandle, effectStackHandle,
+    volumeDB, volumeLinear, lane, role, and clip name.
+    """
+    r = bridge.call("mixer.getState")
+    if _err(r):
+        return f"Error: {r.get('error', r)}"
+    faders = r.get("faders", [])
+    if not faders:
+        return f"No clips at playhead (time: {r.get('playheadSeconds', 0):.3f}s)"
+    lines = [f"Mixer State (playhead: {r.get('playheadSeconds', 0):.3f}s, {len(faders)} faders):"]
+    lines.append("")
+    for f in faders:
+        db = f.get("volumeDB", 0)
+        db_str = f"-inf" if db == float("-inf") else f"{db:.1f}"
+        role_str = f" [{f['role']}]" if f.get("role") else ""
+        lines.append(f"  Fader {f['index']}: {f.get('name', '?')} (lane {f['lane']})"
+                     f"  {db_str} dB{role_str}")
+        lines.append(f"    handles: clip={f.get('clipHandle','?')}"
+                     f" vol={f.get('volumeChannelHandle','?')}"
+                     f" es={f.get('effectStackHandle','?')}")
+    if r.get("totalClipsAtPlayhead", 0) > 10:
+        lines.append(f"\n  ({r['totalClipsAtPlayhead']} total clips, showing first 10)")
+    return "\n".join(lines)
+
+
+@mcp.tool(annotations=_tool_annotations("mixer_set_volume"))
+def mixer_set_volume(handle: str, volume_db: float = None,
+                     volume_linear: float = None) -> str:
+    """Set volume on a specific clip via its volumeChannelHandle.
+
+    Use mixer_get_state() first to get handles. For proper undo support,
+    call mixer_volume_begin() before a series of changes, then mixer_volume_end() after.
+
+    Args:
+        handle: The volumeChannelHandle from mixer_get_state()
+        volume_db: Volume in dB (0 = unity, -6 = half, -inf = silent). Use this OR volume_linear.
+        volume_linear: Volume as linear gain (1.0 = 0dB, 0.5 = -6dB, 0 = silent)
+    """
+    params = {"handle": handle}
+    if volume_db is not None:
+        params["volumeDB"] = volume_db
+    elif volume_linear is not None:
+        params["volumeLinear"] = volume_linear
+    else:
+        return "Error: provide either volume_db or volume_linear"
+    r = bridge.call("mixer.setVolume", **params)
+    if _err(r):
+        return f"Error: {r.get('error', r)}"
+    db = r.get("volumeDB", 0)
+    db_str = f"-inf" if db == float("-inf") else f"{db:.1f}"
+    return f"Volume set: {db_str} dB (linear: {r.get('volumeLinear', 0):.3f})"
+
+
+@mcp.tool(annotations=_tool_annotations("mixer_volume_begin"))
+def mixer_volume_begin(effect_stack_handle: str) -> str:
+    """Begin an undo-batched volume change (call before a series of mixer_set_volume).
+
+    Opens an undo transaction so all volume changes until mixer_volume_end()
+    are grouped as a single undo action.
+
+    Args:
+        effect_stack_handle: The effectStackHandle from mixer_get_state()
+    """
+    r = bridge.call("mixer.volumeBegin", effectStackHandle=effect_stack_handle)
+    if _err(r):
+        return f"Error: {r.get('error', r)}"
+    return "Undo transaction opened for volume adjustment"
+
+
+@mcp.tool(annotations=_tool_annotations("mixer_volume_end"))
+def mixer_volume_end(effect_stack_handle: str) -> str:
+    """End an undo-batched volume change (call after mixer_set_volume series).
+
+    Closes the undo transaction. The entire series of changes becomes one undo action.
+
+    Args:
+        effect_stack_handle: The effectStackHandle used in mixer_volume_begin()
+    """
+    r = bridge.call("mixer.volumeEnd", effectStackHandle=effect_stack_handle)
+    if _err(r):
+        return f"Error: {r.get('error', r)}"
+    return "Undo transaction closed"
+
+
+@mcp.tool(annotations=_tool_annotations("mixer_set_all_volumes"))
+def mixer_set_all_volumes(volumes: list) -> str:
+    """Set volumes for multiple faders at once.
+
+    Args:
+        volumes: List of dicts with 'handle' (volumeChannelHandle) and
+                 'volumeDB' or 'volumeLinear'. Example:
+                 [{"handle": "obj_42", "volumeDB": -6.0},
+                  {"handle": "obj_43", "volumeDB": -3.0}]
+    """
+    r = bridge.call("mixer.setAllVolumes", volumes=volumes)
+    if _err(r):
+        return f"Error: {r.get('error', r)}"
+    results = r.get("results", [])
+    lines = [f"Set {len(results)} volumes:"]
+    for res in results:
+        if res.get("ok"):
+            db = res.get("volumeDB", 0)
+            db_str = f"-inf" if db == float("-inf") else f"{db:.1f}"
+            lines.append(f"  {res.get('handle', '?')}: {db_str} dB")
+        else:
+            lines.append(f"  {res.get('handle', '?')}: ERROR - {res.get('error', '?')}")
+    return "\n".join(lines)
+
+
+# ============================================================
 # Share/Export
 # ============================================================
 # Triggers FCP's share destinations (Export File, YouTube, etc).
@@ -3070,10 +3196,79 @@ def _otio_prepare_for_fcp(timeline):
         for i, item in enumerate(list(track)):
             if (isinstance(item, otio.schema.Clip) and
                     isinstance(item.media_reference, otio.schema.GeneratorReference)):
-                gen_kind = getattr(item.media_reference, "generator_kind", "")
-                if gen_kind != "Title":
+                if not _otio_is_title_generator_reference(item.media_reference):
                     track[i] = otio.schema.Gap(source_range=item.source_range)
     return timeline
+
+
+def _otio_is_title_generator_reference(media_reference):
+    """Detect title-like GeneratorReference metadata across adapter variants."""
+    title_generator_kinds = {"Title", "title", "fcpx.title"}
+    gen_kind = getattr(media_reference, "generator_kind", "")
+    if gen_kind in title_generator_kinds:
+        return True
+
+    parameters = getattr(media_reference, "parameters", {}) or {}
+    if not isinstance(parameters, dict):
+        return False
+    return bool(parameters.get("text_xml") or parameters.get("text_style_def_xml"))
+
+
+def _otio_fcpx_adapter_candidates():
+    """Return compatible FCPXML adapter names in preference order."""
+    import opentimelineio as otio
+
+    preferred = ("fcpxml", "fcpx_xml")
+    try:
+        available = set(otio.adapters.available_adapter_names())
+    except Exception:
+        available = set()
+
+    ordered = [name for name in preferred if name in available]
+    if ordered:
+        return ordered
+    return list(preferred)
+
+
+def _otio_with_fcpx_adapter(operation):
+    """Run an OTIO adapter operation against the supported FCPXML adapter names."""
+    errors = []
+    for adapter_name in _otio_fcpx_adapter_candidates():
+        try:
+            return operation(adapter_name)
+        except Exception as exc:
+            errors.append(f"{adapter_name}: {exc}")
+    raise RuntimeError("No working FCPXML adapter found (" + "; ".join(errors) + ")")
+
+
+def _otio_read_fcpx_string(fcpxml_str):
+    """Read FCPXML using whichever adapter name is installed."""
+    import opentimelineio as otio
+
+    return _otio_with_fcpx_adapter(
+        lambda adapter_name: otio.adapters.read_from_string(fcpxml_str, adapter_name)
+    )
+
+
+def _otio_write_fcpx_string(timeline):
+    """Write FCPXML using whichever adapter name is installed."""
+    import opentimelineio as otio
+
+    return _otio_with_fcpx_adapter(
+        lambda adapter_name: otio.adapters.write_to_string(timeline, adapter_name)
+    )
+
+
+def _otio_read_fcpx_document(path):
+    """Read a `.fcpxml` document or `.fcpxmld` package entrypoint."""
+    import os
+
+    document_path = path
+    if path.lower().endswith(".fcpxmld"):
+        document_path = os.path.join(path, "Info.fcpxml")
+
+    with open(document_path, "r") as f:
+        return f.read()
 
 
 def _otio_fcpxml_clean_for_paste(fcpxml_str):
@@ -3193,6 +3388,7 @@ def export_otio(path: str = "/tmp/splicekit_export.otio", rate: float = 0) -> st
       .otiod  — OpenTimelineIO directory bundle
       .fcpxml — Final Cut Pro XML (uses FCP's native exporter for full fidelity,
                 then round-trips through OTIO for normalization)
+      .fcpxmld — Final Cut Pro XML package (writes native export to `Info.fcpxml`)
       .edl    — CMX 3600 EDL (Premiere, Resolve, Avid compatible)
       .aaf    — Advanced Authoring Format (Avid Media Composer)
 
@@ -3209,25 +3405,35 @@ def export_otio(path: str = "/tmp/splicekit_export.otio", rate: float = 0) -> st
     try:
         import opentimelineio as otio
     except ImportError:
-        return "Error: opentimelineio not installed. Run: pip install opentimelineio otio-fcpx-xml-adapter"
+        return "Error: opentimelineio not installed. Run: pip install opentimelineio otio-fcpx-xml-adapter (or otio-fcpxml-adapter)"
 
     import tempfile, os
 
-    # For .fcpxml output, use FCP's native exporter directly for maximum fidelity
-    if path.lower().endswith(".fcpxml"):
-        r = bridge.call("fcpxml.export", path=path)
+    # For .fcpxml/.fcpxmld output, use FCP's native exporter directly for maximum fidelity.
+    if path.lower().endswith((".fcpxml", ".fcpxmld")):
+        export_path = path
+        if path.lower().endswith(".fcpxmld"):
+            os.makedirs(path, exist_ok=True)
+            export_path = os.path.join(path, "Info.fcpxml")
+
+        r = bridge.call("fcpxml.export", path=export_path)
         if _err(r):
             return f"Error exporting FCPXML: {r.get('error', r)}"
         # Also parse through OTIO for summary info
         try:
-            with open(path, "r") as f:
+            with open(export_path, "r") as f:
                 fcpxml_str = f.read()
-            result = otio.adapters.read_from_string(fcpxml_str, "fcpx_xml")
+            result = _otio_read_fcpx_string(fcpxml_str)
             timeline = _otio_first_timeline(result)
             summary = _otio_timeline_summary(timeline)
         except Exception:
             summary = {}
-        summary.update({"status": "ok", "path": path, "bytes": os.path.getsize(path), "format": "fcpxml"})
+        summary.update({
+            "status": "ok",
+            "path": path,
+            "bytes": os.path.getsize(export_path),
+            "format": "fcpxmld" if path.lower().endswith(".fcpxmld") else "fcpxml",
+        })
         return _fmt(summary)
 
     # For OTIO formats: export FCPXML from FCP, convert via adapter, write target format
@@ -3239,7 +3445,7 @@ def export_otio(path: str = "/tmp/splicekit_export.otio", rate: float = 0) -> st
     try:
         with open(fcpxml_path, "r") as f:
             fcpxml_str = f.read()
-        result = otio.adapters.read_from_string(fcpxml_str, "fcpx_xml")
+        result = _otio_read_fcpx_string(fcpxml_str)
     except Exception as e:
         return f"Error reading FCPXML into OTIO: {e}"
 
@@ -3287,6 +3493,7 @@ def import_otio(path: str = "", otio_json: str = "", rate: float = 0) -> str:
       .otiod  — OpenTimelineIO directory bundle
       .fcpxml — Final Cut Pro XML (sent directly to FCP's native importer
                 for full fidelity — effects, transitions, titles all preserved)
+      .fcpxmld — Final Cut Pro XML package (loads `Info.fcpxml` for native import)
       .edl    — CMX 3600 EDL (Premiere, Resolve, Avid)
       .aaf    — Advanced Authoring Format (Avid Media Composer)
 
@@ -3303,22 +3510,21 @@ def import_otio(path: str = "", otio_json: str = "", rate: float = 0) -> str:
     try:
         import opentimelineio as otio
     except ImportError:
-        return "Error: opentimelineio not installed. Run: pip install opentimelineio otio-fcpx-xml-adapter"
+        return "Error: opentimelineio not installed. Run: pip install opentimelineio otio-fcpx-xml-adapter (or otio-fcpxml-adapter)"
 
-    # For .fcpxml input, send directly to FCP's native importer for full fidelity
-    if path and path.lower().endswith(".fcpxml"):
+    # For .fcpxml/.fcpxmld input, send directly to FCP's native importer for full fidelity.
+    if path and path.lower().endswith((".fcpxml", ".fcpxmld")):
         try:
-            with open(path, "r") as f:
-                fcpxml_str = f.read()
+            fcpxml_str = _otio_read_fcpx_document(path)
         except Exception as e:
             return f"Error reading file: {e}"
 
         r = bridge.call("fcpxml.import", xml=fcpxml_str, internal=True)
 
         # Also parse through OTIO for summary info
-        summary = {"format": "fcpxml"}
+        summary = {"format": path.rsplit(".", 1)[-1].lower()}
         try:
-            result = otio.adapters.read_from_string(fcpxml_str, "fcpx_xml")
+            result = _otio_read_fcpx_string(fcpxml_str)
             timelines = _otio_all_timelines(result)
             summary["timelines_total"] = len(timelines)
             summary["details"] = [_otio_timeline_summary(tl) for tl in timelines]
@@ -3352,7 +3558,7 @@ def import_otio(path: str = "", otio_json: str = "", rate: float = 0) -> str:
                 # Parse through OTIO for summary
                 summary = {"format": ext or "otio_json", "converter": "native"}
                 try:
-                    parsed = otio.adapters.read_from_string(fcpxml_str, "fcpx_xml")
+                    parsed = _otio_read_fcpx_string(fcpxml_str)
                     timelines = _otio_all_timelines(parsed)
                     summary["timelines_total"] = len(timelines)
                     summary["details"] = [_otio_timeline_summary(tl) for tl in timelines]
@@ -3393,7 +3599,7 @@ def import_otio(path: str = "", otio_json: str = "", rate: float = 0) -> str:
     for tl in timelines:
         _otio_prepare_for_fcp(tl)
         try:
-            fcpxml_str = otio.adapters.write_to_string(tl, "fcpx_xml")
+            fcpxml_str = _otio_write_fcpx_string(tl)
             fcpxml_str = _otio_fcpxml_clean_for_paste(fcpxml_str)
         except Exception as e:
             err_msg = f"FCPXML conversion failed: {e}"

@@ -18,6 +18,7 @@
 #import <Security/Security.h>
 #import <mach-o/dyld.h>
 #import <dlfcn.h>
+#import <math.h>
 #import <signal.h>
 #import <execinfo.h>
 #import <time.h>
@@ -425,6 +426,7 @@ static void SpliceKit_checkCompatibility(void) {
 - (void)toggleSecondaryAudioMeters:(id)sender;
 - (void)toggleSecondaryEffectsBrowser:(id)sender;
 - (void)toggleSecondaryTransitionsBrowser:(id)sender;
+- (void)toggleMixerPanel:(id)sender;
 - (void)toggleMuteAudio:(id)sender;
 - (void)exportOTIO:(id)sender;
 - (void)importOTIO:(id)sender;
@@ -464,6 +466,21 @@ static void SpliceKit_checkCompatibility(void) {
     Class panelClass = objc_getClass("SpliceKitCaptionPanel");
     if (!panelClass) {
         SpliceKit_log(@"SpliceKitCaptionPanel class not found");
+        return;
+    }
+    id panel = ((id (*)(id, SEL))objc_msgSend)((id)panelClass, @selector(sharedPanel));
+    BOOL visible = ((BOOL (*)(id, SEL))objc_msgSend)(panel, @selector(isVisible));
+    if (visible) {
+        ((void (*)(id, SEL))objc_msgSend)(panel, @selector(hidePanel));
+    } else {
+        ((void (*)(id, SEL))objc_msgSend)(panel, @selector(showPanel));
+    }
+}
+
+- (void)toggleMixerPanel:(id)sender {
+    Class panelClass = objc_getClass("SpliceKitMixerPanel");
+    if (!panelClass) {
+        SpliceKit_log(@"SpliceKitMixerPanel class not found");
         return;
     }
     id panel = ((id (*)(id, SEL))objc_msgSend)((id)panelClass, @selector(sharedPanel));
@@ -621,6 +638,38 @@ static double otio_sourceStart(NSDictionary *clip) {
     return srStart;
 }
 
+/// Return FCPXML-specific metadata using either SpliceKit's legacy key ("fcpx")
+/// or the upstream adapter namespace ("fcpx_xml").
+static NSDictionary *otio_fcpxMeta(NSDictionary *obj) {
+    NSDictionary *metadata = [obj[@"metadata"] isKindOfClass:[NSDictionary class]] ? obj[@"metadata"] : @{};
+    NSDictionary *fcpx = [metadata[@"fcpx"] isKindOfClass:[NSDictionary class]] ? metadata[@"fcpx"] : nil;
+    if (fcpx) return fcpx;
+    NSDictionary *fcpxXml = [metadata[@"fcpx_xml"] isKindOfClass:[NSDictionary class]] ? metadata[@"fcpx_xml"] : nil;
+    return fcpxXml ?: @{};
+}
+
+/// Return GeneratorReference parameters if present.
+static NSDictionary *otio_generatorParams(NSDictionary *ref) {
+    NSDictionary *params = [ref[@"parameters"] isKindOfClass:[NSDictionary class]] ? ref[@"parameters"] : nil;
+    return params ?: @{};
+}
+
+/// Identify generator references that should roundtrip as FCP titles.
+static BOOL otio_isTitleGenerator(NSDictionary *ref) {
+    NSString *schema = ref[@"OTIO_SCHEMA"] ?: @"";
+    if (![schema hasPrefix:@"GeneratorReference."]) return NO;
+
+    NSString *kind = ref[@"generator_kind"] ?: @"";
+    if ([kind isEqualToString:@"Title"] ||
+        [kind isEqualToString:@"title"] ||
+        [kind isEqualToString:@"fcpx.title"]) {
+        return YES;
+    }
+
+    NSDictionary *params = otio_generatorParams(ref);
+    return params[@"text_xml"] != nil || params[@"text_style_def_xml"] != nil;
+}
+
 // ---- Main converter ----
 
 /// Extract text from Premiere-style GeneratorReference clips.
@@ -675,11 +724,12 @@ static NSString *otio_extractPremiereText(NSDictionary *clip) {
 static NSString *otio_buildTitleElement(NSDictionary *child, NSDictionary *ref,
                                         NSString *offsetStr, NSString *durationStr,
                                         int *tsCounter, NSString *titleEffectRef) {
-    NSDictionary *genMeta = ref[@"metadata"][@"fcpx"] ?: @{};
+    NSDictionary *genMeta = otio_fcpxMeta(ref);
+    NSDictionary *params = otio_generatorParams(ref);
     NSString *clipName = otio_esc(child[@"name"] ?: @"Title");
 
     // Get text content: FCPXML metadata > Premiere extraction > clip name
-    NSString *text = genMeta[@"text"];
+    NSString *text = genMeta[@"text"] ?: params[@"text"];
     if (!text || text.length == 0) {
         text = otio_extractPremiereText(child);
     }
@@ -690,6 +740,9 @@ static NSString *otio_buildTitleElement(NSDictionary *child, NSDictionary *ref,
     NSMutableString *xml = [NSMutableString string];
 
     // Build text-style-def and text body
+    NSArray *paramXml = [params[@"param_xml"] isKindOfClass:[NSArray class]] ? params[@"param_xml"] : nil;
+    NSArray *rawTextXml = [params[@"text_xml"] isKindOfClass:[NSArray class]] ? params[@"text_xml"] : nil;
+    NSArray *rawStyleDefs = [params[@"text_style_def_xml"] isKindOfClass:[NSArray class]] ? params[@"text_style_def_xml"] : nil;
     NSArray *textSegments = genMeta[@"text_segments"];
     NSArray *styleDefs = genMeta[@"text_style_defs"];
 
@@ -701,12 +754,25 @@ static NSString *otio_buildTitleElement(NSDictionary *child, NSDictionary *ref,
         clipName, effectRef, offsetStr, durationStr];
 
     // Add role if present
-    NSString *role = genMeta[@"role"];
+    NSString *role = genMeta[@"role"] ?: params[@"role"];
     if (role) [xml appendFormat:@" role=\"%@\"", otio_esc(role)];
     [xml appendString:@">\n"];
 
+    // Motion/title parameters must precede text blocks.
+    if (paramXml && paramXml.count > 0) {
+        for (NSString *raw in paramXml) {
+            if (![raw isKindOfClass:[NSString class]] || raw.length == 0) continue;
+            [xml appendFormat:@"                            %@\n", raw];
+        }
+    }
+
     // Text content
-    if (textSegments && [textSegments isKindOfClass:[NSArray class]] && textSegments.count > 0) {
+    if (rawTextXml && rawTextXml.count > 0) {
+        for (NSString *raw in rawTextXml) {
+            if (![raw isKindOfClass:[NSString class]] || raw.length == 0) continue;
+            [xml appendFormat:@"                            %@\n", raw];
+        }
+    } else if (textSegments && [textSegments isKindOfClass:[NSArray class]] && textSegments.count > 0) {
         [xml appendString:@"                            <text>"];
         for (NSDictionary *seg in textSegments) {
             NSString *segRef = seg[@"ref"] ?: @"";
@@ -721,7 +787,12 @@ static NSString *otio_buildTitleElement(NSDictionary *child, NSDictionary *ref,
     }
 
     // Text style definitions
-    if (styleDefs && [styleDefs isKindOfClass:[NSArray class]] && styleDefs.count > 0) {
+    if (rawStyleDefs && rawStyleDefs.count > 0) {
+        for (NSString *raw in rawStyleDefs) {
+            if (![raw isKindOfClass:[NSString class]] || raw.length == 0) continue;
+            [xml appendFormat:@"                            %@\n", raw];
+        }
+    } else if (styleDefs && [styleDefs isKindOfClass:[NSArray class]] && styleDefs.count > 0) {
         for (NSDictionary *sd in styleDefs) {
             NSString *sdId = sd[@"id"] ?: tsId;
             NSDictionary *attrs = sd[@"attrs"] ?: @{};
@@ -843,7 +914,7 @@ NSString *SpliceKit_otioToFCPXML(NSString *otioPath) {
             BOOL isVideo = [kind isEqualToString:@"Video"];
 
             // Preserve asset metadata from FCPXML round-trip (uid, audioChannels, etc.)
-            NSDictionary *refMeta = ref[@"metadata"][@"fcpx"] ?: @{};
+            NSDictionary *refMeta = otio_fcpxMeta(ref);
             NSMutableString *assetAttrs = [NSMutableString stringWithFormat:
                 @"        <asset name=\"%@\" format=\"r1\" id=\"%@\" duration=\"%@\" start=\"0s\" hasVideo=\"%d\" hasAudio=\"1\"",
                 otio_esc(c[@"name"] ?: @"Clip"), aid, durStr, isVideo ? 1 : 0];
@@ -869,7 +940,7 @@ NSString *SpliceKit_otioToFCPXML(NSString *otioPath) {
 
             // Collect effect resources from clip effects
             for (NSDictionary *eff in c[@"effects"] ?: @[]) {
-                NSDictionary *fcpxMeta = eff[@"metadata"][@"fcpx"] ?: @{};
+                NSDictionary *fcpxMeta = otio_fcpxMeta(eff);
                 NSString *eRef = fcpxMeta[@"ref"];
                 NSString *eName = eff[@"effect_name"] ?: eff[@"name"] ?: @"";
                 // Skip adjust-* (not effect resources) and empty refs
@@ -978,8 +1049,8 @@ NSString *SpliceKit_otioToFCPXML(NSString *otioPath) {
         } else if ([schema hasPrefix:@"Clip."]) {
             NSDictionary *ref = otio_mediaRef(child);
             NSString *refSchema = ref[@"OTIO_SCHEMA"] ?: @"";
-            if ([refSchema hasPrefix:@"GeneratorReference."]) {
-                // Title/generator clip — build <title> element
+            if (otio_isTitleGenerator(ref)) {
+                // Title generator clip — build <title> element
                 static int tsCounter = 1;
                 NSString *titleXml = otio_buildTitleElement(child, ref,
                     otio_time(offRT), otio_time(srDur), &tsCounter, basicTitleEffectId);
@@ -988,6 +1059,13 @@ NSString *SpliceKit_otioToFCPXML(NSString *otioPath) {
                 item[@"openTag"] = titleXml;
                 runFrames += durFrames;
                 goto clipDone;
+            } else if ([refSchema hasPrefix:@"GeneratorReference."]) {
+                // Non-title generators do not map cleanly to FCPXML in this path.
+                item[@"type"] = @"gap";
+                item[@"sourceStartSec"] = @(3600.0);
+                item[@"openTag"] = [NSString stringWithFormat:
+                    @"<gap name=\"%@\" offset=\"%@\" duration=\"%@\" start=\"3600s\">",
+                    otio_esc(child[@"name"] ?: @"Gap"), otio_time(offRT), otio_time(srDur)];
             } else if (!otio_isExternal(ref)) {
                 item[@"type"] = @"gap";
                 item[@"sourceStartSec"] = @(3600.0);
@@ -1050,14 +1128,17 @@ NSString *SpliceKit_otioToFCPXML(NSString *otioPath) {
                 // DTD requires strict ordering inside <clip>:
                 //   1. adjust-* elements (conform, transform, blend, etc.)
                 //   2. adjust-volume, adjust-panner
-                //   3. <video> (with filter-video/filter-audio as children)
-                //   4. connected clips, titles (added later by secondary track loop)
+                //   3. timeMap / frame-sampling
+                //   4. <video> (with filter-video/filter-audio as children)
+                //   5. markers, then connected clips/titles (added later by secondary track loop)
 
-                // Phase 1: adjust-* elements (before video)
+                // Phase 1: adjust-* elements (before timeMap/video)
                 NSMutableString *filterXml = [NSMutableString string]; // filters go inside <video>
+                NSMutableString *timeMapXml = [NSMutableString string];
                 for (NSDictionary *eff in child[@"effects"] ?: @[]) {
                     NSString *eName = eff[@"effect_name"] ?: eff[@"name"] ?: @"";
-                    NSDictionary *fcpxMeta = eff[@"metadata"][@"fcpx"] ?: @{};
+                    NSDictionary *fcpxMeta = otio_fcpxMeta(eff);
+                    NSString *eSchema = eff[@"OTIO_SCHEMA"] ?: @"";
 
                     if ([eName hasPrefix:@"adjust-"]) {
                         // Adjust elements go directly on <clip>
@@ -1080,6 +1161,37 @@ NSString *SpliceKit_otioToFCPXML(NSString *otioPath) {
                             [cx appendFormat:@"\n                        </%@>", eName];
                         } else {
                             [cx appendString:@"/>"];
+                        }
+                    } else if (fcpxMeta[@"time_map"]) {
+                        id rawTimeMap = fcpxMeta[@"time_map"];
+                        NSArray *rawEntries = [rawTimeMap isKindOfClass:[NSArray class]] ? rawTimeMap : nil;
+                        if ([rawTimeMap isKindOfClass:[NSString class]]) rawEntries = @[rawTimeMap];
+                        for (NSString *raw in rawEntries ?: @[]) {
+                            if (![raw isKindOfClass:[NSString class]] || raw.length == 0) continue;
+                            [timeMapXml appendFormat:@"\n                        %@", raw];
+                        }
+                    } else if ([eSchema hasPrefix:@"FreezeFrame."]) {
+                        [timeMapXml appendFormat:
+                            @"\n                        <timeMap>"
+                            @"\n                            <timept time=\"0s\" value=\"0s\" interp=\"linear\"/>"
+                            @"\n                            <timept time=\"%@\" value=\"0s\" interp=\"linear\"/>"
+                            @"\n                        </timeMap>",
+                            otio_time(adjDurRT)];
+                    } else if ([eSchema hasPrefix:@"LinearTimeWarp."]) {
+                        double timeScalar = [eff[@"time_scalar"] doubleValue];
+                        if (timeScalar != 0.0 && timeScalar != 1.0) {
+                            NSDictionary *mappedEndRT = @{
+                                @"value": @(llround((double)adjDurFrames * fabs(timeScalar))),
+                                @"rate": adjDurRT[@"rate"] ?: @1
+                            };
+                            NSString *startValue = timeScalar < 0.0 ? otio_time(mappedEndRT) : @"0s";
+                            NSString *endValue = timeScalar < 0.0 ? @"0s" : otio_time(mappedEndRT);
+                            [timeMapXml appendFormat:
+                                @"\n                        <timeMap>"
+                                @"\n                            <timept time=\"0s\" value=\"%@\" interp=\"linear\"/>"
+                                @"\n                            <timept time=\"%@\" value=\"%@\" interp=\"linear\"/>"
+                                @"\n                        </timeMap>",
+                                startValue, otio_time(adjDurRT), endValue];
                         }
                     } else if ([fcpxMeta[@"type"] isEqualToString:@"audio"]) {
                         // filter-audio goes inside <video> — skip if no valid ref
@@ -1111,7 +1223,12 @@ NSString *SpliceKit_otioToFCPXML(NSString *otioPath) {
                     }
                 }
 
-                // Phase 2: <video> child with filters nested inside
+                // Phase 2: retime metadata before <video>
+                if (timeMapXml.length > 0) {
+                    [cx appendString:timeMapXml];
+                }
+
+                // Phase 3: <video> child with filters nested inside
                 if (filterXml.length > 0) {
                     [cx appendFormat:
                         @"\n                        <video offset=\"%@\" ref=\"%@\" duration=\"%@\">%@"
@@ -1123,9 +1240,9 @@ NSString *SpliceKit_otioToFCPXML(NSString *otioPath) {
                         otio_time(adjSrcStartRT), aid, otio_time(adjDurRT)];
                 }
 
-                // Phase 3: Markers (after video, before connected clips)
+                // Phase 4: Markers (after video, before connected clips)
                 for (NSDictionary *m in child[@"markers"] ?: @[]) {
-                    NSDictionary *fcpxMeta = m[@"metadata"][@"fcpx"] ?: @{};
+                    NSDictionary *fcpxMeta = otio_fcpxMeta(m);
                     NSString *markerType = fcpxMeta[@"marker_type"] ?: @"marker";
                     NSString *startStr = otio_time(m[@"marked_range"][@"start_time"]);
                     NSString *durStr = otio_time(m[@"marked_range"][@"duration"]);
@@ -1148,7 +1265,7 @@ NSString *SpliceKit_otioToFCPXML(NSString *otioPath) {
                         [cx appendFormat:@"\n                        <%@ %@/>", markerType, attrs];
                     }
                 }
-                // Phase 4: Connected clips/titles are added later by the secondary track loop
+                // Phase 5: Connected clips/titles are added later by the secondary track loop
 
                 // Advance by adjusted duration (transitions eat into clip edges)
                 runFrames += adjDurFrames;
@@ -1178,7 +1295,7 @@ NSString *SpliceKit_otioToFCPXML(NSString *otioPath) {
                 NSDictionary *ref = otio_mediaRef(child);
                 NSString *refSchema = ref[@"OTIO_SCHEMA"] ?: @"";
 
-                if ([refSchema hasPrefix:@"GeneratorReference."]) {
+                if (otio_isTitleGenerator(ref)) {
                     // Connected title clip — build <title> with lane attribute
                     for (NSMutableDictionary *si in spineItems) {
                         double siStart = [si[@"timelineStartSec"] doubleValue];
@@ -1200,6 +1317,8 @@ NSString *SpliceKit_otioToFCPXML(NSString *otioPath) {
                             break;
                         }
                     }
+                } else if ([refSchema hasPrefix:@"GeneratorReference."]) {
+                    // Ignore non-title generators on secondary lanes for now.
                 } else if (otio_isExternal(ref)) {
                     NSString *aid = assets[ref[@"target_url"]] ?: @"r2";
                     double srcStart = otio_sourceStart(child);
@@ -1382,6 +1501,10 @@ NSString *SpliceKit_otioToFCPXML(NSString *otioPath) {
             panel.nameFieldStringValue = @"Timeline.otio";
             panel.allowedContentTypes = @[
                 [UTType typeWithFilenameExtension:@"otio"],
+                [UTType typeWithFilenameExtension:@"otioz"],
+                [UTType typeWithFilenameExtension:@"otiod"],
+                [UTType typeWithFilenameExtension:@"fcpxml"],
+                [UTType typeWithFilenameExtension:@"fcpxmld"],
                 [UTType typeWithFilenameExtension:@"edl"],
                 [UTType typeWithFilenameExtension:@"aaf"],
             ];
@@ -1395,24 +1518,72 @@ NSString *SpliceKit_otioToFCPXML(NSString *otioPath) {
             NSString *outPath = panel.URL.path;
             NSString *ext = outPath.pathExtension.lowercaseString;
 
-            // Step 3: Convert FCPXML → target format using Python/OTIO
             dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
-                NSString *pyScript = [NSString stringWithFormat:
+                NSFileManager *fm = [NSFileManager defaultManager];
+
+                if ([ext isEqualToString:@"fcpxml"] || [ext isEqualToString:@"fcpxmld"]) {
+                    NSError *fileErr = nil;
+                    [fm removeItemAtPath:outPath error:nil];
+
+                    if ([ext isEqualToString:@"fcpxml"]) {
+                        [fm copyItemAtPath:tmpFcpxml toPath:outPath error:&fileErr];
+                    } else {
+                        NSString *infoPath = [outPath stringByAppendingPathComponent:@"Info.fcpxml"];
+                        [fm createDirectoryAtPath:outPath withIntermediateDirectories:YES attributes:nil error:&fileErr];
+                        if (!fileErr) {
+                            [fm copyItemAtPath:tmpFcpxml toPath:infoPath error:&fileErr];
+                        }
+                    }
+
+                    [fm removeItemAtPath:tmpFcpxml error:nil];
+
+                    if (fileErr) {
+                        SpliceKit_log(@"[OTIO] Export error: %@", fileErr.localizedDescription);
+                        dispatch_async(dispatch_get_main_queue(), ^{
+                            NSAlert *alert = [[NSAlert alloc] init];
+                            alert.messageText = @"Export Failed";
+                            alert.informativeText = fileErr.localizedDescription ?: @"Could not write the exported file.";
+                            alert.alertStyle = NSAlertStyleWarning;
+                            [alert addButtonWithTitle:@"OK"];
+                            [alert runModal];
+                        });
+                    } else {
+                        SpliceKit_log(@"[OTIO] Exported to %@ (%@)", outPath, ext.uppercaseString);
+                    }
+                    return;
+                }
+
+                // Step 3: Convert FCPXML → target format using Python/OTIO
+                NSString *pyScript =
+                    @"import sys\n"
                     @"import opentimelineio as otio\n"
-                    @"result = otio.adapters.read_from_string(open('%@').read(), 'fcpx_xml')\n"
-                    @"tl = result\n"
+                    @"\n"
+                    @"def pick_fcpx_adapter():\n"
+                    @"    preferred = ('fcpxml', 'fcpx_xml')\n"
+                    @"    try:\n"
+                    @"        available = set(otio.adapters.available_adapter_names())\n"
+                    @"    except Exception:\n"
+                    @"        available = set()\n"
+                    @"    for name in preferred:\n"
+                    @"        if name in available:\n"
+                    @"            return name\n"
+                    @"    return preferred[0]\n"
+                    @"\n"
+                    @"src_path, dst_path = sys.argv[1:3]\n"
+                    @"with open(src_path, 'r', encoding='utf-8') as fh:\n"
+                    @"    result = otio.adapters.read_from_string(fh.read(), pick_fcpx_adapter())\n"
+                    @"timeline = result\n"
                     @"if hasattr(result, '__iter__') and not isinstance(result, otio.schema.Timeline):\n"
                     @"    for item in result:\n"
                     @"        if isinstance(item, otio.schema.Timeline):\n"
-                    @"            tl = item\n"
+                    @"            timeline = item\n"
                     @"            break\n"
-                    @"otio.adapters.write_to_file(tl, '%@')\n"
-                    @"print('OK')\n",
-                    tmpFcpxml, outPath];
+                    @"otio.adapters.write_to_file(timeline, dst_path)\n"
+                    @"print('OK')\n";
 
                 NSTask *task = [[NSTask alloc] init];
                 task.executableURL = [NSURL fileURLWithPath:@"/usr/bin/env"];
-                task.arguments = @[@"python3", @"-c", pyScript];
+                task.arguments = @[@"python3", @"-c", pyScript, tmpFcpxml, outPath];
                 NSPipe *outPipe = [NSPipe pipe];
                 NSPipe *errPipe = [NSPipe pipe];
                 task.standardOutput = outPipe;
@@ -1462,7 +1633,12 @@ NSString *SpliceKit_otioToFCPXML(NSString *otioPath) {
     panel.title = @"Import Timeline (OpenTimelineIO)";
     panel.allowedContentTypes = @[
         [UTType typeWithFilenameExtension:@"otio"],
+        [UTType typeWithFilenameExtension:@"otioz"],
+        [UTType typeWithFilenameExtension:@"otiod"],
+        [UTType typeWithFilenameExtension:@"edl"],
+        [UTType typeWithFilenameExtension:@"aaf"],
         [UTType typeWithFilenameExtension:@"fcpxml"],
+        [UTType typeWithFilenameExtension:@"fcpxmld"],
     ];
     panel.allowsOtherFileTypes = YES;
     panel.allowsMultipleSelection = NO;
@@ -1472,9 +1648,13 @@ NSString *SpliceKit_otioToFCPXML(NSString *otioPath) {
     NSString *inPath = panel.URL.path;
     NSString *ext = inPath.pathExtension.lowercaseString;
 
-    // .fcpxml files → open via NSWorkspace (same as FCP's own Import XML)
-    if ([ext isEqualToString:@"fcpxml"]) {
-        NSURL *fileURL = [NSURL fileURLWithPath:inPath];
+    // .fcpxml/.fcpxmld files → open via NSWorkspace (same as FCP's own Import XML)
+    if ([ext isEqualToString:@"fcpxml"] || [ext isEqualToString:@"fcpxmld"]) {
+        NSString *openPath = inPath;
+        if ([ext isEqualToString:@"fcpxmld"]) {
+            openPath = [inPath stringByAppendingPathComponent:@"Info.fcpxml"];
+        }
+        NSURL *fileURL = [NSURL fileURLWithPath:openPath];
         [[NSWorkspace sharedWorkspace] openURLs:@[fileURL]
                        withApplicationAtURL:[[NSBundle mainBundle] bundleURL]
                               configuration:[NSWorkspaceOpenConfiguration configuration]
@@ -1482,7 +1662,7 @@ NSString *SpliceKit_otioToFCPXML(NSString *otioPath) {
             if (openErr) {
                 SpliceKit_log(@"[OTIO] Import error: %@", openErr.localizedDescription);
             } else {
-                SpliceKit_log(@"[OTIO] Imported FCPXML from %@", inPath);
+                SpliceKit_log(@"[OTIO] Imported %@ from %@", ext.uppercaseString, inPath);
             }
         }];
         return;
@@ -1527,6 +1707,103 @@ NSString *SpliceKit_otioToFCPXML(NSString *otioPath) {
                         SpliceKit_log(@"[OTIO] Imported .otio from %@", inPath);
                     }
                     // Clean up after FCP reads it
+                    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 10 * NSEC_PER_SEC),
+                        dispatch_get_global_queue(QOS_CLASS_BACKGROUND, 0), ^{
+                        [[NSFileManager defaultManager] removeItemAtPath:tmpPath error:nil];
+                    });
+                }];
+            });
+        });
+        return;
+    }
+
+    // Other OTIO formats (.otioz/.otiod/.edl/.aaf) → Python/OTIO conversion to FCPXML, then import
+    if ([ext isEqualToString:@"otioz"] ||
+        [ext isEqualToString:@"otiod"] ||
+        [ext isEqualToString:@"edl"] ||
+        [ext isEqualToString:@"aaf"]) {
+        dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+            NSString *tmpPath = [NSTemporaryDirectory() stringByAppendingPathComponent:@"splicekit_otio_import.fcpxml"];
+            NSString *pyScript =
+                @"import sys\n"
+                @"import opentimelineio as otio\n"
+                @"\n"
+                @"def pick_fcpx_adapter():\n"
+                @"    preferred = ('fcpxml', 'fcpx_xml')\n"
+                @"    try:\n"
+                @"        available = set(otio.adapters.available_adapter_names())\n"
+                @"    except Exception:\n"
+                @"        available = set()\n"
+                @"    for name in preferred:\n"
+                @"        if name in available:\n"
+                @"            return name\n"
+                @"    return preferred[0]\n"
+                @"\n"
+                @"src_path, dst_path = sys.argv[1:3]\n"
+                @"result = otio.adapters.read_from_file(src_path)\n"
+                @"timeline = result\n"
+                @"if hasattr(result, '__iter__') and not isinstance(result, otio.schema.Timeline):\n"
+                @"    for item in result:\n"
+                @"        if isinstance(item, otio.schema.Timeline):\n"
+                @"            timeline = item\n"
+                @"            break\n"
+                @"xml = otio.adapters.write_to_string(timeline, pick_fcpx_adapter())\n"
+                @"with open(dst_path, 'w', encoding='utf-8') as fh:\n"
+                @"    fh.write(xml)\n"
+                @"print('OK')\n";
+
+            NSTask *task = [[NSTask alloc] init];
+            task.executableURL = [NSURL fileURLWithPath:@"/usr/bin/env"];
+            task.arguments = @[@"python3", @"-c", pyScript, inPath, tmpPath];
+            NSPipe *outPipe = [NSPipe pipe];
+            NSPipe *errPipe = [NSPipe pipe];
+            task.standardOutput = outPipe;
+            task.standardError = errPipe;
+
+            NSError *launchErr = nil;
+            [task launchAndReturnError:&launchErr];
+            if (launchErr) {
+                SpliceKit_log(@"[OTIO] Import launch error: %@", launchErr.localizedDescription);
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    NSAlert *alert = [[NSAlert alloc] init];
+                    alert.messageText = @"Import Failed";
+                    alert.informativeText = launchErr.localizedDescription ?: @"Could not launch Python for OTIO import.";
+                    alert.alertStyle = NSAlertStyleWarning;
+                    [alert addButtonWithTitle:@"OK"];
+                    [alert runModal];
+                });
+                return;
+            }
+
+            [task waitUntilExit];
+            NSString *stdoutStr = [[NSString alloc] initWithData:[outPipe.fileHandleForReading readDataToEndOfFile] encoding:NSUTF8StringEncoding];
+            NSString *stderrStr = [[NSString alloc] initWithData:[errPipe.fileHandleForReading readDataToEndOfFile] encoding:NSUTF8StringEncoding];
+
+            if (task.terminationStatus != 0 || ![stdoutStr containsString:@"OK"]) {
+                [[NSFileManager defaultManager] removeItemAtPath:tmpPath error:nil];
+                SpliceKit_log(@"[OTIO] Import conversion error: %@", stderrStr);
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    NSAlert *alert = [[NSAlert alloc] init];
+                    alert.messageText = @"Import Failed";
+                    alert.informativeText = stderrStr.length > 0 ? stderrStr : @"Unknown error during OTIO conversion";
+                    alert.alertStyle = NSAlertStyleWarning;
+                    [alert addButtonWithTitle:@"OK"];
+                    [alert runModal];
+                });
+                return;
+            }
+
+            NSURL *fcpxmlURL = [NSURL fileURLWithPath:tmpPath];
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [[NSWorkspace sharedWorkspace] openURLs:@[fcpxmlURL]
+                               withApplicationAtURL:[[NSBundle mainBundle] bundleURL]
+                                      configuration:[NSWorkspaceOpenConfiguration configuration]
+                                  completionHandler:^(NSRunningApplication *app, NSError *openErr) {
+                    if (openErr) {
+                        SpliceKit_log(@"[OTIO] Import error: %@", openErr.localizedDescription);
+                    } else {
+                        SpliceKit_log(@"[OTIO] Imported %@ from %@", ext.uppercaseString, inPath);
+                    }
                     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 10 * NSEC_PER_SEC),
                         dispatch_get_global_queue(QOS_CLASS_BACKGROUND, 0), ^{
                         [[NSFileManager defaultManager] removeItemAtPath:tmpPath error:nil];
@@ -1972,6 +2249,14 @@ static void SpliceKit_installMenu(void) {
     sectionsItem.keyEquivalentModifierMask = NSEventModifierFlagControl | NSEventModifierFlagOption;
     sectionsItem.target = [SpliceKitMenuController shared];
     [bridgeMenu addItem:sectionsItem];
+
+    NSMenuItem *mixerItem = [[NSMenuItem alloc]
+        initWithTitle:@"Audio Mixer"
+               action:@selector(toggleMixerPanel:)
+        keyEquivalent:@"m"];
+    mixerItem.keyEquivalentModifierMask = NSEventModifierFlagControl | NSEventModifierFlagOption;
+    mixerItem.target = [SpliceKitMenuController shared];
+    [bridgeMenu addItem:mixerItem];
 
     [bridgeMenu addItem:[NSMenuItem separatorItem]];
 

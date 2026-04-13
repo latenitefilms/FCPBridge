@@ -21,7 +21,8 @@ SOURCES = Sources/SpliceKit.m \
           Sources/SpliceKitSectionsBar.m \
           Sources/SpliceKitLua.m \
           Sources/SpliceKitLuaPanel.m \
-          Sources/SpliceKitPlugins.m
+          Sources/SpliceKitPlugins.m \
+          Sources/SpliceKitMixerPanel.m
 
 BUILD_DIR = build
 OUTPUT = $(BUILD_DIR)/SpliceKit
@@ -41,6 +42,7 @@ ENTITLEMENTS = entitlements.plist
 
 SILENCE_DETECTOR = $(BUILD_DIR)/silence-detector
 STRUCTURE_ANALYZER = $(BUILD_DIR)/structure-analyzer
+MIXER_APP = $(BUILD_DIR)/SpliceKitMixer
 TOOLS_DIR = $(HOME)/Applications/SpliceKit/tools
 PARAKEET_PKG_DIR = patcher/SpliceKitPatcher.app/Contents/Resources/tools/parakeet-transcriber
 PARAKEET_RELEASE_BIN = $(PARAKEET_PKG_DIR)/.build/release/parakeet-transcriber
@@ -50,7 +52,7 @@ PARAKEET_DEBUG_BIN = $(PARAKEET_PKG_DIR)/.build/debug/parakeet-transcriber
 
 all: $(OUTPUT)
 
-tools: $(SILENCE_DETECTOR) $(STRUCTURE_ANALYZER)
+tools: $(SILENCE_DETECTOR) $(STRUCTURE_ANALYZER) $(MIXER_APP)
 
 $(BUILD_DIR):
 	@mkdir -p $(BUILD_DIR)
@@ -65,6 +67,11 @@ $(SILENCE_DETECTOR): tools/silence-detector.swift | $(BUILD_DIR)
 $(STRUCTURE_ANALYZER): tools/structure-analyzer.swift | $(BUILD_DIR)
 	swiftc -O -suppress-warnings -o $(STRUCTURE_ANALYZER) tools/structure-analyzer.swift
 	@echo "Built: $(STRUCTURE_ANALYZER)"
+
+MIXER_SOURCES = $(wildcard tools/mixer-app/*.swift)
+$(MIXER_APP): $(MIXER_SOURCES) | $(BUILD_DIR)
+	swiftc -O -suppress-warnings -parse-as-library -o $(MIXER_APP) $(MIXER_SOURCES)
+	@echo "Built: $(MIXER_APP)"
 
 # Lua static library — compiled as C (no -fobjc-arc)
 $(BUILD_DIR)/lua/%.o: $(LUA_DIR)/%.c | $(BUILD_DIR)/lua
@@ -84,7 +91,7 @@ $(OUTPUT): $(SOURCES) Sources/SpliceKit.h $(LUA_LIB) | $(BUILD_DIR)
 clean:
 	rm -rf $(BUILD_DIR)
 
-deploy: $(OUTPUT) $(SILENCE_DETECTOR) $(STRUCTURE_ANALYZER)
+deploy: $(OUTPUT) $(SILENCE_DETECTOR) $(STRUCTURE_ANALYZER) $(MIXER_APP)
 	@echo "=== Deploying SpliceKit to modded FCP ==="
 	@mkdir -p "$(FW_DIR)/Versions/A/Resources"
 	cp $(OUTPUT) "$(FW_DIR)/Versions/A/SpliceKit"
@@ -102,6 +109,7 @@ deploy: $(OUTPUT) $(SILENCE_DETECTOR) $(STRUCTURE_ANALYZER)
 	@mkdir -p "$(TOOLS_DIR)"
 	@cp $(SILENCE_DETECTOR) "$(TOOLS_DIR)/silence-detector" 2>/dev/null || true
 	@cp $(STRUCTURE_ANALYZER) "$(TOOLS_DIR)/structure-analyzer" 2>/dev/null || true
+	@cp $(MIXER_APP) "$(TOOLS_DIR)/SpliceKitMixer" 2>/dev/null || true
 	@if [ -f "$(PARAKEET_RELEASE_BIN)" ]; then \
 		cp "$(PARAKEET_RELEASE_BIN)" "$(TOOLS_DIR)/parakeet-transcriber"; \
 		cp "$(PARAKEET_RELEASE_BIN)" "$(FW_DIR)/Versions/A/Resources/parakeet-transcriber"; \
