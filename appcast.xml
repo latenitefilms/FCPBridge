@@ -6,6 +6,22 @@
     <description>SpliceKit Patcher release updates</description>
     <language>en</language>
     <item>
+      <title>SpliceKit v3.1.11</title>
+      <sparkle:version>3.1.11</sparkle:version>
+      <sparkle:shortVersionString>3.1.11</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <pubDate>Mon, 13 Apr 2026 21:00:58 +0000</pubDate>
+      <description><![CDATA[
+        <h2>What's New in 3.1.11</h2>
+        <p>CloudContent guard summary logging, patcher launch monitoring, enhanced diagnostic coverage</p>
+      ]]></description>
+      <enclosure
+        url="https://github.com/elliotttate/SpliceKit/releases/download/v3.1.11/SpliceKit-v3.1.11.dmg"
+        sparkle:edSignature="E0h4EfNKBRTjB2rbuRB/4n6o3Ii6XInU3RO7zyVtkBsxlRHOEOydwrsOFx8Lm2Bs440epRxh1DnJePnMbeMLCQ=="
+        length="14183980"
+        type="application/octet-stream" />
+    </item>
+    <item>
       <title>SpliceKit v3.1.10</title>
       <sparkle:version>3.1.10</sparkle:version>
       <sparkle:shortVersionString>3.1.10</sparkle:shortVersionString>
