@@ -817,11 +817,36 @@ class PatcherModel: ObservableObject {
         return identities.first?.hash
     }
 
+    // File logging — writes to ~/Library/Logs/SpliceKit/patcher.log
+    private static let logFileURL: URL = {
+        let logDir = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Logs/SpliceKit")
+        try? FileManager.default.createDirectory(at: logDir, withIntermediateDirectories: true)
+        let logFile = logDir.appendingPathComponent("patcher.log")
+        let prev = logDir.appendingPathComponent("patcher.previous.log")
+        try? FileManager.default.removeItem(at: prev)
+        try? FileManager.default.moveItem(at: logFile, to: prev)
+        FileManager.default.createFile(atPath: logFile.path, contents: nil)
+        return logFile
+    }()
+
+    private nonisolated func writeLogFile(_ text: String) {
+        let timestamp = ISO8601DateFormatter().string(from: Date())
+        let line = "[\(timestamp)] \(text)\n"
+        if let handle = try? FileHandle(forWritingTo: Self.logFileURL) {
+            handle.seekToEndOfFile()
+            handle.write(line.data(using: .utf8) ?? Data())
+            handle.closeFile()
+        }
+    }
+
     private func appendLog(_ text: String) {
         log += text + "\n"
+        writeLogFile(text)
     }
 
     private nonisolated func logAsync(_ text: String) async {
+        writeLogFile(text)
         await MainActor.run { self.log += text + "\n" }
     }
 

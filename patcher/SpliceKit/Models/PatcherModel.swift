@@ -42,6 +42,34 @@ enum PatchError: LocalizedError {
     }
 }
 
+// MARK: - Patcher Log File
+//
+// Writes to ~/Library/Logs/SpliceKit/patcher.log so we have a persistent record
+// of every patch attempt — even if FCP crashes on launch and the dylib never loads.
+
+private let patcherLogURL: URL = {
+    let logDir = FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent("Library/Logs/SpliceKit")
+    try? FileManager.default.createDirectory(at: logDir, withIntermediateDirectories: true)
+    let logFile = logDir.appendingPathComponent("patcher.log")
+    // Rotate: keep one previous log
+    let prev = logDir.appendingPathComponent("patcher.previous.log")
+    try? FileManager.default.removeItem(at: prev)
+    try? FileManager.default.moveItem(at: logFile, to: prev)
+    FileManager.default.createFile(atPath: logFile.path, contents: nil)
+    return logFile
+}()
+
+private func patcherLogWrite(_ text: String) {
+    let timestamp = ISO8601DateFormatter().string(from: Date())
+    let line = "[\(timestamp)] \(text)\n"
+    if let handle = try? FileHandle(forWritingTo: patcherLogURL) {
+        handle.seekToEndOfFile()
+        handle.write(line.data(using: .utf8) ?? Data())
+        handle.closeFile()
+    }
+}
+
 // MARK: - Model
 
 @MainActor
@@ -660,6 +688,50 @@ class PatcherModel: ObservableObject {
         }
         await completeStepAsync(.setupMCP)
 
+        // Post-patch diagnostics — verify everything a user would need for bug reports
+        await logAsync("\n--- Post-Patch Diagnostics ---")
+        let osv = ProcessInfo.processInfo.operatingSystemVersion
+        await logAsync("macOS: \(osv.majorVersion).\(osv.minorVersion).\(osv.patchVersion)")
+        let fcpInfo = NSDictionary(contentsOfFile: moddedApp + "/Contents/Info.plist")
+        await logAsync("FCP: \(fcpInfo?["CFBundleShortVersionString"] ?? "?") (build \(fcpInfo?["CFBundleVersion"] ?? "?"))")
+        await logAsync("SpliceKit patcher: \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] ?? "?")")
+        await logAsync("Signing identity used: \(signIdentity)")
+
+        // Verify load command injection
+        let otoolOut = shell("otool -L '\(moddedApp)/Contents/MacOS/Final Cut Pro' 2>&1 | grep -i splice")
+        if otoolOut.isEmpty {
+            await logAsync("WARNING: SpliceKit load command NOT found in binary (dylib will NOT load)")
+        } else {
+            await logAsync("Load command: \(otoolOut.trimmingCharacters(in: .whitespacesAndNewlines))")
+        }
+
+        // Verify framework binary exists
+        let fwBinary = moddedApp + "/Contents/Frameworks/SpliceKit.framework/Versions/A/SpliceKit"
+        if FileManager.default.fileExists(atPath: fwBinary) {
+            let attrs = try? FileManager.default.attributesOfItem(atPath: fwBinary)
+            let size = (attrs?[.size] as? Int) ?? 0
+            await logAsync("Framework binary: exists (\(size) bytes)")
+        } else {
+            await logAsync("WARNING: Framework binary NOT found at \(fwBinary)")
+        }
+
+        // Verify framework signature
+        let fwVerify = shell("codesign -dvv '\(moddedApp)/Contents/Frameworks/SpliceKit.framework' 2>&1")
+        for line in fwVerify.components(separatedBy: "\n") where line.contains("Authority=") || line.contains("TeamIdentifier=") || line.contains("Signature=") {
+            await logAsync("Framework signing: \(line.trimmingCharacters(in: .whitespaces))")
+        }
+
+        // Verify app entitlements
+        let entOut = shell("codesign -d --entitlements - '\(moddedApp)' 2>&1")
+        let entKeys = ["app-sandbox", "disable-library-validation", "allow-dyld-environment-variables", "get-task-allow", "icloud-services"]
+        for key in entKeys {
+            let found = entOut.contains(key)
+            await logAsync("Entitlement \(key): \(found ? "present" : "MISSING")")
+        }
+
+        await logAsync("Log saved to: ~/Library/Logs/SpliceKit/patcher.log")
+        await logAsync("--- End Diagnostics ---")
+
         await setStepAsync(.done)
         await logAsync("\nSetup complete! You can now launch the enhanced Final Cut Pro.")
     }
@@ -843,6 +915,40 @@ class PatcherModel: ObservableObject {
         await completeStepAsync(.configureDefaults)
         await completeStepAsync(.setupMCP)
 
+        // Post-update diagnostics
+        await logAsync("\n--- Post-Update Diagnostics ---")
+        let osv = ProcessInfo.processInfo.operatingSystemVersion
+        await logAsync("macOS: \(osv.majorVersion).\(osv.minorVersion).\(osv.patchVersion)")
+        let fcpInfo = NSDictionary(contentsOfFile: moddedApp + "/Contents/Info.plist")
+        await logAsync("FCP: \(fcpInfo?["CFBundleShortVersionString"] ?? "?") (build \(fcpInfo?["CFBundleVersion"] ?? "?"))")
+        await logAsync("SpliceKit patcher: \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] ?? "?")")
+        await logAsync("Signing identity used: \(signIdentity)")
+
+        let otoolOut = shell("otool -L '\(moddedApp)/Contents/MacOS/Final Cut Pro' 2>&1 | grep -i splice")
+        if otoolOut.isEmpty {
+            await logAsync("WARNING: SpliceKit load command NOT found in binary")
+        } else {
+            await logAsync("Load command: \(otoolOut.trimmingCharacters(in: .whitespacesAndNewlines))")
+        }
+
+        let fwBinary = moddedApp + "/Contents/Frameworks/SpliceKit.framework/Versions/A/SpliceKit"
+        if FileManager.default.fileExists(atPath: fwBinary) {
+            let attrs = try? FileManager.default.attributesOfItem(atPath: fwBinary)
+            let size = (attrs?[.size] as? Int) ?? 0
+            await logAsync("Framework binary: exists (\(size) bytes)")
+        } else {
+            await logAsync("WARNING: Framework binary NOT found")
+        }
+
+        let entOut = shell("codesign -d --entitlements - '\(moddedApp)' 2>&1")
+        let entKeys = ["app-sandbox", "disable-library-validation", "allow-dyld-environment-variables", "get-task-allow"]
+        for key in entKeys {
+            await logAsync("Entitlement \(key): \(entOut.contains(key) ? "present" : "MISSING")")
+        }
+
+        await logAsync("Log saved to: ~/Library/Logs/SpliceKit/patcher.log")
+        await logAsync("--- End Diagnostics ---")
+
         await setStepAsync(.done)
         await logAsync("\nSpliceKit updated! You can now launch Final Cut Pro.")
     }
@@ -936,9 +1042,11 @@ class PatcherModel: ObservableObject {
 
     func appendLog(_ text: String) {
         log += text + "\n"
+        patcherLogWrite(text)
     }
 
     private nonisolated func logAsync(_ text: String) async {
+        patcherLogWrite(text)
         await MainActor.run { self.log += text + "\n" }
     }
 
