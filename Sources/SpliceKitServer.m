@@ -20124,6 +20124,20 @@ NSDictionary *SpliceKit_handleRequest(NSDictionary *request) {
         result = SpliceKit_handleMixerVolumeEnd(params);
     } else if ([method isEqualToString:@"mixer.setAllVolumes"]) {
         result = SpliceKit_handleMixerSetAllVolumes(params);
+    } else if ([method isEqualToString:@"mixer.open"]) {
+        SpliceKit_executeOnMainThread(^{
+            Class cls = objc_getClass("SpliceKitMixerPanel");
+            if (cls) ((void (*)(id, SEL))objc_msgSend)(
+                ((id (*)(id, SEL))objc_msgSend)((id)cls, @selector(sharedPanel)), @selector(showPanel));
+        });
+        result = @{@"status": @"ok", @"message": @"Mixer panel opened"};
+    } else if ([method isEqualToString:@"mixer.close"]) {
+        SpliceKit_executeOnMainThread(^{
+            Class cls = objc_getClass("SpliceKitMixerPanel");
+            if (cls) ((void (*)(id, SEL))objc_msgSend)(
+                ((id (*)(id, SEL))objc_msgSend)((id)cls, @selector(sharedPanel)), @selector(hidePanel));
+        });
+        result = @{@"status": @"ok", @"message": @"Mixer panel closed"};
     }
     // share.* namespace
     else if ([method isEqualToString:@"share.export"]) {

@@ -10,6 +10,22 @@
       <sparkle:version>3.1.11</sparkle:version>
       <sparkle:shortVersionString>3.1.11</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <pubDate>Mon, 13 Apr 2026 22:32:36 +0000</pubDate>
+      <description><![CDATA[
+        <h2>What's New in 3.1.11</h2>
+        <p>Fix transcript editor missing connected clips (FFAnchoredClip URL resolution), mixer panel, caption enhancements, CloudContent diagnostic logging, patcher launch monitoring</p>
+      ]]></description>
+      <enclosure
+        url="https://github.com/elliotttate/SpliceKit/releases/download/v3.1.11/SpliceKit-v3.1.11.dmg"
+        sparkle:edSignature="bCDhw5Leze3lmgM5wksLBkNIdy+Kr76iS11nVANqa0tW5WSFOSRpYQtV2T5Ldc3y1rKG3Ty35FGPJKloyr+GAg=="
+        length="14303691"
+        type="application/octet-stream" />
+    </item>
+    <item>
+      <title>SpliceKit v3.1.11</title>
+      <sparkle:version>3.1.11</sparkle:version>
+      <sparkle:shortVersionString>3.1.11</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
       <pubDate>Mon, 13 Apr 2026 21:00:58 +0000</pubDate>
       <description><![CDATA[
         <h2>What's New in 3.1.11</h2>
