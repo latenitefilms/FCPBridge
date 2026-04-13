@@ -2454,9 +2454,12 @@ static void SpliceKit_disableCloudContent(void) {
         }
     }
 
-    // Also handle the CCFirstLaunchHelper directly — on Creator Studio the Swift feature
-    // flag swizzle above may not take effect, so we ensure the CloudContent first-launch
-    // flow (which requires CloudKit entitlements lost after re-signing) doesn't run.
+    // Handle the first-launch helper directly — the feature flag swizzle may not
+    // take effect on all FCP versions, so we also noop the helper that triggers
+    // CloudKit (which requires iCloud entitlements lost after re-signing).
+    //
+    // FCP < 12.2: ObjC class CCFirstLaunchHelper, method -setupAndPresentFirstLaunchIfNeededWithCompletionHandler:
+    // FCP >= 12.2: Swift class CloudContentFirstLaunchHelper, method -setupAndPresentFirstLaunchIfNeeded
     Class ccHelper = objc_getClass("CCFirstLaunchHelper");
     if (ccHelper) {
         SEL sel = NSSelectorFromString(@"setupAndPresentFirstLaunchIfNeededWithCompletionHandler:");
@@ -2464,6 +2467,39 @@ static void SpliceKit_disableCloudContent(void) {
         if (m) {
             method_setImplementation(m, (IMP)noopMethodWithArg);
             SpliceKit_log(@"  Handled CCFirstLaunchHelper (CloudKit entitlements fix)");
+        }
+    }
+
+    // FCP 12.2+ renamed the helper to CloudContentFirstLaunchHelper (Swift class)
+    Class ccHelper2 = objc_getClass("_TtC13Final_Cut_Pro29CloudContentFirstLaunchHelper");
+    if (!ccHelper2) ccHelper2 = objc_getClass("Final_Cut_Pro.CloudContentFirstLaunchHelper");
+    if (ccHelper2) {
+        // Parameterless variant (FCP 12.2+)
+        SEL sel = NSSelectorFromString(@"setupAndPresentFirstLaunchIfNeeded");
+        Method m = class_getInstanceMethod(ccHelper2, sel);
+        if (m) {
+            method_setImplementation(m, (IMP)noopMethod);
+            SpliceKit_log(@"  Handled CloudContentFirstLaunchHelper.setupAndPresentFirstLaunchIfNeeded (FCP 12.2+)");
+        }
+        // Also try the completion-handler variant in case it still exists
+        SEL sel2 = NSSelectorFromString(@"setupAndPresentFirstLaunchIfNeededWithCompletionHandler:");
+        Method m2 = class_getInstanceMethod(ccHelper2, sel2);
+        if (m2) {
+            method_setImplementation(m2, (IMP)noopMethodWithArg);
+            SpliceKit_log(@"  Handled CloudContentFirstLaunchHelper completion-handler variant");
+        }
+    }
+
+    // Safety net: noop CloudContentCatalog.updateCatalogAndRegistry() directly,
+    // which is the actual crashing call if the helpers above don't cover it.
+    Class ccCatalog = objc_getClass("_TtC13Final_Cut_Pro19CloudContentCatalog");
+    if (!ccCatalog) ccCatalog = objc_getClass("Final_Cut_Pro.CloudContentCatalog");
+    if (ccCatalog) {
+        SEL sel = NSSelectorFromString(@"updateCatalogAndRegistry");
+        Method m = class_getInstanceMethod(ccCatalog, sel);
+        if (m) {
+            method_setImplementation(m, (IMP)noopMethod);
+            SpliceKit_log(@"  Handled CloudContentCatalog.updateCatalogAndRegistry (safety net)");
         }
     }
 
