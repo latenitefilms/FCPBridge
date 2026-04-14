@@ -6,6 +6,22 @@
     <description>SpliceKit Patcher release updates</description>
     <language>en</language>
     <item>
+      <title>SpliceKit v3.1.142</title>
+      <sparkle:version>3.1.142</sparkle:version>
+      <sparkle:shortVersionString>3.1.142</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <pubDate>Tue, 14 Apr 2026 20:49:33 +0000</pubDate>
+      <description><![CDATA[
+        <h2>What's New in 3.1.142</h2>
+        <p>Fix audio mixer clip discovery for nested compound clips and storylines, handle deduplication, caption panel visibility guard</p>
+      ]]></description>
+      <enclosure
+        url="https://github.com/elliotttate/SpliceKit/releases/download/v3.1.142/SpliceKit-v3.1.142.dmg"
+        sparkle:edSignature="5VNyZlYWwXjM9VGyCOD7PiI3mmlxBCvqgjhHigD6+PnzFqySN6XZUtOU5+MHBMaDobuGEky9g5vr0tkaOz40CA=="
+        length="14482080"
+        type="application/octet-stream" />
+    </item>
+    <item>
       <title>SpliceKit v3.1.141</title>
       <sparkle:version>3.1.141</sparkle:version>
       <sparkle:shortVersionString>3.1.141</sparkle:shortVersionString>
