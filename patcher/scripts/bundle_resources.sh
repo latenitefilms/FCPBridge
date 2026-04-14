@@ -13,16 +13,16 @@ if [ -f "$PREBUILT/SpliceKit" ]; then
 fi
 
 # Copy Sources for from-source builds
-mkdir -p "$APP_RESOURCES/Sources"
-rsync -a --delete "$REPO_DIR/Sources/" "$APP_RESOURCES/Sources/"
-echo "Bundled Sources/"
+#mkdir -p "$APP_RESOURCES/Sources"
+#rsync -a --delete "$REPO_DIR/Sources/" "$APP_RESOURCES/Sources/"
+#echo "Bundled Sources/"
 
 # Copy Lua vendor sources (for from-source builds)
-if [ -d "$REPO_DIR/vendor/lua-5.4.7" ]; then
-    mkdir -p "$APP_RESOURCES/vendor/lua-5.4.7/src"
-    rsync -a "$REPO_DIR/vendor/lua-5.4.7/src/" "$APP_RESOURCES/vendor/lua-5.4.7/src/"
-    echo "Bundled vendor/lua-5.4.7/"
-fi
+#if [ -d "$REPO_DIR/vendor/lua-5.4.7" ]; then
+#    mkdir -p "$APP_RESOURCES/vendor/lua-5.4.7/src"
+#    rsync -a "$REPO_DIR/vendor/lua-5.4.7/src/" "$APP_RESOURCES/vendor/lua-5.4.7/src/"
+#    echo "Bundled vendor/lua-5.4.7/"
+#fi
 
 # Copy MCP server
 mkdir -p "$APP_RESOURCES/mcp"

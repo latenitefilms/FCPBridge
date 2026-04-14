@@ -7,7 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		226FB5362F823A28004BCB44 /* Configuration.xcconfig in Resources */ = {isa = PBXBuildFile; fileRef = 22D74E232F8235FE00A9252B /* Configuration.xcconfig */; };
 		22D74E1F2F81FBD900A9252B /* Credits.rtf in Resources */ = {isa = PBXBuildFile; fileRef = 22D74E1E2F81FBD900A9252B /* Credits.rtf */; };
 		BB0000000000000000000001 /* SpliceKitApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000001 /* SpliceKitApp.swift */; };
 		BB0000000000000000000002 /* PatcherModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000002 /* PatcherModel.swift */; };
@@ -196,7 +195,6 @@
 			files = (
 				BB0000000000000000000008 /* Assets.xcassets in Resources */,
 				22D74E1F2F81FBD900A9252B /* Credits.rtf in Resources */,
-				226FB5362F823A28004BCB44 /* Configuration.xcconfig in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
