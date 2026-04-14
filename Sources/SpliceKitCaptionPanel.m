@@ -1389,11 +1389,15 @@ static void SpliceKit_installDragSpy(void) {
                                                               object:nil
                                                                queue:[NSOperationQueue mainQueue]
                                                           usingBlock:^(__unused NSNotification *note) {
-            [weakSelf scheduleAutomaticRestoreAttemptsWithInitialDelay:0.15];
+            if (weakSelf.panel.isVisible) {
+                [weakSelf scheduleAutomaticRestoreAttemptsWithInitialDelay:0.15];
+            }
         }];
     }
 
-    [self scheduleAutomaticRestoreAttemptsWithInitialDelay:0.6];
+    if (self.panel.isVisible) {
+        [self scheduleAutomaticRestoreAttemptsWithInitialDelay:0.6];
+    }
 }
 
 - (void)scheduleAutomaticRestoreAttemptsWithInitialDelay:(NSTimeInterval)initialDelay {
@@ -5328,6 +5332,10 @@ static BOOL SpliceKitCaption_pollMainThread(BOOL (^condition)(void), double time
                   sequenceKey ?: @"<nil>",
                   panelVisible ? @"YES" : @"NO",
                   (unsigned long)runtimeEntries.count);
+    if (!panelVisible) {
+        SpliceKit_log(@"[Captions] Persisted caption repair skipped: panel not visible");
+        return;
+    }
     if (runtimeEntries.count == 0 || !styleDict) {
         SpliceKit_log(@"[Captions] Persisted caption repair skipped: runtime entries or style missing");
         return;
