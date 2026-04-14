@@ -7,6 +7,8 @@
 #import <QuartzCore/QuartzCore.h>
 #import <objc/runtime.h>
 #import <objc/message.h>
+#import <float.h>
+#import <math.h>
 #import "SpliceKit.h"
 
 // Forward declarations from SpliceKitServer.m
@@ -15,6 +17,8 @@ extern id SpliceKit_storeHandle(id obj);
 extern id SpliceKit_resolveHandle(NSString *handle);
 extern double SpliceKit_channelValue(id channel);
 extern BOOL SpliceKit_setChannelValue(id channel, double value);
+extern BOOL SpliceKit_removeChannelKeyframes(id channel);
+extern BOOL SpliceKit_mixerWriteAutomationPoint(id clip, id channel, double value);
 
 // CMTime struct (matches FCP's internal layout)
 typedef struct { long long value; int timescale; unsigned int flags; long long epoch; } SKMixer_CMTime;
@@ -81,6 +85,7 @@ static const char kMeterRoleUIDKey = 0; // associated object key
 @property (nonatomic, strong) NSString *clipHandle;
 @property (nonatomic, strong) NSString *volumeChannelHandle;
 @property (nonatomic, strong) NSString *audioEffectStackHandle;
+@property (nonatomic, strong) NSString *effectStackHandle; // main effectStack (for undo transactions)
 @property (nonatomic, strong) NSString *clipName;
 @property (nonatomic, assign) NSInteger lane;
 @property (nonatomic, assign) double volumeDB;
@@ -93,6 +98,11 @@ static const char kMeterRoleUIDKey = 0; // associated object key
 @property (nonatomic, assign) BOOL isActive;
 @property (nonatomic, assign) BOOL isPlaying; // clip with this role is at playhead
 @property (nonatomic, assign) BOOL isDragging;
+@property (nonatomic, assign) BOOL isRecordingAutomation;
+@property (nonatomic, assign) BOOL didRecordAutomationInDrag;
+@property (nonatomic, assign) double lastAutomationPlayheadSeconds;
+@property (nonatomic, assign) double lastAutomationLinear;
+@property (nonatomic, strong) NSMutableDictionary<NSString *, NSString *> *openEffectStackHandlesByPointer;
 @end
 
 @implementation SpliceKitFaderState
@@ -265,6 +275,9 @@ static double sliderPosToDB(double pos) {
     BOOL active = _state.isActive;
     BOOL playing = _state.isPlaying;
     _slider.enabled = active;
+    self.layer.borderColor = (_state.isRecordingAutomation ? [NSColor systemRedColor].CGColor
+                                                           : [NSColor.separatorColor CGColor]);
+    self.layer.borderWidth = _state.isRecordingAutomation ? 1.0 : 0.5;
 
     if (active && !_state.isDragging) {
         _slider.doubleValue = dbToSliderPos(_state.volumeDB);
@@ -290,7 +303,9 @@ static double sliderPosToDB(double pos) {
     _nameLabel.textColor = playing ? [NSColor labelColor] : [NSColor tertiaryLabelColor];
 
     // Slightly darker background when playing at playhead
-    if (playing) {
+    if (_state.isRecordingAutomation) {
+        self.layer.backgroundColor = [[NSColor systemRedColor] colorWithAlphaComponent:0.14].CGColor;
+    } else if (playing) {
         self.layer.backgroundColor = [[NSColor controlAccentColor] colorWithAlphaComponent:0.15].CGColor;
     } else if (active) {
         self.layer.backgroundColor = [[NSColor controlBackgroundColor] colorWithAlphaComponent:0.1].CGColor;
@@ -358,6 +373,9 @@ static double sliderPosToDB(double pos) {
 @property (nonatomic, strong) NSView *statusDot;
 @property (nonatomic, strong) NSTimer *pollTimer;
 @property (nonatomic, assign) BOOL isPolling;
+@property (nonatomic, assign) BOOL transportPlaying;
+@property (nonatomic, assign) double playheadSeconds;
+@property (nonatomic, assign) double frameRate;
 + (instancetype)sharedPanel;
 - (void)showPanel;
 - (void)hidePanel;
@@ -500,33 +518,29 @@ static double sliderPosToDB(double pos) {
 }
 
 - (void)updateMixerState {
-    // Call the RPC handler — but it uses SpliceKit_executeOnMainThread internally,
-    // and we're already on the main thread. We need to call it on a background
-    // thread and dispatch results back to update the UI.
-    // For safety, wrap everything in a dispatch to avoid re-entrancy crashes.
-    __weak SpliceKitMixerPanel *weakSelf = self;
-    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INTERACTIVE, 0), ^{
-        extern NSDictionary *SpliceKit_handleMixerGetState(NSDictionary *params);
-        NSDictionary *result = SpliceKit_handleMixerGetState(@{});
-        dispatch_async(dispatch_get_main_queue(), ^{
-            [weakSelf applyMixerState:result];
-        });
-    });
+    extern NSDictionary *SpliceKit_handleMixerGetState(NSDictionary *params);
+    NSDictionary *result = SpliceKit_handleMixerGetState(@{});
+    [self applyMixerState:result];
 }
 
 - (void)applyMixerState:(NSDictionary *)result {
     self.isPolling = NO; // Allow next poll
 
     if (result[@"error"]) {
+        self.transportPlaying = NO;
         [self clearAllFaders];
         return;
     }
+
+    self.transportPlaying = [result[@"isPlaying"] boolValue];
+    self.playheadSeconds = [result[@"playheadSeconds"] doubleValue];
+    self.frameRate = [result[@"frameRate"] doubleValue];
 
     NSArray *faderData = result[@"faders"];
 
     for (NSInteger i = 0; i < 10; i++) {
         SpliceKitFaderView *fv = self.faderViews[i];
-        if (fv.state.isDragging) continue;
+        BOOL dragging = fv.state.isDragging;
 
         if (i < (NSInteger)faderData.count) {
             NSDictionary *info = faderData[i];
@@ -534,16 +548,19 @@ static double sliderPosToDB(double pos) {
             fv.state.isPlaying = [info[@"playing"] boolValue]; // Playing = clip at playhead
             fv.state.clipName = info[@"name"] ?: @"";
             fv.state.lane = [info[@"lane"] integerValue];
-            fv.state.volumeDB = [info[@"volumeDB"] doubleValue];
-            fv.state.volumeLinear = [info[@"volumeLinear"] doubleValue];
             fv.state.clipHandle = info[@"clipHandle"];
             fv.state.volumeChannelHandle = info[@"volumeChannelHandle"];
             fv.state.audioEffectStackHandle = info[@"audioEffectStackHandle"];
+            fv.state.effectStackHandle = info[@"effectStackHandle"];
             fv.state.role = info[@"role"];
             fv.state.roleColorHex = info[@"roleColor"];
             fv.state.meterDB = [info[@"meterDB"] doubleValue];
             fv.state.meterLinear = [info[@"meterLinear"] doubleValue];
             fv.state.meterPeak = [info[@"meterPeak"] doubleValue];
+            if (!dragging) {
+                fv.state.volumeDB = [info[@"volumeDB"] doubleValue];
+                fv.state.volumeLinear = [info[@"volumeLinear"] doubleValue];
+            }
         } else {
             fv.state.isActive = NO;
             fv.state.isPlaying = NO;
@@ -551,19 +568,141 @@ static double sliderPosToDB(double pos) {
             fv.state.clipHandle = nil;
             fv.state.volumeChannelHandle = nil;
             fv.state.audioEffectStackHandle = nil;
+            fv.state.effectStackHandle = nil;
             fv.state.role = nil;
+            fv.state.meterDB = -INFINITY;
+            fv.state.meterLinear = 0;
+            fv.state.meterPeak = 0;
         }
         [fv updateFromState];
     }
+
+    [self recordAutomationSamplesIfNeeded];
 }
 
 - (void)clearAllFaders {
     for (SpliceKitFaderView *fv in self.faderViews) {
+        [self finishUndoTransactionsForFader:fv];
         fv.state.isActive = NO;
+        fv.state.isPlaying = NO;
+        fv.state.isRecordingAutomation = NO;
         fv.state.clipName = nil;
         fv.state.clipHandle = nil;
         fv.state.volumeChannelHandle = nil;
+        fv.state.audioEffectStackHandle = nil;
+        fv.state.effectStackHandle = nil;
         [fv updateFromState];
+    }
+}
+
+- (BOOL)isTransportPlayingNow {
+    BOOL playing = self.transportPlaying;
+    @try {
+        id timeline = SpliceKit_getActiveTimelineModule();
+        SEL isPlayingSel = NSSelectorFromString(@"isPlaying");
+        if (timeline && [timeline respondsToSelector:isPlayingSel]) {
+            playing = ((BOOL (*)(id, SEL))objc_msgSend)(timeline, isPlayingSel);
+        }
+    } @catch (NSException *e) {}
+    self.transportPlaying = playing;
+    return playing;
+}
+
+- (NSString *)currentUndoEffectStackHandleForFader:(SpliceKitFaderView *)fv {
+    return fv.state.effectStackHandle ?: fv.state.audioEffectStackHandle;
+}
+
+- (void)resetDragSessionForFader:(SpliceKitFaderView *)fv {
+    fv.state.isRecordingAutomation = NO;
+    fv.state.didRecordAutomationInDrag = NO;
+    fv.state.lastAutomationPlayheadSeconds = -DBL_MAX;
+    fv.state.lastAutomationLinear = NAN;
+    if (!fv.state.openEffectStackHandlesByPointer) {
+        fv.state.openEffectStackHandlesByPointer = [NSMutableDictionary dictionary];
+    } else {
+        [fv.state.openEffectStackHandlesByPointer removeAllObjects];
+    }
+}
+
+- (void)ensureUndoTransactionForFader:(SpliceKitFaderView *)fv effectStackHandle:(NSString *)effectStackHandle {
+    if (!effectStackHandle) return;
+
+    id effectStack = SpliceKit_resolveHandle(effectStackHandle);
+    if (!effectStack) return;
+
+    if (!fv.state.openEffectStackHandlesByPointer) {
+        fv.state.openEffectStackHandlesByPointer = [NSMutableDictionary dictionary];
+    }
+
+    NSString *pointerKey = [NSString stringWithFormat:@"%p", (__bridge void *)effectStack];
+    if (fv.state.openEffectStackHandlesByPointer[pointerKey]) return;
+
+    @try {
+        SEL beginSel = NSSelectorFromString(@"actionBegin:animationHint:deferUpdates:");
+        if ([effectStack respondsToSelector:beginSel]) {
+            ((void (*)(id, SEL, id, id, BOOL))objc_msgSend)(
+                effectStack, beginSel, @"Adjust Volume", nil, NO);
+        }
+    } @catch (NSException *e) {}
+
+    fv.state.openEffectStackHandlesByPointer[pointerKey] = effectStackHandle;
+}
+
+- (void)finishUndoTransactionsForFader:(SpliceKitFaderView *)fv {
+    NSArray<NSString *> *handles = [fv.state.openEffectStackHandlesByPointer allValues];
+    for (NSString *effectStackHandle in handles) {
+        id effectStack = SpliceKit_resolveHandle(effectStackHandle);
+        if (!effectStack) continue;
+
+        @try {
+            SEL endSel = NSSelectorFromString(@"actionEnd:save:error:");
+            if ([effectStack respondsToSelector:endSel]) {
+                ((void (*)(id, SEL, id, BOOL, id))objc_msgSend)(
+                    effectStack, endSel, @"Adjust Volume", YES, nil);
+            }
+        } @catch (NSException *e) {}
+    }
+    [fv.state.openEffectStackHandlesByPointer removeAllObjects];
+}
+
+- (BOOL)recordAutomationSampleForFader:(SpliceKitFaderView *)fv force:(BOOL)force {
+    if (!fv.state.isDragging || !self.transportPlaying || !fv.state.isPlaying) return NO;
+    if (!fv.state.clipHandle || !fv.state.volumeChannelHandle) return NO;
+
+    double linear = fv.state.volumeLinear;
+    if (linear < 0.0) linear = 0.0;
+    if (linear > 3.98) linear = 3.98;
+
+    if (!force && fabs(self.playheadSeconds - fv.state.lastAutomationPlayheadSeconds) < 0.0005) {
+        return NO;
+    }
+
+    id clip = SpliceKit_resolveHandle(fv.state.clipHandle);
+    id channel = SpliceKit_resolveHandle(fv.state.volumeChannelHandle);
+    if (!clip || !channel) return NO;
+
+    [self ensureUndoTransactionForFader:fv effectStackHandle:[self currentUndoEffectStackHandleForFader:fv]];
+
+    BOOL ok = SpliceKit_mixerWriteAutomationPoint(clip, channel, linear);
+    if (ok) {
+        fv.state.isRecordingAutomation = YES;
+        fv.state.didRecordAutomationInDrag = YES;
+        fv.state.lastAutomationPlayheadSeconds = self.playheadSeconds;
+        fv.state.lastAutomationLinear = linear;
+        [fv updateFromState];
+    }
+    return ok;
+}
+
+- (void)recordAutomationSamplesIfNeeded {
+    for (SpliceKitFaderView *fv in self.faderViews) {
+        if (!fv.state.isDragging) continue;
+        if (self.transportPlaying) {
+            [self recordAutomationSampleForFader:fv force:NO];
+        } else if (fv.state.isRecordingAutomation) {
+            fv.state.isRecordingAutomation = NO;
+            [fv updateFromState];
+        }
     }
 }
 
@@ -577,6 +716,7 @@ static double sliderPosToDB(double pos) {
             @"active": @(fv.state.isActive),
             @"playing": @(fv.state.isPlaying),
             @"dragging": @(fv.state.isDragging),
+            @"recordingAutomation": @(fv.state.isRecordingAutomation),
             @"name": fv.state.clipName ?: @"",
             @"role": fv.state.role ?: @"",
             @"lane": @(fv.state.lane),
@@ -590,6 +730,8 @@ static double sliderPosToDB(double pos) {
         @"panelVisible": @(self.panel.isVisible),
         @"isPolling": @(self.isPolling),
         @"timerValid": @(self.pollTimer.isValid),
+        @"transportPlaying": @(self.transportPlaying),
+        @"playheadSeconds": @(self.playheadSeconds),
         @"faders": faderStates,
     };
 }
@@ -598,53 +740,72 @@ static double sliderPosToDB(double pos) {
 
 - (void)beginVolumeChange:(NSInteger)faderIndex {
     SpliceKitFaderView *fv = self.faderViews[faderIndex];
-    NSString *esHandle = fv.state.audioEffectStackHandle;
-    if (!esHandle) return;
+    [self resetDragSessionForFader:fv];
 
-    id effectStack = SpliceKit_resolveHandle(esHandle);
-    if (!effectStack) return;
-
-    @try {
-        SEL beginSel = NSSelectorFromString(@"actionBegin:animationHint:deferUpdates:");
-        if ([effectStack respondsToSelector:beginSel]) {
-            ((void (*)(id, SEL, id, id, BOOL))objc_msgSend)(
-                effectStack, beginSel, @"Adjust Volume", nil, YES);
-        }
-    } @catch (NSException *e) {}
+    if (![self isTransportPlayingNow]) {
+        [self ensureUndoTransactionForFader:fv effectStackHandle:[self currentUndoEffectStackHandleForFader:fv]];
+    } else {
+        [self recordAutomationSampleForFader:fv force:YES];
+    }
 }
 
 - (void)setVolume:(NSInteger)faderIndex db:(double)db {
     SpliceKitFaderView *fv = self.faderViews[faderIndex];
+    double linear = (db <= -96.0) ? 0.0 : pow(10.0, db / 20.0);
+    if (linear < 0.0) linear = 0.0;
+    if (linear > 3.98) linear = 3.98;
+    fv.state.volumeDB = db;
+    fv.state.volumeLinear = linear;
+
+    if ([self isTransportPlayingNow]) {
+        [self recordAutomationSampleForFader:fv force:YES];
+        return;
+    }
+
+    if (fv.state.didRecordAutomationInDrag) return;
+
     NSString *handle = fv.state.volumeChannelHandle;
     if (!handle) return;
 
     id channel = SpliceKit_resolveHandle(handle);
     if (!channel) return;
 
-    double linear = (db <= -96.0) ? 0.0 : pow(10.0, db / 20.0);
-    if (linear < 0.0) linear = 0.0;
-    if (linear > 3.98) linear = 3.98;
-
+    SpliceKit_removeChannelKeyframes(channel);
     SpliceKit_setChannelValue(channel, linear);
+
+    // Force timeline/audio engine refresh so volume takes effect during playback
+    @try {
+        id timeline = SpliceKit_getActiveTimelineModule();
+        if (timeline) {
+            id sequence = nil;
+            if ([timeline respondsToSelector:@selector(sequence)])
+                sequence = ((id (*)(id, SEL))objc_msgSend)(timeline, @selector(sequence));
+            if (sequence) {
+                SEL forceUpdateSel = NSSelectorFromString(@"forceUpdate");
+                if ([sequence respondsToSelector:forceUpdateSel])
+                    ((void (*)(id, SEL))objc_msgSend)(sequence, forceUpdateSel);
+            }
+            SEL reloadSel = NSSelectorFromString(@"reloadTimelineView:");
+            if ([timeline respondsToSelector:reloadSel])
+                ((void (*)(id, SEL, id))objc_msgSend)(timeline, reloadSel, nil);
+        }
+    } @catch (NSException *e) {}
 }
 
 - (void)endVolumeChange:(NSInteger)faderIndex {
     SpliceKitFaderView *fv = self.faderViews[faderIndex];
-    NSString *esHandle = fv.state.audioEffectStackHandle;
-    if (!esHandle) return;
+    if ([self isTransportPlayingNow]) {
+        [self recordAutomationSampleForFader:fv force:YES];
+    }
 
-    id effectStack = SpliceKit_resolveHandle(esHandle);
-    if (!effectStack) return;
-
-    @try {
-        SEL endSel = NSSelectorFromString(@"actionEnd:save:error:");
-        if ([effectStack respondsToSelector:endSel]) {
-            ((void (*)(id, SEL, id, BOOL, id))objc_msgSend)(
-                effectStack, endSel, @"Adjust Volume", YES, nil);
-        }
-    } @catch (NSException *e) {}
+    [self finishUndoTransactionsForFader:fv];
+    fv.state.isRecordingAutomation = NO;
+    fv.state.didRecordAutomationInDrag = NO;
+    fv.state.lastAutomationPlayheadSeconds = -DBL_MAX;
+    fv.state.lastAutomationLinear = NAN;
 
     fv.state.isDragging = NO;
+    [fv updateFromState];
 }
 
 @end

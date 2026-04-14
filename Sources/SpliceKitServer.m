@@ -12391,19 +12391,42 @@ static double SpliceKit_channelValueAtTime(id channel, SpliceKit_CMTime time) {
     return 0;
 }
 
-// Helper: set a double on a channel
-BOOL SpliceKit_setChannelValue(id channel, double value) {
+// Remove all existing keyframes so a constant write takes effect.
+BOOL SpliceKit_removeChannelKeyframes(id channel) {
     if (!channel) return NO;
     @try {
-        SpliceKit_CMTime t = {0, 0, 17, 0}; // kCMTimeIndefinite
-        SEL sel = NSSelectorFromString(@"setCurveDoubleValue:atTime:options:");
-        if ([channel respondsToSelector:sel]) {
-            ((void (*)(id, SEL, double, SpliceKit_CMTime, unsigned int))objc_msgSend)(
-                channel, sel, value, t, 0);
+        SEL countSel = NSSelectorFromString(@"keyframeCount");
+        if (![channel respondsToSelector:countSel]) return NO;
+
+        NSInteger count = ((NSInteger (*)(id, SEL))objc_msgSend)(channel, countSel);
+        if (count <= 0) return YES;
+
+        SEL removeAllSel = NSSelectorFromString(@"removeAllKeyframes:");
+        if ([channel respondsToSelector:removeAllSel]) {
+            ((void (*)(id, SEL, BOOL))objc_msgSend)(channel, removeAllSel, YES);
             return YES;
         }
     } @catch (NSException *e) {}
     return NO;
+}
+
+BOOL SpliceKit_setChannelValueAtTime(id channel, double value, SpliceKit_CMTime time) {
+    if (!channel) return NO;
+    @try {
+        SEL sel = NSSelectorFromString(@"setCurveDoubleValue:atTime:options:");
+        if ([channel respondsToSelector:sel]) {
+            ((void (*)(id, SEL, double, SpliceKit_CMTime, unsigned int))objc_msgSend)(
+                channel, sel, value, time, 0);
+            return YES;
+        }
+    } @catch (NSException *e) {}
+    return NO;
+}
+
+// Helper: set a double on a channel
+BOOL SpliceKit_setChannelValue(id channel, double value) {
+    SpliceKit_CMTime t = {0, 0, 17, 0}; // kCMTimeIndefinite
+    return SpliceKit_setChannelValueAtTime(channel, value, t);
 }
 
 // Helper: get sub-channel by name (xChannel, yChannel, zChannel)
@@ -12995,6 +13018,34 @@ static SpliceKit_CMTime SpliceKit_clipLocalTime(id clip, SpliceKit_CMTime absTim
     return absTime;
 }
 
+// Write one automation point to the mixer's volume channel at the current playhead.
+// mixer.getState seeds the shared playhead/container state used for local-time conversion.
+BOOL SpliceKit_mixerWriteAutomationPoint(id clip, id channel, double value) {
+    if (!clip || !channel || !sMixerContainer || sMixerPlayheadTime.timescale <= 0) return NO;
+
+    SpliceKit_CMTime localTime = SpliceKit_clipLocalTime(clip, sMixerPlayheadTime, sMixerContainer);
+    BOOL beganOperation = NO;
+
+    @try {
+        SEL beginSel = NSSelectorFromString(@"operationBegin");
+        if ([channel respondsToSelector:beginSel]) {
+            ((void (*)(id, SEL))objc_msgSend)(channel, beginSel);
+            beganOperation = YES;
+        }
+    } @catch (NSException *e) {}
+
+    BOOL ok = SpliceKit_setChannelValueAtTime(channel, value, localTime);
+
+    @try {
+        SEL endSel = NSSelectorFromString(@"operationEnd");
+        if (beganOperation && [channel respondsToSelector:endSel]) {
+            ((void (*)(id, SEL))objc_msgSend)(channel, endSel);
+        }
+    } @catch (NSException *e) {}
+
+    return ok;
+}
+
 static void SpliceKit_readVolume(id clip, id effectStack, NSMutableDictionary *out) {
     if (!clip && !effectStack) return;
 
@@ -13150,6 +13201,9 @@ NSDictionary *SpliceKit_handleMixerGetState(NSDictionary *params) {
                 playhead = ((SpliceKit_CMTime (*)(id, SEL))STRET_MSG)(timeline, @selector(playheadTime));
             }
             double playheadSec = (playhead.timescale > 0) ? (double)playhead.value / playhead.timescale : 0;
+            BOOL transportPlaying = NO;
+            double transportRate = 0.0;
+            double frameRate = 0.0;
 
             // Set global playhead time for volume reads (picks up keyframed values)
             sMixerPlayheadTime = playhead;
@@ -13164,6 +13218,29 @@ NSDictionary *SpliceKit_handleMixerGetState(NSDictionary *params) {
                 return;
             }
             sMixerContainer = primaryObj; // For clip-local time conversion in readVolume
+
+            SEL isPlayingSel = NSSelectorFromString(@"isPlaying");
+            if ([timeline respondsToSelector:isPlayingSel]) {
+                transportPlaying = ((BOOL (*)(id, SEL))objc_msgSend)(timeline, isPlayingSel);
+            }
+
+            SEL frameDurationSel = NSSelectorFromString(@"frameDuration");
+            if ([sequence respondsToSelector:frameDurationSel]) {
+                SpliceKit_CMTime frameDuration = ((SpliceKit_CMTime (*)(id, SEL))STRET_MSG)(sequence, frameDurationSel);
+                if (frameDuration.timescale > 0 && frameDuration.value > 0) {
+                    frameRate = (double)frameDuration.timescale / frameDuration.value;
+                }
+            }
+
+            id timelinePlayer = nil;
+            SEL playerSel = NSSelectorFromString(@"player");
+            if ([timeline respondsToSelector:playerSel]) {
+                timelinePlayer = ((id (*)(id, SEL))objc_msgSend)(timeline, playerSel);
+            }
+            SEL rateSel = NSSelectorFromString(@"rate");
+            if (timelinePlayer && [timelinePlayer respondsToSelector:rateSel]) {
+                transportRate = ((double (*)(id, SEL))objc_msgSend)(timelinePlayer, rateSel);
+            }
 
             // Get spine items
             id spineItems = nil;
@@ -13470,6 +13547,10 @@ NSDictionary *SpliceKit_handleMixerGetState(NSDictionary *params) {
 
             result = @{
                 @"playheadSeconds": @(playheadSec),
+                @"playheadTime": SpliceKit_serializeCMTime(playhead),
+                @"isPlaying": @(transportPlaying),
+                @"playbackRate": @(transportRate),
+                @"frameRate": @(frameRate),
                 @"faders": indexed,
                 @"count": @(indexed.count),
                 @"totalRoles": @(roleOrder.count),
@@ -13513,8 +13594,19 @@ static NSDictionary *SpliceKit_handleMixerSetVolume(NSDictionary *params) {
                 return;
             }
 
+            SpliceKit_removeChannelKeyframes(channel);
+
             BOOL ok = SpliceKit_setChannelValue(channel, linear);
             if (ok) {
+                // Force timeline/audio engine refresh so volume takes effect during playback
+                id timeline = SpliceKit_getActiveTimelineModule();
+                if (timeline) {
+                    id seq = nil;
+                    if ([timeline respondsToSelector:@selector(sequence)])
+                        seq = ((id (*)(id, SEL))objc_msgSend)(timeline, @selector(sequence));
+                    if (seq) SpliceKit_refreshTimeline(seq);
+                }
+
                 double readback = SpliceKit_channelValue(channel);
                 result = @{
                     @"ok": @YES,
@@ -13636,6 +13728,7 @@ static NSDictionary *SpliceKit_handleMixerSetAllVolumes(NSDictionary *params) {
                 if (linear < 0.0) linear = 0.0;
                 if (linear > 3.98) linear = 3.98;
 
+                SpliceKit_removeChannelKeyframes(channel);
                 BOOL ok = SpliceKit_setChannelValue(channel, linear);
                 double readback = ok ? SpliceKit_channelValue(channel) : 0;
                 [results addObject:@{
