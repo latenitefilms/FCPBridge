@@ -35,6 +35,22 @@ REMOTE_URL="$(git remote get-url "${PUSH_REMOTE}")"
 RELEASE_REPO="$(printf '%s' "${REMOTE_URL}" | sed -E 's#(git@github.com:|https://github.com/)##; s#\.git$##')"
 TAG_NAME="v${VERSION}"
 
+if ! git diff --quiet || ! git diff --cached --quiet || [ -n "$(git ls-files --others --exclude-standard)" ]; then
+    echo "ERROR: Working tree is dirty. Commit, stash, or remove local changes before releasing." >&2
+    git status --short >&2
+    exit 1
+fi
+
+echo "[0/14] Checking notarization profile..."
+NOTARY_PREFLIGHT_LOG="$(mktemp)"
+if ! xcrun notarytool history --keychain-profile "${KEYCHAIN_PROFILE}" >/dev/null 2>"${NOTARY_PREFLIGHT_LOG}"; then
+    cat "${NOTARY_PREFLIGHT_LOG}" >&2
+    rm -f "${NOTARY_PREFLIGHT_LOG}"
+    echo "ERROR: Notarization profile ${KEYCHAIN_PROFILE} is not ready. Fix Apple Developer agreements or credentials before releasing." >&2
+    exit 1
+fi
+rm -f "${NOTARY_PREFLIGHT_LOG}"
+
 resolve_built_app() {
     local products_dir="${BUILD_DIR}/Build/Products/Release"
     local candidate=""
@@ -252,7 +268,7 @@ print('  Appcast updated')
 # ──────────────────────────────────────────────
 
 echo "[13/14] Committing and pushing..."
-git add -A
+git add appcast.xml "patcher/SpliceKit/Resources/Info.plist" "${XCODE_PROJECT}/project.pbxproj"
 git commit -m "Release v${VERSION}: ${NOTES}"
 git push "${PUSH_REMOTE}" "HEAD:${PUSH_BRANCH}"
 
