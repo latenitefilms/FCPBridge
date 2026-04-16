@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "https://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>en</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.splicekit.decoder.blackmagic-raw</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleExecutable</key>
+    <string>SpliceKitBRAWDecoder</string>
+    <key>CFBundleName</key>
+    <string>SpliceKitBRAWDecoder</string>
+    <key>CFBundlePackageType</key>
+    <string>BNDL</string>
+    <key>CFBundleSignature</key>
+    <string>????</string>
+    <key>CFBundleShortVersionString</key>
+    <string>0.1.0</string>
+    <key>CFBundleSupportedPlatforms</key>
+    <array>
+        <string>MacOSX</string>
+    </array>
+    <key>CFBundleVersion</key>
+    <string>0.1.0</string>
+    <key>CMClassImplementations</key>
+    <array>
+        <dict>
+            <key>CMClassID</key>
+            <string>com.apple.videotoolbox.videodecoder</string>
+            <key>CMClassImplementationID</key>
+            <string>com.splicekit.videotoolbox.videodecoder.blackmagic-raw</string>
+            <key>CMClassImplementationName</key>
+            <string>SpliceKit BRAW Decoder</string>
+            <key>CMClassImplementationVersion</key>
+            <integer>1</integer>
+            <key>CMCopyright</key>
+            <string>Copyright 2026 SpliceKit</string>
+            <key>CMExecutableArchitectures</key>
+            <array>
+                <string>x86_64</string>
+                <string>arm64</string>
+            </array>
+            <key>CMFactoryFunction</key>
+            <string>BRAWVideoDecoder_CreateInstance</string>
+            <key>CMManufacturer</key>
+            <string>SpliceKit</string>
+            <key>CMMatchingInfo</key>
+            <dict>
+                <key>VTCodecType</key>
+                <string>braw</string>
+            </dict>
+        </dict>
+        <dict>
+            <key>CMClassID</key>
+            <string>com.apple.videotoolbox.videodecoder</string>
+            <key>CMClassImplementationID</key>
+            <string>com.splicekit.videotoolbox.videodecoder.blackmagic-raw-brxq</string>
+            <key>CMClassImplementationName</key>
+            <string>SpliceKit BRAW Decoder (brxq)</string>
+            <key>CMClassImplementationVersion</key>
+            <integer>1</integer>
+            <key>CMCopyright</key>
+            <string>Copyright 2026 SpliceKit</string>
+            <key>CMExecutableArchitectures</key>
+            <array>
+                <string>x86_64</string>
+                <string>arm64</string>
+            </array>
+            <key>CMFactoryFunction</key>
+            <string>BRAWVideoDecoder_CreateInstance</string>
+            <key>CMManufacturer</key>
+            <string>SpliceKit</string>
+            <key>CMMatchingInfo</key>
+            <dict>
+                <key>VTCodecType</key>
+                <string>brxq</string>
+            </dict>
+        </dict>
+    </array>
+    <key>LSMinimumSystemVersion</key>
+    <string>14.0</string>
+</dict>
+</plist>

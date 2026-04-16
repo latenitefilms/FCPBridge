@@ -1,13 +1,26 @@
 CC = clang
 ARCHS = -arch arm64 -arch x86_64
 MIN_VERSION = -mmacosx-version-min=14.0
-FRAMEWORKS = -framework Foundation -framework AppKit -framework AVFoundation -framework CoreServices
+FRAMEWORKS = -framework Foundation -framework AppKit -framework AVFoundation -framework CoreServices -framework Metal
 OBJC_FLAGS = -fobjc-arc -fmodules
+OBJCXX_FLAGS = $(OBJC_FLAGS) -std=c++17
+DEBUG_FLAGS = -g
 LINKER_FLAGS = -undefined dynamic_lookup -dynamiclib
+CPP_LIBS = -lc++
 INSTALL_NAME = -install_name @rpath/SpliceKit.framework/Versions/A/SpliceKit
+SPLICEKIT_VERSION = $(shell awk -F= '/SPLICEKIT_VERSION/ { gsub(/[ ;]/, "", $$2); print $$2; exit }' patcher/SpliceKit/Configuration/Version.xcconfig)
+VERSION_DEFINE = -DSPLICEKIT_VERSION=\"$(SPLICEKIT_VERSION)\"
+SENTRY_FRAMEWORK_DIR = patcher/Frameworks
+SENTRY_FRAMEWORK = $(SENTRY_FRAMEWORK_DIR)/Sentry.framework
+SENTRY_FLAGS = -F $(SENTRY_FRAMEWORK_DIR) -ObjC -framework Sentry
+DSYM = $(OUTPUT).dSYM
 
 # Read canonical source list from Sources/SOURCES.txt
 SOURCES = $(addprefix Sources/, $(shell grep -v '^\#' Sources/SOURCES.txt | grep -v '^$$'))
+OBJC_SOURCES = $(filter %.m,$(SOURCES))
+OBJCXX_SOURCES = $(filter %.mm,$(SOURCES))
+OBJS = $(patsubst Sources/%.m,$(BUILD_DIR)/obj/%.o,$(OBJC_SOURCES)) \
+	$(patsubst Sources/%.mm,$(BUILD_DIR)/obj/%.o,$(OBJCXX_SOURCES))
 
 BUILD_DIR = build
 OUTPUT = $(BUILD_DIR)/SpliceKit
@@ -24,6 +37,8 @@ MODDED_APP_CREATOR = $(HOME)/Applications/SpliceKit/Final Cut Pro Creator Studio
 MODDED_APP = $(shell if [ -d "$(MODDED_APP_STANDARD)" ]; then echo "$(MODDED_APP_STANDARD)"; elif [ -d "$(MODDED_APP_CREATOR)" ]; then echo "$(MODDED_APP_CREATOR)"; else echo "$(MODDED_APP_STANDARD)"; fi)
 FW_DIR = $(MODDED_APP)/Contents/Frameworks/SpliceKit.framework
 ENTITLEMENTS = entitlements.plist
+REGISTER_PRO_EXTENSION_APP = $(MODDED_APP)/Contents/Helpers/RegisterProExtension.app
+PROAPP_SUPPORT_FRAMEWORK = $(MODDED_APP)/Contents/Frameworks/ProAppSupport.framework
 
 SILENCE_DETECTOR = $(BUILD_DIR)/silence-detector
 STRUCTURE_ANALYZER = $(BUILD_DIR)/structure-analyzer
@@ -39,9 +54,27 @@ PARAKEET_PKG_DIR = patcher/SpliceKitPatcher.app/Contents/Resources/tools/parakee
 PARAKEET_RELEASE_BIN = $(PARAKEET_PKG_DIR)/.build/release/parakeet-transcriber
 PARAKEET_DEBUG_BIN = $(PARAKEET_PKG_DIR)/.build/debug/parakeet-transcriber
 
-.PHONY: all clean deploy launch tools audio-bus-probe install-audio-bus-probe uninstall-audio-bus-probe
+BRAW_SOURCE_DIR = Plugins/BRAW/Sources
+BRAW_PRIVATE_DIR = $(BRAW_SOURCE_DIR)/Private
+BRAW_BUILD_DIR = $(BUILD_DIR)/braw-prototype
+BRAW_IMPORT_BUNDLE = $(BRAW_BUILD_DIR)/FormatReaders/SpliceKitBRAWImport.bundle
+BRAW_IMPORT_EXEC = $(BRAW_IMPORT_BUNDLE)/Contents/MacOS/SpliceKitBRAWImport
+BRAW_IMPORT_INFO = Plugins/BRAW/FormatReaders/SpliceKitBRAWImport.bundle/Contents/Info.plist
+BRAW_DECODER_BUNDLE = $(BRAW_BUILD_DIR)/Codecs/SpliceKitBRAWDecoder.bundle
+BRAW_DECODER_EXEC = $(BRAW_DECODER_BUNDLE)/Contents/MacOS/SpliceKitBRAWDecoder
+BRAW_DECODER_INFO = Plugins/BRAW/Codecs/SpliceKitBRAWDecoder.bundle/Contents/Info.plist
+BRAW_COMMON_SOURCES = $(BRAW_SOURCE_DIR)/BRAWCommon.mm
+BRAW_IMPORT_SOURCES = $(BRAW_COMMON_SOURCES) $(BRAW_SOURCE_DIR)/BRAWFormatReader.mm
+BRAW_DECODER_SOURCES = $(BRAW_COMMON_SOURCES) $(BRAW_SOURCE_DIR)/BRAWVideoDecoder.mm
+BRAW_FRAMEWORKS = -framework Foundation -framework CoreFoundation -framework CoreMedia -framework CoreVideo -framework VideoToolbox -framework MediaToolbox -framework Accelerate
+BRAW_CFLAGS = $(ARCHS) $(MIN_VERSION) $(OBJCXX_FLAGS) $(DEBUG_FLAGS) -fvisibility=hidden -I $(BRAW_SOURCE_DIR) -I $(BRAW_PRIVATE_DIR)
+BRAW_LDFLAGS = -bundle $(CPP_LIBS)
+
+.PHONY: all clean deploy launch tools audio-bus-probe install-audio-bus-probe uninstall-audio-bus-probe symbols braw-prototype
 
 all: $(OUTPUT)
+
+symbols: $(DSYM)
 
 tools: $(SILENCE_DETECTOR) $(STRUCTURE_ANALYZER) $(MIXER_APP)
 
@@ -73,8 +106,14 @@ uninstall-audio-bus-probe:
 $(BUILD_DIR):
 	@mkdir -p $(BUILD_DIR)
 
+$(SENTRY_FRAMEWORK): Scripts/ensure_sentry_framework.sh
+	@bash Scripts/ensure_sentry_framework.sh
+
 $(BUILD_DIR)/lua: | $(BUILD_DIR)
 	@mkdir -p $(BUILD_DIR)/lua
+
+$(BUILD_DIR)/obj: | $(BUILD_DIR)
+	@mkdir -p $(BUILD_DIR)/obj
 
 $(SILENCE_DETECTOR): tools/silence-detector.swift | $(BUILD_DIR)
 	swiftc -O -suppress-warnings -o $(SILENCE_DETECTOR) tools/silence-detector.swift
@@ -97,20 +136,71 @@ $(LUA_LIB): $(LUA_OBJS) | $(BUILD_DIR)
 	libtool -static -o $@ $^
 	@echo "Built: $(LUA_LIB)"
 
-$(OUTPUT): $(SOURCES) Sources/SpliceKit.h $(LUA_LIB) | $(BUILD_DIR)
-	$(CC) $(ARCHS) $(MIN_VERSION) $(FRAMEWORKS) $(OBJC_FLAGS) $(LINKER_FLAGS) \
-		$(INSTALL_NAME) -I Sources -I $(LUA_DIR) \
-		$(SOURCES) $(LUA_LIB) -o $(OUTPUT)
+$(BUILD_DIR)/obj/%.o: Sources/%.m Sources/SpliceKit.h $(SENTRY_FRAMEWORK) | $(BUILD_DIR)/obj
+	$(CC) $(ARCHS) $(MIN_VERSION) $(OBJC_FLAGS) $(DEBUG_FLAGS) $(VERSION_DEFINE) \
+		-I Sources -I $(LUA_DIR) -F $(SENTRY_FRAMEWORK_DIR) -c $< -o $@
+
+$(BUILD_DIR)/obj/%.o: Sources/%.mm Sources/SpliceKit.h $(SENTRY_FRAMEWORK) | $(BUILD_DIR)/obj
+	$(CC) $(ARCHS) $(MIN_VERSION) $(OBJCXX_FLAGS) $(DEBUG_FLAGS) $(VERSION_DEFINE) \
+		-I Sources -I $(LUA_DIR) -F $(SENTRY_FRAMEWORK_DIR) -c $< -o $@
+
+$(OUTPUT): $(OBJS) $(LUA_LIB) $(SENTRY_FRAMEWORK) | $(BUILD_DIR)
+	$(CC) $(ARCHS) $(MIN_VERSION) $(FRAMEWORKS) $(LINKER_FLAGS) \
+		$(INSTALL_NAME) $(OBJS) $(LUA_LIB) $(SENTRY_FLAGS) $(CPP_LIBS) -o $(OUTPUT)
 	@echo "Built: $(OUTPUT)"
 	@file $(OUTPUT)
 
+$(DSYM): $(OUTPUT)
+	dsymutil "$(OUTPUT)" -o "$(DSYM)"
+	@echo "Built: $(DSYM)"
+
 clean:
 	rm -rf $(BUILD_DIR)
+
+$(BRAW_BUILD_DIR): | $(BUILD_DIR)
+	@mkdir -p "$(BRAW_BUILD_DIR)"
+
+$(BRAW_IMPORT_EXEC): $(BRAW_IMPORT_SOURCES) $(BRAW_IMPORT_INFO) | $(BRAW_BUILD_DIR)
+	@mkdir -p "$(BRAW_IMPORT_BUNDLE)/Contents/MacOS"
+	@cp "$(BRAW_IMPORT_INFO)" "$(BRAW_IMPORT_BUNDLE)/Contents/Info.plist"
+	$(CC) $(BRAW_CFLAGS) $(BRAW_FRAMEWORKS) $(BRAW_IMPORT_SOURCES) $(BRAW_LDFLAGS) -o "$(BRAW_IMPORT_EXEC)"
+	@codesign --force --sign - "$(BRAW_IMPORT_BUNDLE)" >/dev/null
+	@echo "Built: $(BRAW_IMPORT_BUNDLE)"
+
+$(BRAW_DECODER_EXEC): $(BRAW_DECODER_SOURCES) $(BRAW_DECODER_INFO) | $(BRAW_BUILD_DIR)
+	@mkdir -p "$(BRAW_DECODER_BUNDLE)/Contents/MacOS"
+	@cp "$(BRAW_DECODER_INFO)" "$(BRAW_DECODER_BUNDLE)/Contents/Info.plist"
+	$(CC) $(BRAW_CFLAGS) $(BRAW_FRAMEWORKS) $(BRAW_DECODER_SOURCES) $(BRAW_LDFLAGS) -o "$(BRAW_DECODER_EXEC)"
+	@codesign --force --sign - "$(BRAW_DECODER_BUNDLE)" >/dev/null
+	@echo "Built: $(BRAW_DECODER_BUNDLE)"
+
+BRAW_CLI_SRC = tools/braw-decoder/braw-decoder.mm
+BRAW_CLI_BIN = $(BUILD_DIR)/braw-decoder
+BRAW_CLI_FRAMEWORK_DIR = /Applications/Blackmagic RAW/Blackmagic RAW SDK/Mac/Libraries
+
+# Subprocess CLI that hosts the BRAW SDK in its own process. FCP's SpliceKit
+# framework talks to it over pipes; see tools/braw-decoder/braw-decoder.mm for
+# the wire protocol.
+$(BRAW_CLI_BIN): $(BRAW_CLI_SRC) | $(BUILD_DIR)
+	$(CC) -arch arm64 -arch x86_64 $(MIN_VERSION) $(OBJCXX_FLAGS) -O2 \
+		-F "$(BRAW_CLI_FRAMEWORK_DIR)" \
+		-framework Foundation -framework CoreFoundation -framework BlackmagicRawAPI \
+		-Wl,-rpath,"$(BRAW_CLI_FRAMEWORK_DIR)" \
+		$(BRAW_CLI_SRC) $(CPP_LIBS) -o "$(BRAW_CLI_BIN)"
+	@codesign --force --sign - "$(BRAW_CLI_BIN)" >/dev/null
+	@echo "Built: $(BRAW_CLI_BIN)"
+
+braw-prototype: $(BRAW_IMPORT_EXEC) $(BRAW_DECODER_EXEC) $(BRAW_CLI_BIN)
+	@echo "Staged: $(BRAW_BUILD_DIR)"
 
 deploy: $(OUTPUT) $(SILENCE_DETECTOR) $(STRUCTURE_ANALYZER) $(MIXER_APP)
 	@echo "=== Deploying SpliceKit to modded FCP ==="
 	@mkdir -p "$(FW_DIR)/Versions/A/Resources"
 	cp $(OUTPUT) "$(FW_DIR)/Versions/A/SpliceKit"
+	@if [ -f "$(HOME)/Library/Application Support/SpliceKit/SpliceKitSentryConfig.plist" ]; then \
+		cp "$(HOME)/Library/Application Support/SpliceKit/SpliceKitSentryConfig.plist" "$(FW_DIR)/Versions/A/Resources/SpliceKitSentryConfig.plist"; \
+		echo "Copied runtime Sentry config into framework resources"; \
+	fi
 	@# Create framework symlinks (must use cd for relative paths)
 	@cd "$(FW_DIR)/Versions" && ln -sf A Current
 	@cd "$(FW_DIR)" && ln -sf Versions/Current/SpliceKit SpliceKit
@@ -140,9 +230,19 @@ deploy: $(OUTPUT) $(SILENCE_DETECTOR) $(STRUCTURE_ANALYZER) $(MIXER_APP)
 	@mkdir -p "$(HOME)/Library/Application Support/SpliceKit/lua/auto"
 	@mkdir -p "$(HOME)/Library/Application Support/SpliceKit/lua/lib"
 	@mkdir -p "$(HOME)/Library/Application Support/SpliceKit/lua/menu"
-	@cp -n scripts/lua/examples/*.lua "$(HOME)/Library/Application Support/SpliceKit/lua/examples/" 2>/dev/null || true
-	@cp -n scripts/lua/menu/*.lua "$(HOME)/Library/Application Support/SpliceKit/lua/menu/" 2>/dev/null || true
-	@cp -n scripts/lua/lib/*.lua "$(HOME)/Library/Application Support/SpliceKit/lua/lib/" 2>/dev/null || true
+	@cp -n Scripts/lua/examples/*.lua "$(HOME)/Library/Application Support/SpliceKit/lua/examples/" 2>/dev/null || true
+	@cp -n Scripts/lua/menu/*.lua "$(HOME)/Library/Application Support/SpliceKit/lua/menu/" 2>/dev/null || true
+	@cp -n Scripts/lua/lib/*.lua "$(HOME)/Library/Application Support/SpliceKit/lua/lib/" 2>/dev/null || true
+	@if [ "$(ENABLE_BRAW_PROTOTYPE)" = "1" ]; then \
+		$(MAKE) braw-prototype; \
+		mkdir -p "$(MODDED_APP)/Contents/PlugIns/Codecs"; \
+		mkdir -p "$(MODDED_APP)/Contents/PlugIns/FormatReaders"; \
+		rm -rf "$(MODDED_APP)/Contents/PlugIns/Codecs/SpliceKitBRAWDecoder.bundle"; \
+		rm -rf "$(MODDED_APP)/Contents/PlugIns/FormatReaders/SpliceKitBRAWImport.bundle"; \
+		cp -R "$(BUILD_DIR)/braw-prototype/Codecs/SpliceKitBRAWDecoder.bundle" "$(MODDED_APP)/Contents/PlugIns/Codecs/SpliceKitBRAWDecoder.bundle"; \
+		cp -R "$(BUILD_DIR)/braw-prototype/FormatReaders/SpliceKitBRAWImport.bundle" "$(MODDED_APP)/Contents/PlugIns/FormatReaders/SpliceKitBRAWImport.bundle"; \
+		echo "Opt-in BRAW prototype bundles copied into FCP.app/Contents/PlugIns"; \
+	fi
 	@sign_identity=$$(security find-identity -v -p codesigning 2>/dev/null | awk '/"Apple Development:/ { print $$2; exit } /"Developer ID Application:/ && developer == "" { developer = $$2 } /[0-9]+\) [0-9A-F]+ "/ && first == "" { first = $$2 } END { if (developer != "") print developer; else if (first != "") print first }'); \
 	if [ -n "$$sign_identity" ]; then \
 		echo "Using signing identity: $$sign_identity"; \
@@ -150,12 +250,36 @@ deploy: $(OUTPUT) $(SILENCE_DETECTOR) $(STRUCTURE_ANALYZER) $(MIXER_APP)
 		sign_identity="-"; \
 		echo "No local codesigning identity found; falling back to ad-hoc signing"; \
 	fi; \
+	if [ -d "$(MODDED_APP)/Contents/PlugIns/FormatReaders/SpliceKitBRAWImport.bundle" ]; then \
+		codesign --force --sign "$$sign_identity" "$(MODDED_APP)/Contents/PlugIns/FormatReaders/SpliceKitBRAWImport.bundle"; \
+	fi; \
+	if [ -d "$(MODDED_APP)/Contents/PlugIns/Codecs/SpliceKitBRAWDecoder.bundle" ]; then \
+		codesign --force --sign "$$sign_identity" "$(MODDED_APP)/Contents/PlugIns/Codecs/SpliceKitBRAWDecoder.bundle"; \
+	fi; \
+	if [ -d "$(PROAPP_SUPPORT_FRAMEWORK)" ]; then \
+		codesign --force --sign "$$sign_identity" "$(PROAPP_SUPPORT_FRAMEWORK)"; \
+	fi; \
+	if [ -d "$(REGISTER_PRO_EXTENSION_APP)" ]; then \
+		codesign --force --sign "$$sign_identity" --entitlements $(ENTITLEMENTS) "$(REGISTER_PRO_EXTENSION_APP)"; \
+	fi; \
 	if ! codesign --force --sign "$$sign_identity" "$(FW_DIR)" || \
 	   ! codesign --force --sign "$$sign_identity" --entitlements $(ENTITLEMENTS) "$(MODDED_APP)"; then \
 		if [ "$$sign_identity" = "-" ]; then \
 			exit 1; \
 		fi; \
 		echo "Developer signing failed; retrying with ad-hoc signature"; \
+		if [ -d "$(MODDED_APP)/Contents/PlugIns/FormatReaders/SpliceKitBRAWImport.bundle" ]; then \
+			codesign --force --sign - "$(MODDED_APP)/Contents/PlugIns/FormatReaders/SpliceKitBRAWImport.bundle"; \
+		fi; \
+		if [ -d "$(MODDED_APP)/Contents/PlugIns/Codecs/SpliceKitBRAWDecoder.bundle" ]; then \
+			codesign --force --sign - "$(MODDED_APP)/Contents/PlugIns/Codecs/SpliceKitBRAWDecoder.bundle"; \
+		fi; \
+		if [ -d "$(PROAPP_SUPPORT_FRAMEWORK)" ]; then \
+			codesign --force --sign - "$(PROAPP_SUPPORT_FRAMEWORK)"; \
+		fi; \
+		if [ -d "$(REGISTER_PRO_EXTENSION_APP)" ]; then \
+			codesign --force --sign - --entitlements $(ENTITLEMENTS) "$(REGISTER_PRO_EXTENSION_APP)"; \
+		fi; \
 		codesign --force --sign - "$(FW_DIR)"; \
 		codesign --force --sign - --entitlements $(ENTITLEMENTS) "$(MODDED_APP)"; \
 	fi

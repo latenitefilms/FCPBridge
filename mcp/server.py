@@ -235,6 +235,7 @@ READ_ONLY_TOOLS = {
     "debug_threads",
     "debug_eval",
     "browser_list_clips",
+    "braw_probe",
     "get_caption_state",
     "get_caption_styles",
     "verify_native_captions",
@@ -293,6 +294,7 @@ DESTRUCTIVE_TOOLS = {
     "debug_load_plugin",
     "direct_timeline_action",
     "browser_append_clip",
+    "import_media",
     "paste_fcpxml",
     "stabilize_subject",
     "insert_title",
@@ -441,6 +443,7 @@ CUSTOM_TOOL_TITLES = {
     "direct_timeline_action": "Direct Timeline Action",
     "browser_list_clips": "List Browser Clips",
     "browser_append_clip": "Append Browser Clip",
+    "import_media": "Import Media Files",
     "paste_fcpxml": "Paste FCPXML",
     "stabilize_subject": "Stabilize Subject",
     "insert_title": "Insert Title",
@@ -6193,6 +6196,93 @@ def browser_append_clip(handle: str = "", index: int = -1, name: str = "") -> st
     if name:
         params["name"] = name
     r = bridge.call("browser.appendClip", **params)
+    if _err(r):
+        return f"Error: {r.get('error', r)}"
+    return _fmt(r)
+
+
+@mcp.tool(annotations=_tool_annotations("import_media"))
+def import_media(paths: list[str] | None = None,
+                 path: str = "",
+                 event: str = "",
+                 library: str = "",
+                 manage_file_type: int = 0) -> str:
+    """Import local media files into an event's browser — the same landing
+    place dragging a file into FCP puts it.
+
+    Wraps -[FFMediaEventProject newClipFromURL:manageFileType:] + addOwnedClipsObject:
+    which is FCP's native drop-import path. Works with any file type FCP can
+    read (QuickTime, MP4, MXF, BRAW once the format reader is loaded, etc.).
+
+    Args:
+        paths: List of absolute paths to import
+        path: Single absolute path (alternative to paths)
+        event: Substring match for event name (case-insensitive). Empty = first event.
+        library: Substring match for library display name. Empty = any library.
+        manage_file_type: 0 = leave in place (default), 1 = copy into managed media.
+
+    Returns imported clip handles plus any skipped paths with reasons.
+    """
+    all_paths: list[str] = []
+    if paths:
+        all_paths.extend(p for p in paths if p)
+    if path:
+        all_paths.append(path)
+    if not all_paths:
+        return "Error: provide `paths` (list) or `path` (single)"
+    params: dict = {"paths": all_paths, "manageFileType": manage_file_type}
+    if event:
+        params["event"] = event
+    if library:
+        params["library"] = library
+    r = bridge.call("media.importFile", **params)
+    if _err(r):
+        return f"Error: {r.get('error', r)}"
+    return _fmt(r)
+
+
+@mcp.tool(annotations=_tool_annotations("braw_probe"))
+def braw_probe(path: str = "",
+               handle: str = "",
+               decode_frame_index: int = -1,
+               metadata_limit: int = 16,
+               include_metadata: bool = False,
+               include_processing: bool = False,
+               include_audio: bool = False,
+               selected: bool = False) -> str:
+    """Probe `.braw` media through the Blackmagic RAW SDK without importing or transcoding.
+
+    This validates the native Blackmagic SDK from inside the injected SpliceKit dylib.
+    It can inspect an explicit file path, a browser/timeline clip handle, or the current
+    selected timeline items when `selected=True` (or when no explicit input is supplied).
+
+    Args:
+        path: Absolute filesystem path to a `.braw` clip
+        handle: Existing SpliceKit clip handle to resolve to media
+        decode_frame_index: Optional frame index to read + decode for validation. Use -1 to skip decode.
+        metadata_limit: Number of metadata entries to sample from the clip
+        include_metadata: Include clip metadata/timecode/camera info sample
+        include_processing: Include current clip processing attributes
+        include_audio: Include embedded audio format/sample info
+        selected: Probe the current selected timeline items
+    """
+    params = {
+        "decodeFrameIndex": decode_frame_index,
+        "metadataLimit": metadata_limit,
+    }
+    if path:
+        params["path"] = path
+    if handle:
+        params["handle"] = handle
+    if include_metadata:
+        params["includeMetadata"] = True
+    if include_processing:
+        params["includeProcessing"] = True
+    if include_audio:
+        params["includeAudio"] = True
+    if selected:
+        params["selected"] = True
+    r = bridge.call("braw.probe", **params)
     if _err(r):
         return f"Error: {r.get('error', r)}"
     return _fmt(r)

@@ -8,8 +8,10 @@ SpliceKitDualTimelineDrag.m
 SpliceKitRuntime.m
 SpliceKitSwizzle.m
 SpliceKitAudioBusDiagnostics.m
+SpliceKitBRAW.mm
 SpliceKitServer.m
 SpliceKitLogPanel.m
+SpliceKitSentry.m
 SpliceKitTranscriptPanel.m
 SpliceKitTranscriptDiagnostics.m
 SpliceKitCaptionPanel.m

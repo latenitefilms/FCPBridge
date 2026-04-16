@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "https://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>en</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.splicekit.formatreader.blackmagic-raw</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleExecutable</key>
+    <string>SpliceKitBRAWImport</string>
+    <key>CFBundleName</key>
+    <string>SpliceKitBRAWImport</string>
+    <key>CFBundlePackageType</key>
+    <string>BNDL</string>
+    <key>CFBundleSignature</key>
+    <string>????</string>
+    <key>CFBundleShortVersionString</key>
+    <string>0.1.0</string>
+    <key>CFBundleSupportedPlatforms</key>
+    <array>
+        <string>MacOSX</string>
+    </array>
+    <key>CFBundleVersion</key>
+    <string>0.1.0</string>
+    <key>CMClassImplementations</key>
+    <array>
+        <dict>
+            <key>CMClassID</key>
+            <string>com.apple.mediatoolbox.pluginformatreader</string>
+            <key>CMClassImplementationID</key>
+            <string>com.splicekit.mediatoolbox.pluginformatreader.blackmagic-raw</string>
+            <key>CMClassImplementationName</key>
+            <string>SpliceKit BRAW Format Reader</string>
+            <key>CMClassImplementationVersion</key>
+            <integer>1</integer>
+            <key>CMCopyright</key>
+            <string>Copyright 2026 SpliceKit</string>
+            <key>CMExecutableArchitectures</key>
+            <array>
+                <string>x86_64</string>
+                <string>arm64</string>
+            </array>
+            <key>CMFactoryFunction</key>
+            <string>BRAWPluginFormatReader_CreateInstance</string>
+            <key>CMManufacturer</key>
+            <string>SpliceKit</string>
+            <key>CMMatchingInfo</key>
+            <dict>
+                <key>MTFileNameExtensionArray</key>
+                <array>
+                    <string>braw</string>
+                    <string>BRAW</string>
+                </array>
+                <key>MTUTTypeArray</key>
+                <array>
+                    <string>com.blackmagic-design.braw-movie</string>
+                </array>
+            </dict>
+        </dict>
+    </array>
+    <key>LSMinimumSystemVersion</key>
+    <string>14.0</string>
+    <key>UTExportedTypeDeclarations</key>
+    <array>
+        <dict>
+            <key>UTTypeConformsTo</key>
+            <string>public.movie</string>
+            <key>UTTypeDescription</key>
+            <string>Blackmagic RAW Clip</string>
+            <key>UTTypeIdentifier</key>
+            <string>com.blackmagic-design.braw-movie</string>
+            <key>UTTypeTagSpecification</key>
+            <dict>
+                <key>public.filename-extension</key>
+                <array>
+                    <string>braw</string>
+                    <string>BRAW</string>
+                </array>
+                <key>public.mime-type</key>
+                <array>
+                    <string>video/x-braw</string>
+                </array>
+            </dict>
+        </dict>
+    </array>
+</dict>
+</plist>

@@ -13,6 +13,7 @@
 //
 
 #import "SpliceKit.h"
+#import "SpliceKitSentry.h"
 #import "SpliceKitLogPanel.h"
 #import "SpliceKitTranscriptPanel.h"
 #import "SpliceKitCaptionPanel.h"
@@ -52,6 +53,8 @@
 // Forward declaration — the actual implementation lives further down in the file
 void SpliceKit_installEffectDragSwizzlesNow(void);
 BOOL SpliceKit_removeChannelKeyframes(id channel);
+NSDictionary *SpliceKit_handleBRAWProbe(NSDictionary *params);
+NSDictionary *SpliceKit_handleBRAWProviderProbe(NSDictionary *params);
 
 #define SPLICEKIT_TCP_PORT 9876
 
@@ -13311,6 +13314,150 @@ static NSDictionary *SpliceKit_handleBrowserAppendClip(NSDictionary *params) {
     return result ?: @{@"error": @"Failed to append clip"};
 }
 
+#pragma mark - Media Import
+
+// Find an event by name across all open libraries. If name is nil or empty,
+// picks the first event of the first library. Returns nil if nothing matches.
+// Optional library name filters the library too.
+static id SpliceKit_resolveMediaImportEvent(NSString *libraryName, NSString *eventName) {
+    id libs = ((id (*)(id, SEL))objc_msgSend)(
+        objc_getClass("FFLibraryDocument"), @selector(copyActiveLibraries));
+    if (![libs isKindOfClass:[NSArray class]] || [(NSArray *)libs count] == 0) {
+        return nil;
+    }
+
+    NSString *libLower = libraryName.length ? [libraryName lowercaseString] : nil;
+    NSString *evtLower = eventName.length ? [eventName lowercaseString] : nil;
+
+    for (id library in (NSArray *)libs) {
+        if (libLower) {
+            NSString *name = nil;
+            if ([library respondsToSelector:@selector(displayName)]) {
+                name = ((id (*)(id, SEL))objc_msgSend)(library, @selector(displayName));
+            }
+            if (!name || ![[name lowercaseString] containsString:libLower]) continue;
+        }
+
+        SEL eventsSel = NSSelectorFromString(@"events");
+        if (![library respondsToSelector:eventsSel]) continue;
+        id events = ((id (*)(id, SEL))objc_msgSend)(library, eventsSel);
+        if (![events isKindOfClass:[NSArray class]]) continue;
+
+        for (id eventRecord in (NSArray *)events) {
+            if (evtLower) {
+                NSString *ename = nil;
+                if ([eventRecord respondsToSelector:@selector(name)]) {
+                    ename = ((id (*)(id, SEL))objc_msgSend)(eventRecord, @selector(name));
+                }
+                if (!ename || ![[ename lowercaseString] containsString:evtLower]) continue;
+            }
+            if (![eventRecord respondsToSelector:@selector(project)]) continue;
+            id project = ((id (*)(id, SEL))objc_msgSend)(eventRecord, @selector(project));
+            if (project) return project;
+        }
+
+        // If event name wasn't specified, return first event of this library.
+        if (!evtLower && [(NSArray *)events count] > 0) {
+            id eventRecord = [(NSArray *)events firstObject];
+            if ([eventRecord respondsToSelector:@selector(project)]) {
+                return ((id (*)(id, SEL))objc_msgSend)(eventRecord, @selector(project));
+            }
+        }
+    }
+    return nil;
+}
+
+// media.importFile — import one or more local files into an event's browser.
+// Uses -[FFMediaEventProject newClipFromURL:manageFileType:] + addOwnedClipsObject:
+// which is the same path drag-and-drop funnels into once the user drops.
+//
+// Params:
+//   paths       : [str]  — absolute file paths (required)
+//   event?      : str    — case-insensitive substring match for event name
+//   library?    : str    — case-insensitive substring match for library display name
+//   manageFileType? : int — 0 = leave in place (default), other values per FCP
+//                          (e.g. 1 = copy to managed media location).
+//
+// Returns { status, event, imported:[{path, handle, name}], skipped:[{path, reason}] }.
+static NSDictionary *SpliceKit_handleMediaImportFile(NSDictionary *params) {
+    id pathsAny = params[@"paths"];
+    NSString *single = [params[@"path"] isKindOfClass:[NSString class]] ? params[@"path"] : nil;
+    NSMutableArray<NSString *> *paths = [NSMutableArray array];
+    if ([pathsAny isKindOfClass:[NSArray class]]) {
+        for (id p in (NSArray *)pathsAny) {
+            if ([p isKindOfClass:[NSString class]] && [(NSString *)p length]) [paths addObject:p];
+        }
+    }
+    if (single) [paths addObject:single];
+    if (paths.count == 0) {
+        return @{@"error": @"No paths provided. Pass `paths` (array of absolute file paths) or `path` (single)."};
+    }
+
+    NSString *libHint = [params[@"library"] isKindOfClass:[NSString class]] ? params[@"library"] : nil;
+    NSString *eventHint = [params[@"event"] isKindOfClass:[NSString class]] ? params[@"event"] : nil;
+    NSNumber *manageNum = [params[@"manageFileType"] isKindOfClass:[NSNumber class]] ? params[@"manageFileType"] : nil;
+    int manageFileType = manageNum ? [manageNum intValue] : 0;
+
+    __block NSDictionary *result = nil;
+    SpliceKit_executeOnMainThread(^{
+        @try {
+            id project = SpliceKit_resolveMediaImportEvent(libHint, eventHint);
+            if (!project) {
+                result = @{@"error": @"No event found. Make sure a library with at least one event is open."};
+                return;
+            }
+            NSString *eventName = nil;
+            if ([project respondsToSelector:@selector(displayName)]) {
+                eventName = ((id (*)(id, SEL))objc_msgSend)(project, @selector(displayName));
+            }
+
+            NSMutableArray *imported = [NSMutableArray array];
+            NSMutableArray *skipped = [NSMutableArray array];
+            SEL newClipSel = NSSelectorFromString(@"newClipFromURL:manageFileType:");
+            SEL addOwnedSel = NSSelectorFromString(@"addOwnedClipsObject:");
+
+            for (NSString *path in paths) {
+                if (![[NSFileManager defaultManager] fileExistsAtPath:path]) {
+                    [skipped addObject:@{@"path": path, @"reason": @"file not found"}];
+                    continue;
+                }
+                NSURL *url = [NSURL fileURLWithPath:path];
+                id clip = nil;
+                if ([project respondsToSelector:newClipSel]) {
+                    clip = ((id (*)(id, SEL, id, int))objc_msgSend)(project, newClipSel, url, manageFileType);
+                }
+                if (!clip) {
+                    [skipped addObject:@{@"path": path, @"reason": @"newClipFromURL returned nil (unsupported format or invalid source?)"}];
+                    continue;
+                }
+                if ([project respondsToSelector:addOwnedSel]) {
+                    ((void (*)(id, SEL, id))objc_msgSend)(project, addOwnedSel, clip);
+                }
+                NSString *displayName = nil;
+                if ([clip respondsToSelector:@selector(displayName)]) {
+                    displayName = ((id (*)(id, SEL))objc_msgSend)(clip, @selector(displayName));
+                }
+                NSString *handle = SpliceKit_storeHandle(clip);
+                [imported addObject:@{
+                    @"path": path,
+                    @"handle": handle ?: @"",
+                    @"name": displayName ?: @"",
+                }];
+            }
+
+            result = @{
+                @"status": imported.count > 0 ? @"ok" : @"error",
+                @"event": eventName ?: @"",
+                @"imported": imported,
+                @"skipped": skipped,
+            };
+        } @catch (NSException *e) {
+            result = @{@"error": [NSString stringWithFormat:@"Exception: %@", e.reason]};
+        }
+    });
+    return result ?: @{@"error": @"Import failed on main thread"};
+}
+
 #pragma mark - Menu Execute Handler
 //
 // Navigate and click any FCP menu item by path, e.g. ["File", "New", "Project..."].
@@ -26412,6 +26559,8 @@ NSDictionary *SpliceKit_handleRequest(NSDictionary *request) {
         return @{@"error": @{@"code": @(-32600), @"message": @"Invalid Request: method required"}};
     }
 
+    SpliceKit_sentrySetLastRPCMethod(method);
+
     SpliceKit_installEffectDragSwizzlesNow();
 
     // Auto-dismiss known blocking dialogs before processing any request
@@ -26635,6 +26784,14 @@ NSDictionary *SpliceKit_handleRequest(NSDictionary *request) {
         result = SpliceKit_handleBrowserListClips(params);
     } else if ([method isEqualToString:@"browser.appendClip"]) {
         result = SpliceKit_handleBrowserAppendClip(params);
+    } else if ([method isEqualToString:@"media.importFile"]) {
+        result = SpliceKit_handleMediaImportFile(params);
+    }
+    // braw.* namespace
+    else if ([method isEqualToString:@"braw.probe"]) {
+        result = SpliceKit_handleBRAWProbe(params);
+    } else if ([method isEqualToString:@"braw.providerProbe"]) {
+        result = SpliceKit_handleBRAWProviderProbe(params);
     }
     // menu.* namespace
     else if ([method isEqualToString:@"menu.execute"]) {
@@ -26976,6 +27133,12 @@ static void SpliceKit_handleClient(int clientFd) {
                 } @catch (NSException *exception) {
                     SpliceKit_log(@"Exception handling request: %@ - %@",
                                   exception.name, exception.reason);
+                    SpliceKit_sentryCaptureException(exception,
+                                                     @"runtime.rpc.exception",
+                                                     @{
+                                                         @"method": method ?: @"<unknown>",
+                                                         @"params": request[@"params"] ?: @{}
+                                                     });
                     response[@"error"] = @{
                         @"code": @(-32000),
                         @"message": [NSString stringWithFormat:@"Internal error: %@", exception.reason]
