@@ -479,56 +479,22 @@ static bool ConfigureDecoderRuntime(BRAWVideoDecoder *decoder, CFStringRef fileP
 
     decoder->CloseRuntime();
 
-    // Prefer populating metadata from the format description FCP handed us,
-    // supplemented by host-side SDK metadata for framerate/frameCount.
-    if (fdHint && PopulateInfoFromFormatDescription(decoder, fdHint, filePath)) {
-        decoder->currentPath = (CFStringRef)CFRetain(filePath);
-        Log(@"decoder", @"metadata: %ux%u @ %.3f fps, %llu frames",
-            decoder->info.width, decoder->info.height,
-            (double)decoder->info.frameRate, decoder->info.frameCount);
-        return true;
-    }
-
-#if !SPLICEKIT_BRAW_SDK_AVAILABLE
-    Log(@"decoder", @"BRAW SDK headers are unavailable");
-    return false;
-#else
-    std::string error;
-    decoder->factory.reset(CreateFactory(error));
-    if (!decoder->factory) {
-        Log(@"decoder", @"CreateFactory failed: %s", error.c_str());
+    // Metadata comes from the format description FCP handed us plus host-side
+    // BRAW SDK state (for framerate/frameCount). We deliberately do not open
+    // the BRAW clip in-bundle: BRAW SDK callbacks fire on its own worker
+    // threads, and when the decoder bundle is loaded inside a live VT decoder
+    // session those callbacks faulted (PAC / EXC_BAD_ACCESS). All actual
+    // decode work runs through the host helper on its serial queue.
+    if (!fdHint || !PopulateInfoFromFormatDescription(decoder, fdHint, filePath)) {
+        Log(@"decoder", @"failed to populate metadata for %@", CopyNSString(filePath));
         return false;
     }
 
-    HRESULT hr = decoder->factory->CreateCodec(decoder->codec.out());
-    if (hr != S_OK || !decoder->codec.get()) {
-        Log(@"decoder", @"CreateCodec failed %@", DescribeHRESULT(hr));
-        decoder->CloseRuntime();
-        return false;
-    }
-
-    if (decoder->codec->QueryInterface(IID_IBlackmagicRawConfiguration, (LPVOID *)decoder->configuration.out()) == S_OK &&
-        decoder->configuration.get()) {
-        decoder->configuration->SetPipeline(blackmagicRawPipelineCPU, nullptr, nullptr);
-    }
-
-    hr = decoder->codec->OpenClip(filePath, decoder->clip.out());
-    if (hr != S_OK || !decoder->clip.get()) {
-        Log(@"decoder", @"OpenClip failed for %@ %@", CopyNSString(filePath), DescribeHRESULT(hr));
-        decoder->CloseRuntime();
-        return false;
-    }
-
-    decoder->codec->SetCallback(&decoder->callback);
     decoder->currentPath = (CFStringRef)CFRetain(filePath);
-    decoder->clip->GetWidth(&decoder->info.width);
-    decoder->clip->GetHeight(&decoder->info.height);
-    decoder->clip->GetFrameRate(&decoder->info.frameRate);
-    decoder->clip->GetFrameCount(&decoder->info.frameCount);
-    decoder->info.frameDuration = FrameDurationForRate(decoder->info.frameRate);
-    decoder->info.duration = CMTimeMultiplyByFloat64(decoder->info.frameDuration, (Float64)decoder->info.frameCount);
+    Log(@"decoder", @"metadata: %ux%u @ %.3f fps, %llu frames",
+        decoder->info.width, decoder->info.height,
+        (double)decoder->info.frameRate, decoder->info.frameCount);
     return true;
-#endif
 }
 
 static CFDictionaryRef CreatePixelBufferAttributes(CFAllocatorRef allocator, const ClipInfo &info)
