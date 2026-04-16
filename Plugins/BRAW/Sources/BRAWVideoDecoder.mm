@@ -23,6 +23,11 @@ static void BRAWVideoDecoderBundleDidLoad()
     Log(@"decoder", @"bundle loaded pid=%d", getpid());
 }
 
+// Forward declaration so CloseRuntime() below can call it — the full definition
+// sits next to the other host-dlsym resolvers further down.
+typedef void (*SKBRAWHostReleaseFn)(CFStringRef);
+static SKBRAWHostReleaseFn ResolveHostReleaseFn();
+
 #if defined(__x86_64__)
 constexpr size_t kCMBasePadSize = 4;
 #else
@@ -282,6 +287,12 @@ struct BRAWVideoDecoder {
             formatDescription = nullptr;
         }
         if (currentPath) {
+            // Drop the host-side cached BRAW clip entry so the SDK state doesn't
+            // accumulate across decoder teardowns. Host keeps a fresh entry when
+            // a subsequent decode asks for the same path.
+            if (SKBRAWHostReleaseFn release = ResolveHostReleaseFn()) {
+                release(currentPath);
+            }
             CFRelease(currentPath);
             currentPath = nullptr;
         }
@@ -416,18 +427,31 @@ static bool PopulateInfoFromFormatDescription(BRAWVideoDecoder *decoder, CMVideo
     if (!fd) return false;
     CMVideoDimensions dims = CMVideoFormatDescriptionGetDimensions(fd);
     if (dims.width <= 0 || dims.height <= 0) return false;
-    decoder->info.width = (uint32_t)dims.width;
-    decoder->info.height = (uint32_t)dims.height;
 
-    // Try to fill framerate + frameCount via the host BRAW SDK. Without this
-    // FrameIndexForTime returns 0 (it short-circuits on frameCount == 0),
-    // which stalls playback on frame 0.
+    // The format description's dimensions are encoded-frame dims, often padded
+    // up to the container's macroblock alignment (e.g. 6176x3472 for a true
+    // 6144x3456 clip). Prefer the BRAW SDK's actual clip dimensions so the pool
+    // buffer matches exactly what the decode job emits — otherwise we blit a
+    // smaller image into a larger buffer and the uncovered strip keeps whatever
+    // stale pixels the pool cycled in.
+    uint32_t fdW = (uint32_t)dims.width;
+    uint32_t fdH = (uint32_t)dims.height;
+    decoder->info.width = fdW;
+    decoder->info.height = fdH;
+
     float fps = 24.0f;
     uint64_t count = 0;
     SKBRAWHostMetaFn hostMeta = ResolveHostMetaFunction();
     if (hostMeta && path) {
-        uint32_t w = 0, h = 0;
-        hostMeta(path, &w, &h, &fps, &count);
+        uint32_t sdkW = 0, sdkH = 0;
+        if (hostMeta(path, &sdkW, &sdkH, &fps, &count)) {
+            if (sdkW > 0 && sdkH > 0) {
+                decoder->info.width = sdkW;
+                decoder->info.height = sdkH;
+                Log(@"decoder", @"using SDK dims %ux%u (fd was %ux%u)",
+                    sdkW, sdkH, fdW, fdH);
+            }
+        }
     }
     if (fps <= 0.0f) fps = 24.0f;
     if (count == 0) {
@@ -818,7 +842,6 @@ static void FillBytesSolid(CVPixelBufferRef pixelBuffer)
 // process) falls back to stub / in-bundle path.
 typedef BOOL (*SKBRAWHostDecodeFn)(CFStringRef, uint32_t, uint32_t, uint32_t,
                                     uint32_t *, uint32_t *, uint32_t *, void **);
-typedef void (*SKBRAWHostReleaseFn)(CFStringRef);
 
 static SKBRAWHostDecodeFn ResolveHostDecodeFn()
 {
@@ -826,6 +849,15 @@ static SKBRAWHostDecodeFn ResolveHostDecodeFn()
     if (fn == (SKBRAWHostDecodeFn)-1) {
         fn = (SKBRAWHostDecodeFn)dlsym(RTLD_DEFAULT, "SpliceKitBRAW_DecodeFrameBytes");
         Log(@"decoder", @"host decode fn %@", fn ? @"available" : @"unavailable");
+    }
+    return fn;
+}
+
+static SKBRAWHostReleaseFn ResolveHostReleaseFn()
+{
+    static SKBRAWHostReleaseFn fn = (SKBRAWHostReleaseFn)-1;
+    if (fn == (SKBRAWHostReleaseFn)-1) {
+        fn = (SKBRAWHostReleaseFn)dlsym(RTLD_DEFAULT, "SpliceKitBRAW_ReleaseClip");
     }
     return fn;
 }
@@ -847,10 +879,10 @@ static OSStatus EmitDecodedFrame_FromHostBytes(BRAWVideoDecoder *decoder,
                                                 uint32_t sizeBytes,
                                                 const uint8_t *bytes)
 {
-    // Use VT's pool buffer when possible — it's sized at the format description's
-    // dimensions, IOSurface-backed, and ready to be handed straight to the
-    // display pipeline. Our DecodeFrame uses full-scale BRAW decode so the data
-    // matches the pool buffer's full-scale size.
+    if (!bytes || width == 0 || height == 0 || sizeBytes == 0) {
+        return kVTVideoDecoderBadDataErr;
+    }
+
     CVPixelBufferRef pixelBuffer = CreatePixelBuffer(decoder);
     if (!pixelBuffer) {
         Log(@"decoder", @"failed to get pixel buffer");
@@ -860,23 +892,50 @@ static OSStatus EmitDecodedFrame_FromHostBytes(BRAWVideoDecoder *decoder,
     size_t pbW = CVPixelBufferGetWidth(pixelBuffer);
     size_t pbH = CVPixelBufferGetHeight(pixelBuffer);
     size_t pbBpr = CVPixelBufferGetBytesPerRow(pixelBuffer);
-    size_t srcBpr = height > 0 ? (sizeBytes / height) : (size_t)width * 4;
-    size_t copyW = std::min<size_t>(width, pbW);
-    size_t copyH = std::min<size_t>(height, pbH);
+    size_t expectedSrcBpr = (size_t)width * 4;
+    size_t srcBpr = height > 0 ? (sizeBytes / height) : expectedSrcBpr;
+
     static bool loggedOnce = false;
     if (!loggedOnce) {
-        Log(@"decoder", @"pool buffer %zux%zu bpr=%zu, src %ux%u bpr=%zu", pbW, pbH, pbBpr, width, height, srcBpr);
+        Log(@"decoder", @"pool buffer %zux%zu bpr=%zu, src %ux%u bpr=%zu (expected %zu)",
+            pbW, pbH, pbBpr, width, height, srcBpr, expectedSrcBpr);
         loggedOnce = true;
+    }
+
+    // Sanity: the SDK promised RGBAU8 at w*h*4 bytes. Anything else means the
+    // pipeline returned a non-CPU resource, or the format was downgraded without
+    // our knowledge. Bailing out prevents writing nonsense into the IOSurface.
+    if (srcBpr != expectedSrcBpr) {
+        Log(@"decoder", @"srcBpr %zu != expected %zu; bailing", srcBpr, expectedSrcBpr);
+        CFRelease(pixelBuffer);
+        return kVTVideoDecoderBadDataErr;
     }
 
     CVPixelBufferLockBaseAddress(pixelBuffer, 0);
     uint8_t *dst = static_cast<uint8_t *>(CVPixelBufferGetBaseAddress(pixelBuffer));
+
+    size_t copyW = std::min<size_t>(width, pbW);
+    size_t copyH = std::min<size_t>(height, pbH);
+
+    // If the pool buffer is larger than the decoded frame (padded format
+    // description), clear the whole surface first so the leftover strip on the
+    // right/bottom doesn't show stale pixels from a previously recycled buffer.
+    if (pbW > copyW || pbH > copyH) {
+        memset(dst, 0, pbBpr * pbH);
+    }
+
     // Host returns RGBAU8; pool buffer is 32BGRA. SIMD channel swap via vImage.
     vImage_Buffer srcBuf = { (void *)bytes, (vImagePixelCount)copyH, (vImagePixelCount)copyW, srcBpr };
     vImage_Buffer dstBuf = { dst, (vImagePixelCount)copyH, (vImagePixelCount)copyW, pbBpr };
     const uint8_t channelMap[4] = { 2, 1, 0, 3 };  // RGBA → BGRA
-    vImagePermuteChannels_ARGB8888(&srcBuf, &dstBuf, channelMap, kvImageDoNotTile);
+    vImage_Error err = vImagePermuteChannels_ARGB8888(&srcBuf, &dstBuf, channelMap, kvImageDoNotTile);
     CVPixelBufferUnlockBaseAddress(pixelBuffer, 0);
+
+    if (err != kvImageNoError) {
+        Log(@"decoder", @"vImagePermuteChannels failed %ld", (long)err);
+        CFRelease(pixelBuffer);
+        return kVTVideoDecoderBadDataErr;
+    }
 
     OSStatus status = VTDecoderSessionEmitDecodedFrame(decoder->session, frame, noErr, 0, pixelBuffer);
     CFRelease(pixelBuffer);
@@ -983,19 +1042,29 @@ static Boolean CanAcceptFormatDescription(VTVideoDecoderRef decoderRef, CMVideoF
     if (subType != kCodecType && subType != 'brxq') {
         return false;
     }
-    CFStringRef path = CopyPathFromFormatDescription(formatDescription);
+
     BRAWVideoDecoder *decoder = DecoderFromRef(decoderRef);
-    Boolean accepted = true;
-    if (path) {
-        if (decoder && decoder->currentPath) {
-            accepted = CFEqual(decoder->currentPath, path);
-        }
-        CFRelease(path);
+
+    // If VideoToolbox is probing whether it can keep using this decoder across
+    // a session boundary, we MUST verify that the new format description still
+    // points at the same .braw clip we previously bound to. Otherwise VT will
+    // reuse the session and decode the wrong file.
+    //
+    // When the decoder has no bound clip yet, accept if we can resolve any path
+    // (either from a BrwP atom or the host's path registry). If resolution
+    // fails entirely, reject so VT knows to surface the error rather than
+    // fall back on stale decoder state.
+    CFStringRef resolved = ResolveClipPathForFormatDescription(formatDescription);
+
+    if (decoder && decoder->currentPath) {
+        Boolean sameClip = resolved ? CFEqual(resolved, decoder->currentPath) : false;
+        if (resolved) CFRelease(resolved);
+        return sameClip;
     }
-    // When no BrwP atom is present (AVFoundation reading the .braw as QT
-    // container), fall through and accept any brxq/braw format description —
-    // the decoder will resolve the underlying clip path via the sample buffer.
-    return accepted;
+
+    Boolean haveAPath = resolved != nullptr;
+    if (resolved) CFRelease(resolved);
+    return haveAPath;
 }
 
 static OSStatus FinishDelayedFrames(VTVideoDecoderRef)

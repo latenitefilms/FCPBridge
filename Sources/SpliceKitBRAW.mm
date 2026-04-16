@@ -683,7 +683,6 @@ static BOOL SpliceKitBRAWUTTypeConformsToOverride(id self, SEL _cmd, id target) 
 // Key retains the format description so the pointer stays valid until we unregister.
 static NSMutableDictionary<NSValue *, NSString *> *sSpliceKitBRAWFormatDescriptionPathMap = nil;
 static NSLock *sSpliceKitBRAWFormatDescriptionLock = nil;
-static NSString *sSpliceKitBRAWLastBRAWPath = nil;
 
 static void SpliceKitBRAWRegisterFormatDescriptionPath(CMFormatDescriptionRef fd, NSString *path) {
     if (!fd || path.length == 0) return;
@@ -699,28 +698,32 @@ static void SpliceKitBRAWRegisterFormatDescriptionPath(CMFormatDescriptionRef fd
     } else {
         CFRelease(fd);  // Didn't insert, so balance retain
     }
-    sSpliceKitBRAWLastBRAWPath = path;
     [sSpliceKitBRAWFormatDescriptionLock unlock];
 }
 
 SPLICEKIT_BRAW_EXTERN_C NSString *SpliceKitBRAWLookupPathForFormatDescription(CMFormatDescriptionRef fd) {
-    NSString *result = nil;
-    if (fd && sSpliceKitBRAWFormatDescriptionPathMap) {
-        [sSpliceKitBRAWFormatDescriptionLock lock];
-        NSValue *key = [NSValue valueWithPointer:fd];
-        result = sSpliceKitBRAWFormatDescriptionPathMap[key];
-        [sSpliceKitBRAWFormatDescriptionLock unlock];
-    }
+    if (!fd || !sSpliceKitBRAWFormatDescriptionPathMap) return nil;
+
+    [sSpliceKitBRAWFormatDescriptionLock lock];
+    // Exact pointer match only. CFEqual-based fallback is unsafe here: two
+    // different .braw clips with identical sample descriptions (same codec,
+    // dimensions, extension atoms) compare equal but map to different files,
+    // so a fallback could silently bind the decoder to the wrong clip. If the
+    // pointer misses, the AV hook (or future per-track registration) needs to
+    // cover that path — we'd rather fail loudly than decode the wrong file.
+    NSValue *pointerKey = [NSValue valueWithPointer:fd];
+    NSString *result = sSpliceKitBRAWFormatDescriptionPathMap[pointerKey];
+    [sSpliceKitBRAWFormatDescriptionLock unlock];
+
     if (!result) {
-        // Fallback: most recent BRAW path seen by the AV hook. Racy in multi-file
-        // scenarios but fine for the common single-import case.
-        result = sSpliceKitBRAWLastBRAWPath;
+        SpliceKitBRAWTrace([NSString stringWithFormat:
+            @"[av-hook] FD %p not in registry; no fallback — returning nil", fd]);
     }
     return result;
 }
 
-static void SpliceKitBRAWRegisterAssetTracks(id asset, NSString *path) {
-    if (!asset || path.length == 0) return;
+static NSUInteger SpliceKitBRAWWalkAssetTracks(id asset, NSString *path) {
+    NSUInteger registered = 0;
     @try {
         NSArray *tracks = [asset respondsToSelector:@selector(tracks)] ?
             ((NSArray *(*)(id, SEL))objc_msgSend)(asset, @selector(tracks)) : nil;
@@ -734,12 +737,45 @@ static void SpliceKitBRAWRegisterAssetTracks(id asset, NSString *path) {
                     FourCharCode subType = CMFormatDescriptionGetMediaSubType(fdRef);
                     if (subType == 'brxq' || subType == 'braw') {
                         SpliceKitBRAWRegisterFormatDescriptionPath(fdRef, path);
+                        registered++;
                     }
                 }
             }
         }
     } @catch (NSException *exception) {
         // ignore
+    }
+    return registered;
+}
+
+static void SpliceKitBRAWRegisterAssetTracks(id asset, NSString *path) {
+    if (!asset || path.length == 0) return;
+
+    NSUInteger registered = SpliceKitBRAWWalkAssetTracks(asset, path);
+
+    // AVFoundation can return an empty tracks array at init time when the
+    // underlying container hasn't been parsed yet. Ask the asset to finish
+    // loading "tracks" asynchronously and re-register once done, so late-binding
+    // format descriptions end up in the path map instead of hitting the lookup
+    // and returning nil.
+    if (registered == 0 && [asset respondsToSelector:@selector(loadValuesAsynchronouslyForKeys:completionHandler:)]) {
+        @try {
+            void (^completion)(void) = ^{
+                NSUInteger n = SpliceKitBRAWWalkAssetTracks(asset, path);
+                if (n > 0) {
+                    SpliceKitBRAWTrace([NSString stringWithFormat:
+                        @"[av-hook] deferred-registered %lu track FD(s) for %@",
+                        (unsigned long)n, path]);
+                }
+            };
+            ((void (*)(id, SEL, NSArray *, id))objc_msgSend)(
+                asset,
+                @selector(loadValuesAsynchronouslyForKeys:completionHandler:),
+                @[@"tracks"],
+                completion);
+        } @catch (NSException *exception) {
+            // ignore
+        }
     }
 }
 
@@ -1848,10 +1884,12 @@ public:
         if (ctx) {
             uint32_t w = 0, h = 0, sz = 0;
             void *resource = nullptr;
+            BlackmagicRawResourceType resourceType = blackmagicRawResourceTypeBufferCPU;
             if (result == S_OK && processedImage) {
                 processedImage->GetWidth(&w);
                 processedImage->GetHeight(&h);
                 processedImage->GetResourceSizeBytes(&sz);
+                processedImage->GetResourceType(&resourceType);
                 processedImage->GetResource(&resource);
             }
 
@@ -1862,6 +1900,11 @@ public:
             ctx->resourceSizeBytes = sz;
             if (result != S_OK) {
                 ctx->error = "ProcessComplete returned failure";
+            } else if (resourceType != blackmagicRawResourceTypeBufferCPU) {
+                // With a non-CPU pipeline, GetResource() hands back an opaque Metal/CUDA/OpenCL
+                // buffer or texture — not RGBA bytes. Copying it would produce garbled output.
+                // Bail so the caller emits a placeholder instead of corrupted pixels.
+                ctx->error = "ProcessComplete returned non-CPU resource; CPU pipeline expected";
             } else if (!resource || sz == 0 || sz > 512u * 1024u * 1024u) {
                 ctx->error = "ProcessComplete returned invalid resource";
             } else {
@@ -1958,42 +2001,18 @@ static SpliceKitBRAWHostClipEntry *SpliceKitBRAWHostAcquireEntry(NSString *path,
         return nullptr;
     }
 
-    // Shared Metal device + queue used for BRAW GPU decode across all clips.
-    // Created lazily. The SDK requires a live MTLDevice context; nullptr works
-    // at SetPipeline time but then decode job submits fail.
-    static id<MTLDevice> sMetalDevice = nil;
-    static id<MTLCommandQueue> sMetalQueue = nil;
-    static dispatch_once_t metalOnce;
-    dispatch_once(&metalOnce, ^{
-        sMetalDevice = MTLCreateSystemDefaultDevice();
-        if (sMetalDevice) {
-            sMetalQueue = [sMetalDevice newCommandQueue];
-        }
-    });
-
+    // Force CPU pipeline. With the Metal pipeline, IBlackmagicRawProcessedImage::
+    // GetResource() returns an opaque Metal buffer/texture pointer — not CPU-readable
+    // RGBA bytes — so copying it directly produces garbled scanline output. A proper
+    // Metal path would dispatch GetResourceType() and blit the Metal texture into the
+    // CVPixelBuffer's IOSurface, but that's a future zero-copy optimization. CPU
+    // pipeline is the correctness baseline and matches the probe's known-good flow.
     IBlackmagicRawConfiguration *config = nullptr;
-    bool metalReady = false;
     if (codec->QueryInterface(IID_IBlackmagicRawConfiguration, (LPVOID *)&config) == S_OK && config) {
-        if (sMetalDevice && sMetalQueue) {
-            bool metalSupported = false;
-            config->IsPipelineSupported(blackmagicRawPipelineMetal, &metalSupported);
-            if (metalSupported) {
-                HRESULT hr = config->SetPipeline(blackmagicRawPipelineMetal,
-                                                 (__bridge void *)sMetalDevice,
-                                                 (__bridge void *)sMetalQueue);
-                if (hr == S_OK) {
-                    metalReady = true;
-                    SpliceKitBRAWTrace(@"[host-decode] using Metal pipeline");
-                } else {
-                    SpliceKitBRAWTrace([NSString stringWithFormat:@"[host-decode] Metal SetPipeline failed hr=0x%08X", (uint32_t)hr]);
-                }
-            }
-        }
-        if (!metalReady) {
-            config->SetPipeline(blackmagicRawPipelineCPU, nullptr, nullptr);
-            config->SetCPUThreads(1);
-            SpliceKitBRAWTrace(@"[host-decode] using CPU pipeline");
-        }
+        config->SetPipeline(blackmagicRawPipelineCPU, nullptr, nullptr);
+        uint32_t cpuCount = (uint32_t)std::max(1, (int)[NSProcessInfo processInfo].activeProcessorCount - 1);
+        config->SetCPUThreads(cpuCount);
+        SpliceKitBRAWTrace([NSString stringWithFormat:@"[host-decode] using CPU pipeline (%u threads)", cpuCount]);
     }
 
     IBlackmagicRawClip *clip = nullptr;
