@@ -6,6 +6,22 @@
     <description>SpliceKit Patcher release updates</description>
     <language>en</language>
     <item>
+      <title>SpliceKit v3.1.147</title>
+      <sparkle:version>3.1.147</sparkle:version>
+      <sparkle:shortVersionString>3.1.147</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <pubDate>Thu, 16 Apr 2026 02:14:23 +0000</pubDate>
+      <description><![CDATA[
+        <h2>What's New in 3.1.147</h2>
+        <p>Fix OTIO and FCPXML import reliability: preserve source in-points, normalize media URLs, avoid library-picker fallbacks, and import projects through the in-process pipeline.</p>
+      ]]></description>
+      <enclosure
+        url="https://github.com/elliotttate/SpliceKit/releases/download/v3.1.147/SpliceKit-v3.1.147.dmg"
+        sparkle:edSignature="s/wx1aO4zkSRziTg+mBYp7nvJmTs9Yo8euz41r9sdgSl8Dgs9c5eIAc+SXTalA973VdonW6YwPnGhiMOde4qDw=="
+        length="14112532"
+        type="application/octet-stream" />
+    </item>
+    <item>
       <title>SpliceKit v3.1.146</title>
       <sparkle:version>3.1.146</sparkle:version>
       <sparkle:shortVersionString>3.1.146</sparkle:shortVersionString>
