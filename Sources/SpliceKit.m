@@ -2962,6 +2962,130 @@ BOOL SpliceKit_safeInstall(const char *featureName, void (^block)(void)) {
     }
 }
 
+// FCP registers Apple's AUSoundIsolation AU but hides it in the UI. Re-apply
+// the visibility override after launch once the effect registry is ready so the
+// effect browser can surface it on every startup.
+static NSString *SpliceKit_soundIsolationEffectID(void) {
+    Class effectStackClass = objc_getClass("FFEffectStack");
+    SEL voiceIsolationSel = NSSelectorFromString(@"voiceIsolationEffectID");
+    if (effectStackClass && [effectStackClass respondsToSelector:voiceIsolationSel]) {
+        id effectID = ((id (*)(id, SEL))objc_msgSend)(effectStackClass, voiceIsolationSel);
+        if ([effectID isKindOfClass:[NSString class]] && [effectID length] > 0) {
+            return effectID;
+        }
+    }
+
+    Class auEffectClass = objc_getClass("FFAudioUnitEffect");
+    SEL identifierSel = NSSelectorFromString(@"effectIdentifierForType:subType:manufacturer:");
+    if (auEffectClass && [auEffectClass respondsToSelector:identifierSel]) {
+        id effectID = ((id (*)(id, SEL, unsigned int, unsigned int, unsigned int))objc_msgSend)(
+            auEffectClass, identifierSel, 1635083896U, 1987012979U, 1634758764U);
+        if ([effectID isKindOfClass:[NSString class]] && [effectID length] > 0) {
+            return effectID;
+        }
+    }
+
+    return @"AudioUnit: 0x61756678766f69736170706c";
+}
+
+static BOOL SpliceKit_tryUnhideSoundIsolationNow(void) {
+    Class ffEffectClass = objc_getClass("FFEffect");
+    if (!ffEffectClass) {
+        SpliceKit_log(@"SoundIsolation unhide: FFEffect class not available yet");
+        return NO;
+    }
+
+    SEL ensureSel = NSSelectorFromString(@"ensureEffectsRegistered");
+    if ([ffEffectClass respondsToSelector:ensureSel]) {
+        ((void (*)(id, SEL))objc_msgSend)(ffEffectClass, ensureSel);
+    }
+
+    NSString *effectID = SpliceKit_soundIsolationEffectID();
+    if (effectID.length == 0) {
+        SpliceKit_log(@"SoundIsolation unhide: could not resolve effect ID");
+        return NO;
+    }
+
+    SEL registeredSel = NSSelectorFromString(@"effectIDIsRegistered:");
+    if (![ffEffectClass respondsToSelector:registeredSel]) {
+        SpliceKit_log(@"SoundIsolation unhide: FFEffect is missing effectIDIsRegistered:");
+        return NO;
+    }
+
+    BOOL isRegistered = ((BOOL (*)(id, SEL, id))objc_msgSend)(ffEffectClass, registeredSel, effectID);
+    if (!isRegistered) {
+        SpliceKit_log(@"SoundIsolation unhide: %@ not registered yet", effectID);
+        return NO;
+    }
+
+    SEL propertiesSel = NSSelectorFromString(@"propertiesForEffect:");
+    NSDictionary *beforeProps = nil;
+    if ([ffEffectClass respondsToSelector:propertiesSel]) {
+        beforeProps = ((id (*)(id, SEL, id))objc_msgSend)(ffEffectClass, propertiesSel, effectID);
+    }
+
+    BOOL wasHidden = [beforeProps[@"FFEffectProperty_HiddenInUI"] boolValue];
+    SEL updateHiddenSel = NSSelectorFromString(@"updatePropertyHiddenInUI:onEffectIDs:");
+    if (![ffEffectClass respondsToSelector:updateHiddenSel]) {
+        SpliceKit_log(@"SoundIsolation unhide: FFEffect is missing updatePropertyHiddenInUI:onEffectIDs:");
+        return NO;
+    }
+
+    BOOL updated = ((BOOL (*)(id, SEL, BOOL, id))objc_msgSend)(
+        ffEffectClass, updateHiddenSel, NO, @[effectID]);
+
+    NSDictionary *afterProps = nil;
+    if ([ffEffectClass respondsToSelector:propertiesSel]) {
+        afterProps = ((id (*)(id, SEL, id))objc_msgSend)(ffEffectClass, propertiesSel, effectID);
+    }
+
+    BOOL isHidden = [afterProps[@"FFEffectProperty_HiddenInUI"] boolValue];
+    if (!updated && isHidden) {
+        SpliceKit_log(@"SoundIsolation unhide: update call failed for %@", effectID);
+        return NO;
+    }
+
+    SpliceKit_log(@"SoundIsolation unhide: %@ hidden=%@ -> %@",
+                  effectID,
+                  wasHidden ? @"YES" : @"NO",
+                  isHidden ? @"hidden" : @"visible");
+    return !isHidden;
+}
+
+static void SpliceKit_scheduleSoundIsolationUnhideAttempt(NSUInteger attempt) {
+    const NSUInteger kMaxAttempts = 20;
+    if (attempt >= kMaxAttempts) {
+        SpliceKit_log(@"SoundIsolation unhide: giving up after %lu attempts",
+                      (unsigned long)attempt);
+        return;
+    }
+
+    NSTimeInterval delay = (attempt == 0) ? 0.25 : 1.0;
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+        [NSThread sleepForTimeInterval:delay];
+        __block BOOL success = NO;
+        __block BOOL didThrow = NO;
+        @try {
+            SpliceKit_executeOnMainThread(^{
+                @try {
+                    success = SpliceKit_tryUnhideSoundIsolationNow();
+                } @catch (NSException *e) {
+                    didThrow = YES;
+                    SpliceKit_log(@"SoundIsolation unhide attempt %lu threw %@: %@",
+                                  (unsigned long)attempt, e.name, e.reason);
+                }
+            });
+        } @catch (NSException *e) {
+            didThrow = YES;
+            SpliceKit_log(@"SoundIsolation unhide dispatch %lu threw %@: %@",
+                          (unsigned long)attempt, e.name, e.reason);
+        }
+        if (!success) {
+            SpliceKit_scheduleSoundIsolationUnhideAttempt(attempt + 1);
+        }
+    });
+}
+
 static void SpliceKit_appDidLaunch(void) {
     SpliceKit_log(@"================================================");
     SpliceKit_log(@"App launched. Starting control server...");
@@ -3078,6 +3202,9 @@ static void SpliceKit_appDidLaunch(void) {
     // Load plugins from ~/Library/Application Support/SpliceKit/plugins/
     // Native plugins load independently of Lua — don't gate on Lua success.
     SpliceKitPlugins_loadAll();
+
+    SpliceKit_log(@"SoundIsolation unhide: scheduling startup attempts");
+    SpliceKit_scheduleSoundIsolationUnhideAttempt(0);
 }
 
 #pragma mark - Crash Prevention & Startup Fixes
