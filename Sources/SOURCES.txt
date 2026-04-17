@@ -9,6 +9,7 @@ SpliceKitRuntime.m
 SpliceKitSwizzle.m
 SpliceKitAudioBusDiagnostics.m
 SpliceKitBRAW.mm
+SpliceKitBRAWRAW.mm
 SpliceKitServer.m
 SpliceKitLogPanel.m
 SpliceKitSentry.m

@@ -239,6 +239,14 @@ uint64_t FrameIndexForTime(CMTime time, const ClipInfo &info)
 #if SPLICEKIT_BRAW_SDK_AVAILABLE
 IBlackmagicRawFactory *CreateFactory(std::string &error)
 {
+    auto createFromPath = (CreateFactoryFromPathFn)dlsym(RTLD_DEFAULT, "CreateBlackmagicRawFactoryInstanceFromPath");
+    auto createDirect = (CreateFactoryFn)dlsym(RTLD_DEFAULT, "CreateBlackmagicRawFactoryInstance");
+    if (createDirect) {
+        if (IBlackmagicRawFactory *factory = createDirect()) {
+            return factory;
+        }
+    }
+
     NSArray<NSDictionary *> *candidates = @[
         @{
             @"binary": @"/Applications/Blackmagic RAW/Blackmagic RAW SDK/Mac/Libraries/BlackmagicRawAPI.framework/BlackmagicRawAPI",
@@ -265,8 +273,8 @@ IBlackmagicRawFactory *CreateFactory(std::string &error)
             continue;
         }
 
-        auto createFromPath = (CreateFactoryFromPathFn)dlsym(image, "CreateBlackmagicRawFactoryInstanceFromPath");
-        auto createDirect = (CreateFactoryFn)dlsym(image, "CreateBlackmagicRawFactoryInstance");
+        createFromPath = (CreateFactoryFromPathFn)dlsym(image, "CreateBlackmagicRawFactoryInstanceFromPath");
+        createDirect = (CreateFactoryFn)dlsym(image, "CreateBlackmagicRawFactoryInstance");
         IBlackmagicRawFactory *factory = nullptr;
         if (createFromPath) {
             factory = createFromPath((__bridge CFStringRef)loadPath);

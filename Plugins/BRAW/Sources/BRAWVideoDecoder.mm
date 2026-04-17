@@ -228,6 +228,11 @@ struct BRAWVideoDecoder {
     VTVideoDecoderSession session { nullptr };
     CMVideoFormatDescriptionRef formatDescription { nullptr };
     CFStringRef currentPath { nullptr };
+    // -1 = monoscopic; 0 = left eye; 1 = right eye. Resolved once at session
+    // start via the 'seye' extension atom on the FD (for stereoscopic BRAWs
+    // shimmed with multi-trak stereo support), and passed to the host on
+    // every per-frame decode call.
+    int eyeIndex { -1 };
     ClipInfo info {};
     ComPtr<IBlackmagicRawFactory> factory;
     ComPtr<IBlackmagicRaw> codec;
@@ -612,6 +617,7 @@ static CVPixelBufferRef CreatePixelBuffer(BRAWVideoDecoder *decoder)
 // the host-side lookup helper. When loaded in a different host, this resolves
 // to NULL and we fall back to the format description's embedded BrwP atom.
 typedef NSString *(*SpliceKitBRAWLookupFn)(CMFormatDescriptionRef);
+typedef int (*SpliceKitBRAWLookupEyeFn)(CMFormatDescriptionRef);
 
 static SpliceKitBRAWLookupFn ResolveHostLookupFunction()
 {
@@ -619,6 +625,20 @@ static SpliceKitBRAWLookupFn ResolveHostLookupFunction()
     if (fn == (SpliceKitBRAWLookupFn)-1) {
         fn = (SpliceKitBRAWLookupFn)dlsym(RTLD_DEFAULT, "SpliceKitBRAWLookupPathForFormatDescription");
         Log(@"decoder", @"host lookup fn %@", fn ? @"available" : @"unavailable");
+    }
+    return fn;
+}
+
+// Separate resolver for the eye-index lookup. Returns 0/1 for stereoscopic
+// BRAW traks (seye extension atom present on the FD), -1 otherwise. If the
+// host binary is older and doesn't export this symbol we treat every FD as
+// monoscopic, which matches pre-stereo behavior.
+static SpliceKitBRAWLookupEyeFn ResolveHostLookupEyeFunction()
+{
+    static SpliceKitBRAWLookupEyeFn fn = (SpliceKitBRAWLookupEyeFn)-1;
+    if (fn == (SpliceKitBRAWLookupEyeFn)-1) {
+        fn = (SpliceKitBRAWLookupEyeFn)dlsym(RTLD_DEFAULT, "SpliceKitBRAWLookupEyeForFormatDescription");
+        Log(@"decoder", @"host lookup-eye fn %@", fn ? @"available" : @"unavailable");
     }
     return fn;
 }
@@ -666,6 +686,18 @@ static OSStatus StartDecoderSession(VTVideoDecoderRef decoderRef, VTVideoDecoder
         CFRelease(decoder->formatDescription);
     }
     decoder->formatDescription = (CMVideoFormatDescriptionRef)CFRetain(formatDescription);
+
+    // Resolve eye index once per session from the FD's 'seye' extension atom.
+    // Monoscopic clips have no seye atom, so this returns -1 — that value flows
+    // through the host decode calls as "don't use immersive SDK", preserving
+    // the existing single-eye path for non-stereo BRAWs.
+    decoder->eyeIndex = -1;
+    if (SpliceKitBRAWLookupEyeFn lookupEye = ResolveHostLookupEyeFunction()) {
+        decoder->eyeIndex = lookupEye(formatDescription);
+        if (decoder->eyeIndex >= 0) {
+            Log(@"decoder", @"session eye=%d for %@", decoder->eyeIndex, CopyNSString(decoder->currentPath));
+        }
+    }
 
     CFDictionaryRef pixelBufferAttributes = CreatePixelBufferAttributes(decoder->allocator, decoder->info);
     if (pixelBufferAttributes) {
@@ -755,6 +787,13 @@ typedef BOOL (*SKBRAWHostDecodeFn)(CFStringRef, uint32_t, uint32_t, uint32_t,
                                     uint32_t *, uint32_t *, uint32_t *, void **);
 typedef BOOL (*SKBRAWHostDecodeIntoPBFn)(CFStringRef, uint32_t, uint32_t,
                                           CVPixelBufferRef, uint32_t *, uint32_t *);
+// Eye-aware variant — caller passes eyeIndex (0 = left, 1 = right, -1 = mono)
+// so the host can select the correct view via IBlackmagicRawClipImmersiveVideo
+// for stereoscopic/immersive clips. Missing from older host builds; we
+// fall back to the monoscopic variant when unavailable.
+typedef BOOL (*SKBRAWHostDecodeIntoPBEyeFn)(CFStringRef, uint32_t, uint32_t,
+                                             int, CVPixelBufferRef,
+                                             uint32_t *, uint32_t *);
 
 static SKBRAWHostDecodeFn ResolveHostDecodeFn()
 {
@@ -772,6 +811,16 @@ static SKBRAWHostDecodeIntoPBFn ResolveHostDecodeIntoPBFn()
     if (fn == (SKBRAWHostDecodeIntoPBFn)-1) {
         fn = (SKBRAWHostDecodeIntoPBFn)dlsym(RTLD_DEFAULT, "SpliceKitBRAW_DecodeFrameIntoPixelBuffer");
         Log(@"decoder", @"host decode-into-PB fn %@", fn ? @"available" : @"unavailable");
+    }
+    return fn;
+}
+
+static SKBRAWHostDecodeIntoPBEyeFn ResolveHostDecodeIntoPBEyeFn()
+{
+    static SKBRAWHostDecodeIntoPBEyeFn fn = (SKBRAWHostDecodeIntoPBEyeFn)-1;
+    if (fn == (SKBRAWHostDecodeIntoPBEyeFn)-1) {
+        fn = (SKBRAWHostDecodeIntoPBEyeFn)dlsym(RTLD_DEFAULT, "SpliceKitBRAW_DecodeFrameIntoPixelBufferEye");
+        Log(@"decoder", @"host decode-into-PB-eye fn %@", fn ? @"available" : @"unavailable");
     }
     return fn;
 }
@@ -897,7 +946,25 @@ static OSStatus DecodeFrame(VTVideoDecoderRef decoderRef, VTVideoDecoderFrame fr
         // blits the result straight into this CVPixelBuffer's IOSurface via a
         // GPU blit command, and returns once the command buffer has completed.
         // No CPU memcpy of the ~170 MB frame, no vImage channel swap.
-        if (SKBRAWHostDecodeIntoPBFn hostDecodePB = ResolveHostDecodeIntoPBFn()) {
+        // Prefer the eye-aware variant so stereoscopic/immersive clips route
+        // the request through IBlackmagicRawClipImmersiveVideo for the correct
+        // left/right view. For monoscopic clips eyeIndex is -1 and the host
+        // falls through to the legacy CreateJobReadFrame path.
+        if (SKBRAWHostDecodeIntoPBEyeFn hostDecodePBEye = ResolveHostDecodeIntoPBEyeFn()) {
+            CVPixelBufferRef pb = CreatePixelBuffer(decoder);
+            if (pb) {
+                uint32_t w = 0, h = 0;
+                BOOL ok = hostDecodePBEye(decoder->currentPath, frameIndex, 0, decoder->eyeIndex, pb, &w, &h);
+                if (ok) {
+                    OSStatus s = VTDecoderSessionEmitDecodedFrame(decoder->session, frame, noErr, 0, pb);
+                    CFRelease(pb);
+                    return s;
+                }
+                CFRelease(pb);
+                Log(@"decoder", @"host decode-into-PB-eye failed frame=%u eye=%d; falling back", frameIndex, decoder->eyeIndex);
+            }
+        } else if (SKBRAWHostDecodeIntoPBFn hostDecodePB = ResolveHostDecodeIntoPBFn()) {
+            // Older host build without eye-aware export — fall back to mono.
             CVPixelBufferRef pb = CreatePixelBuffer(decoder);
             if (pb) {
                 uint32_t w = 0, h = 0;

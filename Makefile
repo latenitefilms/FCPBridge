@@ -57,6 +57,8 @@ PARAKEET_DEBUG_BIN = $(PARAKEET_PKG_DIR)/.build/debug/parakeet-transcriber
 BRAW_SOURCE_DIR = Plugins/BRAW/Sources
 BRAW_PRIVATE_DIR = $(BRAW_SOURCE_DIR)/Private
 BRAW_BUILD_DIR = $(BUILD_DIR)/braw-prototype
+BRAW_SDK_FRAMEWORK_DIR = /Applications/Blackmagic RAW/Blackmagic RAW SDK/Mac/Libraries
+BRAW_SDK_FRAMEWORK = $(BRAW_SDK_FRAMEWORK_DIR)/BlackmagicRawAPI.framework
 BRAW_IMPORT_BUNDLE = $(BRAW_BUILD_DIR)/FormatReaders/SpliceKitBRAWImport.bundle
 BRAW_IMPORT_EXEC = $(BRAW_IMPORT_BUNDLE)/Contents/MacOS/SpliceKitBRAWImport
 BRAW_IMPORT_INFO = Plugins/BRAW/FormatReaders/SpliceKitBRAWImport.bundle/Contents/Info.plist
@@ -69,8 +71,21 @@ BRAW_DECODER_SOURCES = $(BRAW_COMMON_SOURCES) $(BRAW_SOURCE_DIR)/BRAWVideoDecode
 BRAW_FRAMEWORKS = -framework Foundation -framework CoreFoundation -framework CoreMedia -framework CoreVideo -framework VideoToolbox -framework MediaToolbox -framework Accelerate
 BRAW_CFLAGS = $(ARCHS) $(MIN_VERSION) $(OBJCXX_FLAGS) $(DEBUG_FLAGS) -fvisibility=hidden -I $(BRAW_SOURCE_DIR) -I $(BRAW_PRIVATE_DIR)
 BRAW_LDFLAGS = -bundle $(CPP_LIBS)
+BRAW_RAWPROC_DIR = MediaExtensions/BRAWRAWProcessor
+BRAW_RAWPROC_BUNDLE = $(BRAW_BUILD_DIR)/Extensions/SpliceKitBRAWRAWProcessor.appex
+BRAW_RAWPROC_EXEC = $(BRAW_RAWPROC_BUNDLE)/Contents/MacOS/SpliceKitBRAWRAWProcessor
+BRAW_RAWPROC_INFO = $(BRAW_RAWPROC_DIR)/Info.plist
+BRAW_RAWPROC_ENTITLEMENTS = $(BRAW_RAWPROC_DIR)/BRAWRAWProcessor.entitlements
+BRAW_RAWPROC_PROFILE = $(BRAW_RAWPROC_DIR)/embedded.provisionprofile
+BRAW_RAWPROC_SOURCES = $(BRAW_COMMON_SOURCES) $(wildcard $(BRAW_RAWPROC_DIR)/Sources/*.mm)
+BRAW_RAWPROC_FRAMEWORK_DEST = $(BRAW_RAWPROC_BUNDLE)/Contents/Frameworks/BlackmagicRawAPI.framework
+BRAW_RAWPROC_SIGN_ID = $(shell security find-identity -v -p codesigning 2>/dev/null | awk '/"Developer ID Application:/ { print $$2; exit }')
+BRAW_RAWPROC_FRAMEWORKS = -F "$(BRAW_SDK_FRAMEWORK_DIR)" -framework Foundation -framework CoreFoundation -framework CoreMedia -framework CoreVideo -framework MediaExtension -framework MediaToolbox -framework VideoToolbox -framework BlackmagicRawAPI
+BRAW_RAWPROC_MIN_VERSION = -mmacosx-version-min=15.0
+BRAW_RAWPROC_CFLAGS = $(ARCHS) $(BRAW_RAWPROC_MIN_VERSION) $(OBJCXX_FLAGS) $(DEBUG_FLAGS) -fvisibility=hidden -fapplication-extension -I $(BRAW_SOURCE_DIR) -I $(BRAW_PRIVATE_DIR)
+BRAW_RAWPROC_LDFLAGS = $(CPP_LIBS) -Wl,-rpath,@executable_path/../Frameworks
 
-.PHONY: all clean deploy launch tools audio-bus-probe install-audio-bus-probe uninstall-audio-bus-probe symbols braw-prototype
+.PHONY: all clean deploy launch tools audio-bus-probe install-audio-bus-probe uninstall-audio-bus-probe symbols braw-prototype braw-raw-processor
 
 all: $(OUTPUT)
 
@@ -174,6 +189,30 @@ $(BRAW_DECODER_EXEC): $(BRAW_DECODER_SOURCES) $(BRAW_DECODER_INFO) | $(BRAW_BUIL
 	@codesign --force --sign - "$(BRAW_DECODER_BUNDLE)" >/dev/null
 	@echo "Built: $(BRAW_DECODER_BUNDLE)"
 
+$(BRAW_RAWPROC_EXEC): $(BRAW_RAWPROC_SOURCES) $(BRAW_RAWPROC_INFO) $(BRAW_RAWPROC_ENTITLEMENTS) $(BRAW_RAWPROC_PROFILE) | $(BRAW_BUILD_DIR)
+	@mkdir -p "$(BRAW_RAWPROC_BUNDLE)/Contents/MacOS"
+	@test -d "$(BRAW_SDK_FRAMEWORK)" || { echo "Missing BRAW SDK framework at $(BRAW_SDK_FRAMEWORK)"; exit 1; }
+	@cp "$(BRAW_RAWPROC_INFO)" "$(BRAW_RAWPROC_BUNDLE)/Contents/Info.plist"
+	@cp "$(BRAW_RAWPROC_PROFILE)" "$(BRAW_RAWPROC_BUNDLE)/Contents/embedded.provisionprofile"
+	$(CC) $(BRAW_RAWPROC_CFLAGS) $(BRAW_RAWPROC_FRAMEWORKS) $(BRAW_RAWPROC_SOURCES) $(BRAW_RAWPROC_LDFLAGS) -o "$(BRAW_RAWPROC_EXEC)"
+	@mkdir -p "$(BRAW_RAWPROC_BUNDLE)/Contents/Frameworks"
+	@rm -rf "$(BRAW_RAWPROC_FRAMEWORK_DEST)"
+	@cp -R "$(BRAW_SDK_FRAMEWORK)" "$(BRAW_RAWPROC_FRAMEWORK_DEST)"
+	@sign_id="$(BRAW_RAWPROC_SIGN_ID)"; \
+	if [ -n "$$sign_id" ]; then \
+		echo "Signing appex with Developer ID: $$sign_id"; \
+		codesign --force --sign "$$sign_id" --options runtime "$(BRAW_RAWPROC_FRAMEWORK_DEST)" >/dev/null; \
+		codesign --force --sign "$$sign_id" --options runtime --entitlements "$(BRAW_RAWPROC_ENTITLEMENTS)" "$(BRAW_RAWPROC_BUNDLE)" >/dev/null; \
+	else \
+		echo "Warning: no Developer ID Application identity; ad-hoc signing (extension will NOT load pluginkit-registered)"; \
+		codesign --force --sign - "$(BRAW_RAWPROC_FRAMEWORK_DEST)" >/dev/null; \
+		if ! codesign --force --sign - --entitlements "$(BRAW_RAWPROC_ENTITLEMENTS)" "$(BRAW_RAWPROC_BUNDLE)" >/dev/null 2>&1; then \
+			echo "Warning: ad-hoc signing with RAW processor entitlements failed; retrying without entitlements"; \
+			codesign --force --sign - "$(BRAW_RAWPROC_BUNDLE)" >/dev/null; \
+		fi; \
+	fi
+	@echo "Built: $(BRAW_RAWPROC_BUNDLE)"
+
 BRAW_CLI_SRC = tools/braw-decoder/braw-decoder.mm
 BRAW_CLI_BIN = $(BUILD_DIR)/braw-decoder
 BRAW_CLI_FRAMEWORK_DIR = /Applications/Blackmagic RAW/Blackmagic RAW SDK/Mac/Libraries
@@ -193,9 +232,13 @@ $(BRAW_CLI_BIN): $(BRAW_CLI_SRC) | $(BUILD_DIR)
 # Enable the BRAW prototype bundles by default during deploy; override with
 # ENABLE_BRAW_PROTOTYPE=0 to skip copying them into the modded FCP app.
 ENABLE_BRAW_PROTOTYPE ?= 1
+ENABLE_BRAW_RAW_PROCESSOR ?= 0
 
 braw-prototype: $(BRAW_IMPORT_EXEC) $(BRAW_DECODER_EXEC) $(BRAW_CLI_BIN)
 	@echo "Staged: $(BRAW_BUILD_DIR)"
+
+braw-raw-processor: $(BRAW_RAWPROC_EXEC)
+	@echo "Staged: $(BRAW_RAWPROC_BUNDLE)"
 
 deploy: $(OUTPUT) $(SILENCE_DETECTOR) $(STRUCTURE_ANALYZER) $(MIXER_APP) braw-prototype
 	@echo "=== Deploying SpliceKit to modded FCP ==="
@@ -247,6 +290,13 @@ deploy: $(OUTPUT) $(SILENCE_DETECTOR) $(STRUCTURE_ANALYZER) $(MIXER_APP) braw-pr
 		cp -R "$(BUILD_DIR)/braw-prototype/FormatReaders/SpliceKitBRAWImport.bundle" "$(MODDED_APP)/Contents/PlugIns/FormatReaders/SpliceKitBRAWImport.bundle"; \
 		echo "Opt-in BRAW prototype bundles copied into FCP.app/Contents/PlugIns"; \
 	fi
+	@if [ "$(ENABLE_BRAW_RAW_PROCESSOR)" = "1" ]; then \
+		$(MAKE) braw-raw-processor; \
+		mkdir -p "$(MODDED_APP)/Contents/Extensions"; \
+		rm -rf "$(MODDED_APP)/Contents/Extensions/SpliceKitBRAWRAWProcessor.appex"; \
+		cp -R "$(BUILD_DIR)/braw-prototype/Extensions/SpliceKitBRAWRAWProcessor.appex" "$(MODDED_APP)/Contents/Extensions/SpliceKitBRAWRAWProcessor.appex"; \
+		echo "Opt-in BRAW RAW processor copied into FCP.app/Contents/Extensions"; \
+	fi
 	@sign_identity=$$(security find-identity -v -p codesigning 2>/dev/null | awk '/"Apple Development:/ { print $$2; exit } /"Developer ID Application:/ && developer == "" { developer = $$2 } /[0-9]+\) [0-9A-F]+ "/ && first == "" { first = $$2 } END { if (developer != "") print developer; else if (first != "") print first }'); \
 	if [ -n "$$sign_identity" ]; then \
 		echo "Using signing identity: $$sign_identity"; \
@@ -259,6 +309,15 @@ deploy: $(OUTPUT) $(SILENCE_DETECTOR) $(STRUCTURE_ANALYZER) $(MIXER_APP) braw-pr
 	fi; \
 	if [ -d "$(MODDED_APP)/Contents/PlugIns/Codecs/SpliceKitBRAWDecoder.bundle" ]; then \
 		codesign --force --sign "$$sign_identity" "$(MODDED_APP)/Contents/PlugIns/Codecs/SpliceKitBRAWDecoder.bundle"; \
+	fi; \
+	if [ -d "$(MODDED_APP)/Contents/Extensions/SpliceKitBRAWRAWProcessor.appex" ]; then \
+		appex_sign_id="$(BRAW_RAWPROC_SIGN_ID)"; \
+		if [ -n "$$appex_sign_id" ]; then \
+			echo "Signing deployed appex with Developer ID: $$appex_sign_id"; \
+			codesign --force --sign "$$appex_sign_id" --options runtime --entitlements "$(BRAW_RAWPROC_ENTITLEMENTS)" "$(MODDED_APP)/Contents/Extensions/SpliceKitBRAWRAWProcessor.appex"; \
+		else \
+			codesign --force --sign "$$sign_identity" --entitlements "$(BRAW_RAWPROC_ENTITLEMENTS)" "$(MODDED_APP)/Contents/Extensions/SpliceKitBRAWRAWProcessor.appex"; \
+		fi; \
 	fi; \
 	if [ -d "$(PROAPP_SUPPORT_FRAMEWORK)" ]; then \
 		codesign --force --sign "$$sign_identity" "$(PROAPP_SUPPORT_FRAMEWORK)"; \
@@ -277,6 +336,10 @@ deploy: $(OUTPUT) $(SILENCE_DETECTOR) $(STRUCTURE_ANALYZER) $(MIXER_APP) braw-pr
 		fi; \
 		if [ -d "$(MODDED_APP)/Contents/PlugIns/Codecs/SpliceKitBRAWDecoder.bundle" ]; then \
 			codesign --force --sign - "$(MODDED_APP)/Contents/PlugIns/Codecs/SpliceKitBRAWDecoder.bundle"; \
+		fi; \
+		if [ -d "$(MODDED_APP)/Contents/Extensions/SpliceKitBRAWRAWProcessor.appex" ]; then \
+			codesign --force --sign - --entitlements "$(BRAW_RAWPROC_ENTITLEMENTS)" "$(MODDED_APP)/Contents/Extensions/SpliceKitBRAWRAWProcessor.appex" || \
+			codesign --force --sign - "$(MODDED_APP)/Contents/Extensions/SpliceKitBRAWRAWProcessor.appex"; \
 		fi; \
 		if [ -d "$(PROAPP_SUPPORT_FRAMEWORK)" ]; then \
 			codesign --force --sign - "$(PROAPP_SUPPORT_FRAMEWORK)"; \

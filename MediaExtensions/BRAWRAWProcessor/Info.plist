@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleDisplayName</key>
+	<string>SpliceKit BRAW RAW Processor</string>
+	<key>CFBundleExecutable</key>
+	<string>SpliceKitBRAWRAWProcessor</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.splicekit.braw.rawprocessor</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>SpliceKitBRAWRAWProcessor</string>
+	<key>CFBundlePackageType</key>
+	<string>XPC!</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.1.0</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>EXAppExtensionAttributes</key>
+	<dict>
+		<key>ClassImplementationID</key>
+		<string>com.splicekit.braw.rawprocessor</string>
+		<key>EXExtensionPointIdentifier</key>
+		<string>com.apple.mediaextension.rawprocessor</string>
+		<key>EXPrincipalClass</key>
+		<string>BRAWMERAWProcessorFactory</string>
+		<key>ObjectName</key>
+		<string>SpliceKit BRAW RAW Processor</string>
+		<key>ProcessorInfo</key>
+		<array>
+			<dict>
+				<key>CodecName</key>
+				<string>Blackmagic RAW</string>
+				<key>CodecType</key>
+				<string>braw</string>
+			</dict>
+			<dict>
+				<key>CodecName</key>
+				<string>Blackmagic RAW</string>
+				<key>CodecType</key>
+				<string>brxq</string>
+			</dict>
+			<dict>
+				<key>CodecName</key>
+				<string>Blackmagic RAW</string>
+				<key>CodecType</key>
+				<string>brst</string>
+			</dict>
+			<dict>
+				<key>CodecName</key>
+				<string>Blackmagic RAW</string>
+				<key>CodecType</key>
+				<string>brvn</string>
+			</dict>
+			<dict>
+				<key>CodecName</key>
+				<string>Blackmagic RAW</string>
+				<key>CodecType</key>
+				<string>brs2</string>
+			</dict>
+			<dict>
+				<key>CodecName</key>
+				<string>Blackmagic RAW</string>
+				<key>CodecType</key>
+				<string>brxh</string>
+			</dict>
+		</array>
+	</dict>
+	<key>LSMinimumSystemVersion</key>
+	<string>15.0</string>
+</dict>
+</plist>

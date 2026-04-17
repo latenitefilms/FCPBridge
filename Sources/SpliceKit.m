@@ -33,6 +33,7 @@ extern NSDictionary *SpliceKit_handleProjectOpen(NSDictionary *params);
 extern void SpliceKit_installMixerSkimHooks(void);
 extern void SpliceKit_installBRAWProviderShim(void);
 extern void SpliceKit_bootstrapBRAWAtLaunchPhase(NSString *phase);
+extern BOOL SpliceKit_installBRAWRAWSettingsHooks(void);
 
 #pragma mark - Logging
 //
@@ -3110,6 +3111,10 @@ static void SpliceKit_appDidLaunch(void) {
     SpliceKit_checkCompatibility();
 
     SpliceKit_bootstrapBRAWAtLaunchPhase(@"did-launch");
+
+    SpliceKit_safeInstall("BRAWRAWSettings", ^{
+        SpliceKit_installBRAWRAWSettingsHooks();
+    });
 
     // Install focused editor routing before commands and menus start querying
     // activeEditorContainer, so the secondary timeline can participate in the
