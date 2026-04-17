@@ -6,6 +6,22 @@
     <description>SpliceKit Patcher release updates</description>
     <language>en</language>
     <item>
+      <title>SpliceKit v3.1.149</title>
+      <sparkle:version>3.1.149</sparkle:version>
+      <sparkle:shortVersionString>3.1.149</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <pubDate>Fri, 17 Apr 2026 01:45:51 +0000</pubDate>
+      <description><![CDATA[
+        <h2>What's New in 3.1.149</h2>
+        <p>Native Blackmagic RAW (BRAW) playback in Final Cut Pro — import, preview, and edit .braw files from URSA Cine / BMPCC / Pocket 4K/6K cameras without transcoding. Works with every codec variant we've seen in the wild (braw, brxq, brst, brvn) including URSA Cine 17K. Playback runs through the Blackmagic RAW SDK with zero-copy Metal decode and realtime framerates at 6K+.</p>
+      ]]></description>
+      <enclosure
+        url="https://github.com/elliotttate/SpliceKit/releases/download/v3.1.149/SpliceKit-v3.1.149.dmg"
+        sparkle:edSignature="5hA0YWtBr+mk0uPYLU0c784mdCWlusplXqt1WXv3jsxnZv50NZZS5t0VJRIypC7ntrEATUVH5VmR/0fZNq80DQ=="
+        length="18876890"
+        type="application/octet-stream" />
+    </item>
+    <item>
       <title>SpliceKit v3.1.148</title>
       <sparkle:version>3.1.148</sparkle:version>
       <sparkle:shortVersionString>3.1.148</sparkle:shortVersionString>
