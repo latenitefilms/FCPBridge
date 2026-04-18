@@ -225,6 +225,15 @@ Short answers: **Yes, it's safe. Yes, it's legal. No, Apple won't ban you.**
 - **Apple doesn't ban Apple IDs for running modded local apps.** There's no precedent, and the mechanism (dyld injection + code signing) is the same one used by BetterTouchTool, Alfred, Hammerspoon, accessibility tools, and every Xcode debugger session.
 - **The realistic risks** are that FCP updates can break compatibility (just re-patch) and that private APIs can behave unexpectedly in edge cases (Cmd+Z is your friend).
 
+### Will it crash my FCP?
+
+**Probably less than you'd expect — and the design goes out of its way to keep it that way.**
+
+- **Nothing changes how FCP works on disk.** SpliceKit adds capabilities on top of FCP; it doesn't modify how projects, libraries, or media are stored. You can quit the patched copy at any time, open the same library in vanilla App Store FCP, and keep editing. Nothing is locked in.
+- **Stability is in the same ballpark as an FXPlug 4 plugin.** Any third-party effect has the power to crash FCP; SpliceKit plugins live at the same level. The difference is that SpliceKit has *more* control than the FXPlug sandbox — we can preemptively guard against things that FXPlug plugins just have to hope FCP recovers from (performance spikes, blocking the main thread, stepping on FCP's own state). Expensive work goes on background threads, hot paths are explicitly designed not to contend, and when something does go sideways we can often isolate it instead of letting it take the whole app down.
+- **SpliceKit already fixes several native FCP bugs.** In a few areas the patched copy is measurably more stable than stock FCP — [here's one example on video](https://youtu.be/SNUpQvBef0k).
+- **Crash reporting is being wired up** so any issue shows up automatically and gets fixed quickly. If something does go wrong in the meantime, sharing your logs (in the SpliceKit Discord or on GitHub Issues) is usually enough to get a fix out fast.
+
 The full plain-English version is in [docs/WHAT_IS_SPLICEKIT.md](docs/WHAT_IS_SPLICEKIT.md).
 
 ---
