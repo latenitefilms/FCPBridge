@@ -11,6 +11,10 @@
 |---|---|---|
 | Hit `Cmd+Shift+P` and type what you want. Apple Intelligence runs it. | Any LLM can read and edit your timeline — and build new tools as it goes. | Every built-in feature is just an example plugin. You (or an AI) can ship more. |
 
+> **Editor? Start here.** The [official SpliceKit site](https://splicekit.fcp.cafe) and the [FAQ](https://splicekit.fcp.cafe/faq/) are the friendliest way in. Questions, help, or feature requests? Join the SpliceKit channels on the [FCP Cafe Discord](https://discord.com/invite/HD3FPc4Azu). Bug reports: [open a GitHub issue](https://github.com/elliotttate/SpliceKit/issues).
+>
+> Can't wait to see what you do with it. 🥳
+
 ---
 
 ## The Three Pillars
@@ -135,6 +139,67 @@ The patcher copies Final Cut Pro to `~/Applications/SpliceKit/`, injects the Spl
 Once done, click **Launch FCP** in the patcher, or open the new copy from `~/Applications/SpliceKit/`. Press **Cmd+Shift+P** to open the Command Palette and you're off.
 
 Prefer the terminal? `./patcher/patch_fcp.sh` does the same job.
+
+---
+
+## Connect It to Claude (or any MCP client)
+
+The GUI patcher sets up the MCP server for you. If you skipped that step — or you're running from a repo checkout — here's the manual path.
+
+### One-line setup
+
+```bash
+make mcp-setup
+```
+
+That creates an isolated Python virtualenv at `~/.venvs/splicekit-mcp` and installs the pinned dependencies from `mcp/requirements.txt`.
+
+If you'd rather do it by hand:
+
+```bash
+python3 -m venv ~/.venvs/splicekit-mcp
+~/.venvs/splicekit-mcp/bin/python -m pip install -r mcp/requirements.txt
+```
+
+### Verify everything is wired up
+
+```bash
+make mcp-doctor
+```
+
+Checks that the venv exists, `mcp` imports cleanly, `.mcp.json` points at the venv, and the FCP bridge is listening on `127.0.0.1:9876`.
+
+### Point your MCP client at the server
+
+Use the virtual environment's Python as the MCP `command`. The `args` path depends on how you installed SpliceKit:
+
+**From a repo checkout:**
+
+```json
+{
+  "mcpServers": {
+    "splicekit": {
+      "command": "/Users/yourname/.venvs/splicekit-mcp/bin/python",
+      "args": ["/absolute/path/to/SpliceKit/mcp/server.py"]
+    }
+  }
+}
+```
+
+**From the packaged installer:**
+
+```json
+{
+  "mcpServers": {
+    "splicekit": {
+      "command": "/Users/yourname/.venvs/splicekit-mcp/bin/python",
+      "args": ["/Applications/SpliceKit.app/Contents/Resources/mcp/server.py"]
+    }
+  }
+}
+```
+
+The MCP server connects to the SpliceKit bridge running inside Final Cut Pro on `127.0.0.1:9876` — so the patched Final Cut Pro has to be running.
 
 ---
 
