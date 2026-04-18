@@ -1,244 +1,179 @@
 # SpliceKit
 
-Welcome to **SpliceKit**!
+[![Release](https://img.shields.io/github/v/release/elliotttate/SpliceKit)](https://github.com/elliotttate/SpliceKit/releases/latest)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Discord](https://img.shields.io/badge/Discord-FCP%20Cafe-5865F2?logo=discord&logoColor=white)](https://discord.com/invite/HD3FPc4Azu)
+[![Docs](https://img.shields.io/badge/docs-splicekit.fcp.cafe-0A84FF)](https://splicekit.fcp.cafe)
 
-SpliceKit gives superpowers to Apple's Final Cut Pro.
+**Final Cut Pro, unlocked. A Command Palette, MCP server, and an open plugin framework to do almost anything.**
 
-If you're a video editor, the best place to get started is the official [SpliceKit website](https://splicekit.fcp.cafe). Definitely check out the [FAQ](https://splicekit.fcp.cafe/faq/) for an easier explanation of some of what SpliceKit can do. 
+| 🎹 Command Palette | 🤖 MCP Server | 🧩 Plugin Framework |
+|---|---|---|
+| Hit `Cmd+Shift+P` and type what you want. Apple Intelligence runs it. | Any LLM can read and edit your timeline — and build new tools as it goes. | Every built-in feature is just an example plugin. You (or an AI) can ship more. |
 
-You can also join us on [FCP Cafe](https://fcp.cafe) in the SpliceKit [Discord channels](https://discord.com/invite/HD3FPc4Azu) for help, questions, or feature requests. 
-
-For bug reports please [open a GitHub Issue](https://github.com/elliotttate/SpliceKit/issues).
-
-We can't wait to see what you do with SpliceKit!
-
-Onwards & Upwards! 🥳
+> **Editor? Start here.** The [official SpliceKit site](https://splicekit.fcp.cafe) and the [FAQ](https://splicekit.fcp.cafe/faq/) are the friendliest way in. Questions, help, or feature requests? Join the SpliceKit channels on the [FCP Cafe Discord](https://discord.com/invite/HD3FPc4Azu). Bug reports: [open a GitHub issue](https://github.com/elliotttate/SpliceKit/issues).
+>
+> Can't wait to see what you do with it. 🥳
 
 ---
 
-## Built-in Features
+## The Three Pillars
 
-### Transcript Editor — Text-Based Video Editing
+### 🎹 1. The Command Palette
 
-[![Transcript Editor Demo](https://img.youtube.com/vi/JxxDSH4Ly0I/maxresdefault.jpg)](https://www.youtube.com/watch?v=JxxDSH4Ly0I)
+*One keystroke to anything.*
 
-> Click a word to jump the playhead. Select words and press Delete to remove video segments. Drag words to reorder clips. All changes apply directly to the FCP timeline.
+Hit **Cmd+Shift+P** inside the patched FCP. Fuzzy-search 100+ built-in editing actions — blade, trim, color, speed, markers, effects, transitions, export — or type plain English and let **Apple Intelligence** (on-device, private) figure out what you meant.
 
-Powered by **NVIDIA Parakeet TDT 0.6B** (on-device via FluidAudio) with v3 multilingual (25 languages) as the default engine and v2 English-optimized as an option. Speaker diarization identifies who's speaking. All clips are transcribed in a single batch process for speed.
-
-### Command Palette — Apple Intelligence for Final Cut Pro
-
-Hit **Cmd+Shift+P** inside the modded FCP to open a VS Code-style command palette with fuzzy search across 100+ editing actions. Type what you want to do in plain English and Apple Intelligence (on-device LLM via FoundationModels) translates your intent into editing actions.
-
-**Built-in commands include:**
-
-- **Editing**: Blade, delete, cut/copy/paste, trim, nudge, compound clips, detach audio, lift/overwrite, create storylines
-- **Playback**: Play/pause, frame stepping, go to start/end, loop, play selection, JKL-style controls
-- **Color**: Color Board, Color Wheels, Color Curves, Hue/Saturation, auto-enhance, match color, balance color
-- **Speed**: Normal, 2x/4x/8x/20x fast, 50%/25%/10% slow, reverse, freeze frame, hold frame
-- **Markers**: Standard, to-do, and chapter markers with navigation
-- **Effects & Transitions**: Browse, search, and apply any effect, transition, generator, or title by name
-- **Audio**: Volume up/down, fade in/out, audio enhancements, **Remove Silences** (auto-detects and removes silent segments)
-- **Scene Detection**: Analyze video for shot boundaries and automatically add markers or blade at every scene change
-- **Transform**: Crop, distort, reframe, stabilize
-- **Multicam**: Switch and cut angles 1-4, create multicam clips
-- **Captions**: Add/import captions and subtitles
-- **Ratings & Roles**: Favorite, reject, role assignment
-- **View**: Zoom to fit, snapping, skimming, timeline index, inspector
-- **Export**: Render, share selection, export FCPXML
-
-**Natural language examples you can ask Apple Intelligence:**
+#### Try saying…
 
 - *"add markers every 5 seconds"*
 - *"slow this clip to half speed"*
-- *"add a cross dissolve"*
-- *"color correct this clip"*
 - *"blade at every scene change"*
 - *"remove all the silences"*
-- *"zoom to fit the timeline"*
+- *"add a cross dissolve"*
 
-The AI understands your intent, maps it to the right sequence of FCP actions, and executes them — all without leaving the keyboard.
-
-**Remove Silences** uses Apple-native AVFoundation + Accelerate (vDSP) to analyze audio and detect silent segments. No ffmpeg or external dependencies. An options panel lets you configure the detection threshold, minimum silence duration, and padding. The audio analysis runs in the background with a processing indicator, then silences are bladed and ripple-deleted from the timeline.
-
-**Scene Detection** uses histogram-based frame comparison via the Accelerate framework's vImage to detect cuts and shot changes. Configurable sensitivity and sample interval. Markers are inserted programmatically at exact timecodes — no playhead movement required — making it fast even on long sequences.
+> No more menu hunting. No more memorizing shortcuts. No cloud.
 
 ---
 
-## What This Does
+### 🤖 2. The MCP Server
 
-SpliceKit injects a dynamic library into a re-signed copy of Final Cut Pro that:
+*Claude (or any other LLM) can drive your editor — and teach it new tricks.*
 
-- Exposes the entire ObjC runtime (78,000+ classes, including all private APIs)
-- Runs a JSON-RPC 2.0 server on `127.0.0.1:9876` for external control
-- Provides an MCP server for AI-assisted FCP automation
-- Swizzles out CloudKit/ImagePlayground calls that crash without iCloud entitlements
-- Gives direct access to Flexo, Ozone, TimelineKit, LunaKit, and all internal frameworks
+SpliceKit ships with an MCP server that exposes ~200 tools covering every major FCP subsystem. Point **Claude Code**, **Claude Desktop**, or any MCP-compatible AI client at it and you can say things like:
 
----
+- *"cut this 40-minute interview down to its best moments"*
+- *"remove the silences from this podcast, add captions, and export"*
+- *"assemble a rough cut from these clips, synced to the beat of this song"*
 
-## Architecture
+It's not a chat wrapper around keyboard shortcuts. The MCP talks to FCP's internal ObjC runtime directly — so it can read timeline state, inspect clips, blade, retime, color-correct, apply effects, and render without ever touching the UI.
 
-```
-┌─────────────────────────────────────────────────┐
-│  Final Cut Pro (modded copy)                    │
-│  ┌───────────────────────────────────────────┐  │
-│  │  SpliceKit.framework (injected via        │  │
-│  │  LC_LOAD_DYLIB)                           │  │
-│  │                                           │  │
-│  │  - ObjC runtime introspection             │  │
-│  │  - JSON-RPC server on TCP :9876           │  │
-│  │  - Method swizzling                       │  │
-│  │  - CloudContent crash prevention          │  │
-│  └───────────┬───────────────────────────────┘  │
-│              │ direct objc_msgSend              │
-│  ┌───────────▼───────────────────────────────┐  │
-│  │  Flexo, Ozone, TimelineKit, LunaKit ...  │  │
-│  │  (78,000+ ObjC classes)                   │  │
-│  └───────────────────────────────────────────┘  │
-└──────────────────────┬──────────────────────────┘
-                       │ TCP :9876
-        ┌──────────────▼──────────────┐
-        │  MCP Server (mcp/server.py) │
-        │  Python Client              │
-        │  nc / curl / any TCP client │
-        └─────────────────────────────┘
-```
+#### The editor that gets smarter every week
+
+The first time you ask for something complicated, the AI might be a little clumsy. It's improvising — stitching together primitives, trial-and-error against your timeline, occasionally picking the long way around.
+
+When that happens, don't settle for the workaround. **Tell it to build the ability.**
+
+| Step | What happens |
+|---|---|
+| **1. Ask** | You request something complex. The LLM improvises with the primitives it has. |
+| **2. Build** | You say "make this a real command." Claude writes a plugin, registers a new MCP tool, and wires it into your editor. |
+| **3. Reuse** | Next time — or the hundredth time after that — it's instant, reliable, and shared with everyone running the same plugin. |
+
+> Every clumsy first attempt is a prompt to turn that workflow into a first-class feature. The editor you use six months from now is smarter than the one you installed today — and most of that improvement won't come from the SpliceKit team. It'll come from you, and from the community shipping plugins back.
 
 ---
 
-## Quick Setup
+### 🧩 3. The Plugin Framework
 
-### GUI Patcher (Recommended)
+*Everything is a plugin.*
+
+SpliceKit isn't a feature list — it's a platform. Once the SpliceKit dylib is loaded into Final Cut Pro, the entire ObjC runtime (78,000+ classes, including all private APIs) is open for plugins to use.
+
+#### What a plugin can do
+
+- Add new panels and windows inside FCP
+- Put buttons on the toolbar, menu, or Enhancements menu
+- Register commands in the Command Palette
+- Expose new tools over the MCP server
+- Hook into timeline events, selection changes, and playback
+- Ship custom Motion templates, FxPlug effects, and Workflow Extensions
+- Be written in Objective-C / C++, Swift, Lua, or Python
+
+#### And you can ask an AI to build one
+
+Describe what you want. Hand the spec to Claude. It writes the plugin against the SpliceKit framework — the project ships full API reference docs designed for AI consumption.
+
+---
+
+## Example Plugins (What Ships in the Box)
+
+Every one of these is a plugin. They're bundled so you can use SpliceKit the day you install it, and they double as working examples for anyone building their own.
+
+### Text-Based Editor
+Transcribe every clip on your timeline with on-device speech recognition (NVIDIA Parakeet — 25 languages, no cloud, with speaker diarization). Click a word to jump there. Select a sentence, hit Delete, and the video gets cut to match. Drag words to reorder clips. Export as SRT or plain text.
+
+[![Text-Based Editor Demo](https://img.youtube.com/vi/JxxDSH4Ly0I/maxresdefault.jpg)](https://www.youtube.com/watch?v=JxxDSH4Ly0I)
+
+### Silence Remover
+Point it at an interview or podcast recording and it finds and cuts every silent pause. Configurable threshold, minimum duration, and padding. Pure Apple-native AVFoundation + Accelerate under the hood.
+
+### Social Media Captions
+Generate word-by-word highlighted, animated captions in 13 built-in styles (Bold Pop, Neon Glow, Karaoke, Typewriter, Bounce, and more). Captions land directly on your timeline as editable Motion titles.
+
+### Scene Detection
+Finds every shot change in your footage using vImage histogram comparison. Add markers, blade the timeline, or both.
+
+### Beat Detection & Song Cut
+Pulls BPM, beats, bars, and song sections from any music file. Hand **Song Cut** a music track and a folder of footage and get back a beat-synced music video on your timeline, with selectable pacing (natural, medium, fast, aggressive) or custom step weights.
+
+### LiveCam
+A built-in webcam booth that records straight to your library or active timeline. Live preview with color adjustments, audio meter, and a subject-lift green-screen matte that works on people *and* objects (macOS 14+). Pick "Transparent" as the green-screen color and LiveCam writes ProRes 4444 with a real alpha channel.
+
+### URL Import
+Paste a YouTube, Vimeo, or Twitter link and pull it into your library as a real clip. Auto-discovers `yt-dlp` and `ffmpeg` from your shell PATH.
+
+### Batch Export
+One command, every clip on your timeline exports as its own file — all effects, color grades, and transitions baked in.
+
+### Dual Timelines, FlexMusic, Montage Maker, OpenTimelineIO exchange, Lua REPL, in-process debugger…
+…and more. Every one of them is code in `Sources/` you can read, fork, or gut for parts.
+
+---
+
+## Install in 60 Seconds
+
+The easiest path is the GUI patcher. Download the latest release, open it, click the button.
 
 [![Installation Guide](https://img.youtube.com/vi/NxbInKlXQVs/maxresdefault.jpg)](https://www.youtube.com/watch?v=NxbInKlXQVs)
 
-Download **SpliceKit** from the [latest release](https://github.com/elliotttate/SpliceKit/releases/latest), unzip it, and run the app. It handles everything automatically — just click the button to patch.
+1. Download **SpliceKit** from the [latest release](https://github.com/elliotttate/SpliceKit/releases/latest)
+2. Unzip and open the app
+3. Click **Patch** — it handles the rest
 
 <img src="docs/patcher-screenshot.jpg" width="500" alt="SpliceKit Patcher">
 
-The patcher will:
-1. Copy Final Cut Pro to `~/Applications/SpliceKit/`
-2. Build and inject the SpliceKit dylib
-3. Re-sign with custom entitlements (no sandbox)
-4. Patch crash points (CloudContent/ImagePlayground)
-5. Set up the MCP server config
+The patcher copies Final Cut Pro to `~/Applications/SpliceKit/`, injects the SpliceKit dylib, re-signs it, and sets up the MCP server. **Your original Final Cut Pro is never touched.**
 
-Once patched, click **Launch FCP** in the patcher or open the modded app directly.
+Once done, click **Launch FCP** in the patcher, or open the new copy from `~/Applications/SpliceKit/`. Press **Cmd+Shift+P** to open the Command Palette and you're off.
 
-### Command Line Patcher
-
-Alternatively, use the shell script:
-
-```bash
-git clone https://github.com/elliotttate/SpliceKit.git
-cd SpliceKit
-./patcher/patch_fcp.sh
-```
-
-Options:
-```bash
-./patcher/patch_fcp.sh --dest ~/my-fcp    # Custom destination
-./patcher/patch_fcp.sh --rebuild           # Rebuild dylib only (after code changes)
-./patcher/patch_fcp.sh --uninstall         # Remove the modded copy
-```
+Prefer the terminal? `./patcher/patch_fcp.sh` does the same job.
 
 ---
 
-## Manual Setup
+## Connect It to Claude (or any MCP client)
 
-### Prerequisites
+The GUI patcher sets up the MCP server for you. If you skipped that step — or you're running from a repo checkout — here's the manual path.
 
-- macOS 14+ with Xcode Command Line Tools
-- Final Cut Pro installed at `/Applications/Final Cut Pro.app`
-- Python 3 with `mcp` package (`pip install mcp`)
-
-### 1. Create the Modded Final Cut Pro Copy
+### One-line setup
 
 ```bash
-# Copy FCP
-mkdir -p ~/Applications/SpliceKit
-cp -R "/Applications/Final Cut Pro.app" ~/Applications/SpliceKit/"Final Cut Pro.app"
-
-# Copy MAS receipt (needed for licensing)
-cp "/Applications/Final Cut Pro.app/Contents/_MASReceipt/receipt" \
-   ~/Applications/SpliceKit/"Final Cut Pro.app/Contents/_MASReceipt/receipt"
-
-# Remove quarantine
-xattr -cr ~/Applications/SpliceKit/"Final Cut Pro.app"
+make mcp-setup
 ```
 
-### 2. Build and Inject SpliceKit
+That creates an isolated Python virtualenv at `~/.venvs/splicekit-mcp` and installs the pinned dependencies from `mcp/requirements.txt`.
 
-```bash
-# Build the dylib
-make all
-
-# Deploy to the modded app (creates framework, signs everything)
-make deploy
-
-# Inject LC_LOAD_DYLIB into the binary (requires insert_dylib)
-# Build insert_dylib: git clone https://github.com/tyilo/insert_dylib.git && cd insert_dylib && clang -o /usr/local/bin/insert_dylib insert_dylib/main.c -framework Foundation
-insert_dylib --inplace --all-yes \
-    "@rpath/SpliceKit.framework/Versions/A/SpliceKit" \
-    ~/Applications/SpliceKit/"Final Cut Pro.app"/Contents/MacOS/"Final Cut Pro"
-
-# Re-sign with a local codesigning identity when available, otherwise ad-hoc
-SIGN_IDENTITY="$(security find-identity -v -p codesigning 2>/dev/null | awk '/"Apple Development:/ { print $2; exit } /"Developer ID Application:/ && developer == "" { developer = $2 } /[0-9]+\) [0-9A-F]+ "/ && first == "" { first = $2 } END { if (developer != "") print developer; else if (first != "") print first }')"
-codesign --force --sign "${SIGN_IDENTITY:--}" --entitlements entitlements.plist \
-    ~/Applications/SpliceKit/"Final Cut Pro.app"
-```
-
-### 3. Launch
-
-```bash
-~/Applications/SpliceKit/"Final Cut Pro.app"/Contents/MacOS/"Final Cut Pro"
-```
-
-Check `~/Library/Logs/SpliceKit/splicekit.log` for startup messages. You should see:
-```
-[SpliceKit] Control server listening on 127.0.0.1:9876
-```
-
----
-
-## Usage
-
-### Python Client (Interactive REPL)
-
-```bash
-python3 Scripts/splicekit_client.py
-```
-
-```
-splicekit> version
-splicekit> classes FFAnchored
-splicekit> methods FFPlayer
-splicekit> props FFAnchoredSequence
-splicekit> super FFAnchoredSequence
-splicekit> ivars FFLibrary
-```
-
-### Direct TCP
-
-```bash
-echo '{"jsonrpc":"2.0","method":"system.version","id":1}' | nc 127.0.0.1 9876
-```
-
-### MCP Server
-
-First, create a Python virtual environment for the MCP server and install the `mcp` package:
+If you'd rather do it by hand:
 
 ```bash
 python3 -m venv ~/.venvs/splicekit-mcp
-~/.venvs/splicekit-mcp/bin/python -m pip install --upgrade pip mcp
+~/.venvs/splicekit-mcp/bin/python -m pip install -r mcp/requirements.txt
 ```
 
-Use the virtual environment's Python as the MCP `command`.
+### Verify everything is wired up
 
-#### From a repository checkout
+```bash
+make mcp-doctor
+```
 
-If you cloned this repository locally, point MCP at the repo copy of `mcp/server.py`:
+Checks that the venv exists, `mcp` imports cleanly, `.mcp.json` points at the venv, and the FCP bridge is listening on `127.0.0.1:9876`.
+
+### Point your MCP client at the server
+
+Use the virtual environment's Python as the MCP `command`. The `args` path depends on how you installed SpliceKit:
+
+**From a repo checkout:**
 
 ```json
 {
@@ -251,9 +186,7 @@ If you cloned this repository locally, point MCP at the repo copy of `mcp/server
 }
 ```
 
-#### From the packaged installer
-
-If you installed SpliceKit using the packaged app, point MCP at the server script inside the installed SpliceKit app bundle:
+**From the packaged installer:**
 
 ```json
 {
@@ -266,114 +199,124 @@ If you installed SpliceKit using the packaged app, point MCP at the server scrip
 }
 ```
 
-Notes:
-- The MCP server connects to the SpliceKit bridge running inside Final Cut Pro on `127.0.0.1:9876`, so the modded Final Cut Pro must be running.
+The MCP server connects to the SpliceKit bridge running inside Final Cut Pro on `127.0.0.1:9876` — so the patched Final Cut Pro has to be running.
 
 ---
 
-## JSON-RPC API
+## Is This Safe? Is It Legal? Will Apple Ban Me?
 
-| Method | Description |
-|--------|-------------|
-| `system.version` | SpliceKit + FCP version info |
-| `system.getClasses` | List/filter all ObjC classes |
-| `system.getMethods` | List methods on a class |
-| `system.getProperties` | List @property declarations |
-| `system.getIvars` | List instance variables |
-| `system.getProtocols` | List protocol conformances |
-| `system.getSuperchain` | Get inheritance chain |
-| `system.callMethod` | Call any ObjC class/instance method |
+Short answers: **Yes, it's safe. Yes, it's legal. No, Apple won't ban you.**
 
-### Key FCP Internal Classes
+- **Your FCP stays untouched.** SpliceKit makes a *copy* in `~/Applications/SpliceKit/`. Your App Store FCP is never modified. Your libraries, projects, and media files are not touched by the install.
+- **It's legal.** Reverse engineering for interoperability is explicitly protected under [DMCA §1201(f)](https://www.law.cornell.edu/uscode/text/17/1201) (US) and the EU Software Directive. SpliceKit is MIT licensed.
+- **Apple doesn't ban Apple IDs for running modded local apps.** There's no precedent, and the mechanism (dyld injection + code signing) is the same one used by BetterTouchTool, Alfred, Hammerspoon, accessibility tools, and every Xcode debugger session.
+- **The realistic risks** are that FCP updates can break compatibility (just re-patch) and that private APIs can behave unexpectedly in edge cases (Cmd+Z is your friend).
+
+The full plain-English version is in [docs/WHAT_IS_SPLICEKIT.md](docs/WHAT_IS_SPLICEKIT.md).
+
+---
+
+## Building Plugins
+
+If you're here to build things, this is the section for you.
+
+### What's actually happening
+
+SpliceKit injects a dynamic library into a re-signed copy of Final Cut Pro. Once loaded:
+
+- The full ObjC runtime is exposed (78,000+ classes including all private APIs)
+- A JSON-RPC 2.0 server listens on `127.0.0.1:9876`
+- An MCP server translates tool calls into bridge RPCs
+- Flexo, Ozone, TimelineKit, LunaKit, Helium, ProCore — all of FCP's internal frameworks — are reachable via direct `objc_msgSend`
+- Crash points around CloudKit / ImagePlayground (which need entitlements a re-signed app doesn't have) are swizzled out
+
+```
+┌─────────────────────────────────────────────┐
+│  Final Cut Pro (patched copy)               │
+│  ┌───────────────────────────────────────┐  │
+│  │  SpliceKit.framework (LC_LOAD_DYLIB)  │  │
+│  │  ├── Command Palette                  │  │
+│  │  ├── MCP / JSON-RPC server on :9876   │  │
+│  │  ├── Plugin loader (hot-reload)       │  │
+│  │  └── your plugins here                │  │
+│  └───────────┬───────────────────────────┘  │
+│              │ objc_msgSend                  │
+│  ┌───────────▼───────────────────────────┐  │
+│  │  Flexo / Ozone / TimelineKit / ...    │  │
+│  └───────────────────────────────────────┘  │
+└──────────────────────┬──────────────────────┘
+                       │ TCP :9876
+        ┌──────────────▼──────────────┐
+        │  MCP server / Python REPL / │
+        │  nc / curl / Lua / your app │
+        └─────────────────────────────┘
+```
+
+### Ways to build
+
+- **Native plugin** (ObjC / Swift / C++) — link against `SpliceKit.framework`, drop your dylib into the plugins folder, hot-load it with `debug.loadPlugin`. Examples in `Plugins/` and `Sources/`.
+- **Lua, inside FCP** — Ctrl+Opt+L opens a REPL with an `sk` module. Drop `.lua` files into `~/Library/Application Support/SpliceKit/lua/auto/` for live coding. Full SDK in [docs/LUA_SDK_REFERENCE.md](docs/LUA_SDK_REFERENCE.md).
+- **Python / any language with a TCP socket** — `python3 Scripts/splicekit_client.py` gives you an interactive runtime REPL. Or: `echo '{"jsonrpc":"2.0","method":"system.version","id":1}' | nc 127.0.0.1 9876`
+- **MCP tools** — expose your plugin's capabilities as MCP tools and any AI client can drive them.
+- **Ask an AI to build it** — the API reference in `docs/` is written to be AI-consumable. Describe what you want, hand the spec to Claude, and it can write the plugin for you.
+- **Open a PR to SpliceKit itself** — if the thing you built is useful to other editors, send it upstream. The bundled "features" (Text-Based Editor, Silence Remover, LiveCam, Song Cut, etc.) all started as plugins. Fork the repo, drop your plugin in `Plugins/` or `Sources/`, and open a [pull request](https://github.com/elliotttate/SpliceKit/pulls) — community plugins are how SpliceKit grows.
+
+### Key FCP internals worth knowing
 
 | Class | Methods | Purpose |
 |-------|---------|---------|
 | `FFAnchoredTimelineModule` | 1435 | Primary timeline controller |
 | `FFAnchoredSequence` | 1074 | Timeline data model |
-| `FFLibrary` | 203 | Library container |
-| `FFLibraryDocument` | 231 | Library persistence |
+| `FFLibrary` / `FFLibraryDocument` | 203 / 231 | Library management |
 | `FFEditActionMgr` | 42 | Edit command dispatcher |
 | `FFPlayer` | 228 | Playback engine |
 | `PEAppController` | 484 | App controller |
 
-### Key FCP Frameworks
+| Prefix | Framework | Classes |
+|--------|-----------|---------|
+| FF | Flexo — core engine, timeline, editing | 2849 |
+| OZ | Ozone — effects, compositing, color | 841 |
+| PE | ProEditor — app controller, windows | 271 |
+| LK | LunaKit — UI framework | 220 |
+| TK | TimelineKit — timeline UI | 111 |
+| IX | Interchange — FCPXML import/export | 155 |
 
-| Prefix | Framework | Classes | Purpose |
-|--------|-----------|---------|---------|
-| FF | Flexo | 2849 | Core engine, timeline, editing |
-| OZ | Ozone | 841 | Effects, compositing, color |
-| PE | ProEditor | 271 | App controller, windows |
-| LK | LunaKit | 220 | UI framework |
-| TK | TimelineKit | 111 | Timeline UI |
-| IX | Interchange | 155 | FCPXML import/export |
+### Build from source
 
----
-
-## How It Works
-
-1. **App duplication**: Final Cut Pro is copied to a writable location
-2. **Re-signing**: Ad-hoc signature with entitlements that disable library validation and sandbox
-3. **Binary patching**: `insert_dylib` adds an `LC_LOAD_DYLIB` command pointing to `SpliceKit.framework`
-4. **Auto-load**: On launch, dyld loads SpliceKit before `main()` runs
-5. **Constructor**: `__attribute__((constructor))` caches class references and swizzles CloudContent
-6. **Server start**: On `NSApplicationDidFinishLaunchingNotification`, starts TCP server on port 9876
-7. **Runtime access**: All calls use `objc_getClass()`, `objc_msgSend()`, and the ObjC runtime API
-
----
-
-## Project Structure
-
-```
-SpliceKit/
-├── patcher/
-│   ├── SpliceKitPatcher.app/  # Signed & notarized GUI patcher
-│   ├── SpliceKitPatcher/
-│   │   └── main.swift         # Patcher source (SwiftUI)
-│   └── patch_fcp.sh           # Command line patcher
-├── Sources/
-│   ├── SpliceKit.h            # Public header
-│   ├── SpliceKit.m            # Constructor, class caching, crash fixes, menu/toolbar
-│   ├── SpliceKitRuntime.m     # ObjC runtime utilities
-│   ├── SpliceKitServer.m      # JSON-RPC TCP server (33 tool endpoints)
-│   ├── SpliceKitSwizzle.m     # Method swizzling infrastructure
-│   ├── SpliceKitTranscriptPanel.h   # Transcript editor header
-│   ├── SpliceKitTranscriptPanel.m   # Speech transcription, text-based editing UI
-│   ├── SpliceKitCommandPalette.h    # Command palette header
-│   └── SpliceKitCommandPalette.m    # Cmd+Shift+P palette with Apple Intelligence + 100 commands
-├── tools/
-│   ├── silence-detector.swift       # Audio silence detection CLI (AVFoundation + vDSP)
-│   └── parakeet-transcriber/        # On-device speech-to-text CLI (NVIDIA Parakeet via FluidAudio)
-├── Scripts/
-│   ├── splicekit_client.py    # Interactive Python REPL client
-│   └── launch.sh              # Launch helper script
-├── mcp/
-│   └── server.py              # MCP server (33 tools)
-├── docs/
-│   └── FCP_API_REFERENCE.md   # Full API reference for FCP internals
-├── CLAUDE.md                  # Skill documentation for Claude
-├── Makefile                   # Build, deploy, launch targets
-├── entitlements.plist         # Unsandboxed entitlements for re-signing
-└── LICENSE                    # MIT License
+```bash
+git clone https://github.com/elliotttate/SpliceKit.git
+cd SpliceKit
+make all && make deploy
 ```
 
+### Documentation map
+
+- [`docs/WHAT_IS_SPLICEKIT.md`](docs/WHAT_IS_SPLICEKIT.md) — the plain-English tour
+- [`docs/FCP_API_REFERENCE.md`](docs/FCP_API_REFERENCE.md) — full API reference for FCP internals
+- [`docs/COMMAND_PALETTE_GUIDE.md`](docs/COMMAND_PALETTE_GUIDE.md) — Command Palette & Apple Intelligence
+- [`docs/LUA_SDK_REFERENCE.md`](docs/LUA_SDK_REFERENCE.md) · [`docs/LUA_SCRIPTING_GUIDE.md`](docs/LUA_SCRIPTING_GUIDE.md) — Lua plugin scripting
+- [`docs/TRANSCRIPT_EDITING_GUIDE.md`](docs/TRANSCRIPT_EDITING_GUIDE.md) — the Text-Based Editor plugin
+- [`docs/FXPLUG_PLUGIN_GUIDE.md`](docs/FXPLUG_PLUGIN_GUIDE.md) — FxPlug 4 plugin dev
+- [`docs/WORKFLOW_EXTENSIONS_GUIDE.md`](docs/WORKFLOW_EXTENSIONS_GUIDE.md) — Workflow Extensions
+- [`docs/DEBUG_TOOLS_GUIDE.md`](docs/DEBUG_TOOLS_GUIDE.md) — in-process debugging, tracing, hot-loading
+- [`docs/RUNTIME_INTROSPECTION_GUIDE.md`](docs/RUNTIME_INTROSPECTION_GUIDE.md) — ObjC runtime exploration
+- [`docs/FCPXML_FORMAT_REFERENCE.md`](docs/FCPXML_FORMAT_REFERENCE.md) — FCPXML format
+- [`docs/SCENE_BEAT_DETECTION_GUIDE.md`](docs/SCENE_BEAT_DETECTION_GUIDE.md) · [`docs/FLEXMUSIC_AND_MONTAGE_GUIDE.md`](docs/FLEXMUSIC_AND_MONTAGE_GUIDE.md) — detection & montage plugins
+
 ---
 
-## Is This Legal / Safe to Use?
+## Community
 
-A few things worth clarifying up front -- this isn't for everyone, but it's very easy to set up if you do want to try it.
+- **Questions, help, feature requests**: [FCP Cafe Discord](https://discord.com/invite/HD3FPc4Azu) (SpliceKit channels)
+- **Bug reports**: [GitHub Issues](https://github.com/elliotttate/SpliceKit/issues)
+- **Features, videos, FAQ**: [splicekit.fcp.cafe](https://splicekit.fcp.cafe)
 
-**On reverse engineering and the EULA:** Reverse engineering for interoperability is explicitly protected under the DMCA ([17 U.S.C. § 1201(f)](https://www.law.cornell.edu/uscode/text/17/1201)) and similar laws in the EU. This is the same legal basis that allows tools like Homebrew, Hammerspoon, and countless other macOS utilities that hook into Apple apps. Apple's EULA doesn't override federal law. That said, SpliceKit doesn't really involve reverse engineering in the traditional sense -- once the library is loaded, Final Cut Pro exposes all of its own classes and methods through the Objective-C runtime. There's no decompilation required.
-
-**On "injecting code":** What SpliceKit does is no different from what accessibility tools, screen readers, and automation utilities do every day on macOS. `DYLD_INSERT_LIBRARIES` is a documented Apple mechanism -- it's not an exploit. Apps like BetterTouchTool, Alfred, and Bartender all inject into running processes using the same techniques.
-
-**On Apple disabling your Apple ID:** There is no precedent for Apple disabling an Apple ID for running a modified local app. Apple can't even distinguish between "ran a modded app" and "loaded a dylib for debugging in Xcode," which developers do constantly. Apple's focus is on protecting the App Store and code signing for distribution -- not policing what developers do on their own machines.
-
-**The real risk** is the same as any unsigned software: make sure you trust the source. The code is fully open, the techniques are well-established, and nothing here is novel or dangerous from a security perspective.
-
-On a personal note -- I've been frustrated by how little progress Final Cut Pro has made over the years, and my hope is that this project can help it finally get some of the features it desperately needs. There's a huge precedent in modding software and games. I've modded quite a few games where the developers officially adopted features based on community work. It can be a really productive relationship where proof of concepts demonstrate what would be genuinely useful to add officially.
+There's a long tradition of community modding projects getting adopted back into the official products they extend. If SpliceKit helps push Final Cut Pro forward, everyone wins.
 
 ---
 
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE). Use it, modify it, ship your own plugins with it.
+
+Onwards & upwards 🥳
