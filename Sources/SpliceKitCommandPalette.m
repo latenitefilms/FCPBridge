@@ -1789,7 +1789,7 @@ static NSString *FCPStripStopWords(NSString *query) {
     bg.layer.masksToBounds = YES;
     [hud.contentView addSubview:bg];
 
-    NSProgressIndicator *spinner = [[NSProgressIndicator alloc] initWithFrame:NSMakeRect(20, 58, 24, 24)];
+    NSProgressIndicator *spinner = [[NSProgressIndicator alloc] initWithFrame:NSMakeRect(20, 50, 24, 24)];
     spinner.style = NSProgressIndicatorStyleSpinning;
     spinner.controlSize = NSControlSizeRegular;
     [spinner startAnimation:nil];
@@ -1797,6 +1797,7 @@ static NSString *FCPStripStopWords(NSString *query) {
 
     NSTextField *label = [NSTextField wrappingLabelWithString:message ?: @"Working..."];
     label.frame = NSMakeRect(52, 42, 446, 40);
+    label.alignment = NSTextAlignmentLeft;
     label.font = [NSFont systemFontOfSize:13 weight:NSFontWeightMedium];
     label.textColor = [NSColor labelColor];
     label.maximumNumberOfLines = 2;
@@ -1817,9 +1818,9 @@ static NSString *FCPStripStopWords(NSString *query) {
             [label sizeToFit];
             NSRect frame = label.frame;
             frame.origin.x = 52;
-            frame.origin.y = 42;
             frame.size.width = 446;
             frame.size.height = MIN(MAX(frame.size.height, 20), 40);
+            frame.origin.y = 62 - frame.size.height / 2.0;
             label.frame = frame;
         }
     });
@@ -1924,7 +1925,14 @@ static NSString *FCPStripStopWords(NSString *query) {
         [alert addButtonWithTitle:primaryButtonTitle];
         [alert addButtonWithTitle:@"Cancel"];
 
-        NSView *accessory = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 420, 184)];
+        NSView *accessory = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 420, 212)];
+
+        NSButton *qualityToggle = [[NSButton alloc] initWithFrame:NSMakeRect(0, 188, 420, 20)];
+        [qualityToggle setButtonType:NSButtonTypeSwitch];
+        qualityToggle.title = @"Highest Quality (larger files, may require VP9/AV1 remux)";
+        qualityToggle.state = NSControlStateValueOff;
+        qualityToggle.toolTip = @"YouTube caps progressive mp4 at 720p. Enable this to fetch the highest available resolution (1080p, 1440p, or 4K) by downloading separate video + audio streams and merging.";
+        [accessory addSubview:qualityToggle];
 
         NSTextField *urlLabel = [NSTextField labelWithString:@"URL"];
         urlLabel.frame = NSMakeRect(0, 160, 80, 20);
@@ -2008,6 +2016,7 @@ static NSString *FCPStripStopWords(NSString *query) {
         NSMutableDictionary *params = [NSMutableDictionary dictionary];
         params[@"url"] = url;
         params[@"mode"] = [self selectedURLImportModeForToggle:timelineToggle popup:modePopup];
+        params[@"highest_quality"] = @(qualityToggle.state == NSControlStateValueOn);
         NSString *title = [titleField.stringValue stringByTrimmingCharactersInSet:
             [NSCharacterSet whitespaceAndNewlineCharacterSet]];
         if (title.length > 0) params[@"title"] = title;
@@ -2046,7 +2055,7 @@ static NSString *FCPStripStopWords(NSString *query) {
                     NSString *message = status[@"message"] ?: @"Working...";
                     double progress = [status[@"progress"] doubleValue];
                     NSString *hudMessage = message;
-                    if (progress > 0.0 && progress < 1.0) {
+                    if (progress > 0.0 && progress < 1.0 && ![message containsString:@"%"]) {
                         hudMessage = [NSString stringWithFormat:@"%@ %.0f%%", message, progress * 100.0];
                     }
                     [self updateProcessingHUD:hud message:hudMessage];

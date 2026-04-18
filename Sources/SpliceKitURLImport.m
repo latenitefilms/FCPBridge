@@ -699,6 +699,7 @@ static NSString *SpliceKitURLImportDownloadedFileMatchingPrefix(NSString *direct
 @property (nonatomic, assign) BOOL timelineInserted;
 @property (nonatomic, assign) BOOL transcoded;
 @property (nonatomic, assign) BOOL cancelled;
+@property (nonatomic, assign) BOOL highestQuality;
 @property (nonatomic, strong) NSDate *createdAt;
 @property (nonatomic, strong) NSDate *updatedAt;
 @property (nonatomic, strong) NSTask *resolverTask;
@@ -851,13 +852,16 @@ static void SpliceKitURLImportResolveProviderURL(NSString *provider,
         NSString *outputTemplate = [downloadsDir stringByAppendingPathComponent:
             [NSString stringWithFormat:@"%@.%%(ext)s", prefix]];
 
+        NSString *formatSpec = job.highestQuality
+            ? @"bv*+ba[ext=m4a]/bv*+ba/b"
+            : @"b[ext=mp4]/bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/bv*+ba/b";
         NSMutableArray<NSString *> *args = [NSMutableArray arrayWithObjects:
             @"--newline",
             @"--no-playlist",
             @"--restrict-filenames",
             @"--no-warnings",
             @"--output", outputTemplate,
-            @"-f", @"b[ext=mp4]/bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/bv*+ba/b",
+            @"-f", formatSpec,
             @"--merge-output-format", @"mp4",
             @"--ffmpeg-location", [ffmpeg stringByDeletingLastPathComponent],
             url.absoluteString ?: @"",
@@ -2079,6 +2083,7 @@ static void SpliceKitURLImportResolveProviderURL(NSString *provider,
     job.mode = [self resolvedModeFromParams:params];
     job.targetEvent = SpliceKitURLImportTrimmedString(params[@"target_event"]);
     job.titleOverride = SpliceKitURLImportTrimmedString(params[@"title"]);
+    job.highestQuality = [params[@"highest_quality"] boolValue];
     job.clipName = [self defaultClipNameForURL:url titleOverride:job.titleOverride];
     job.progress = 0.01;
     job.message = @"Resolving URL...";

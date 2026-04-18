@@ -1355,7 +1355,8 @@ def import_fcpxml(xml: str, internal: bool = True) -> str:
 
 @mcp.tool(annotations=_tool_annotations("import_url"))
 def import_url(url: str, mode: str = "import_only", target_event: str = "",
-               title: str = "", wait_until_complete: bool = True) -> str:
+               title: str = "", highest_quality: bool = False,
+               wait_until_complete: bool = True) -> str:
     """Download a remote media URL, import it into Final Cut Pro, and optionally
     place it into the active timeline.
 
@@ -1365,6 +1366,9 @@ def import_url(url: str, mode: str = "import_only", target_event: str = "",
         mode: "import_only", "insert_at_playhead", or "append_to_timeline".
         target_event: Optional event name override.
         title: Optional clip title override.
+        highest_quality: If True, fetch the highest available resolution from
+            YouTube/Vimeo (1080p/1440p/4K via VP9/AV1 when needed). Default False
+            downloads the best progressive mp4 (typically 720p) for faster imports.
         wait_until_complete: If False, returns immediately with a job_id that can
             be polled via import_url_status().
 
@@ -1376,6 +1380,8 @@ def import_url(url: str, mode: str = "import_only", target_event: str = "",
         params["target_event"] = target_event
     if title:
         params["title"] = title
+    if highest_quality:
+        params["highest_quality"] = True
 
     method = "urlImport.import" if wait_until_complete else "urlImport.start"
     r = bridge.call(method, **params)
