@@ -154,6 +154,12 @@ static NSString *SpliceKitURLImportSharedDownloadsDirectory(void) {
         stringByAppendingPathComponent:@"downloads"]);
 }
 
+static void SpliceKitURLImportAddExecutableCandidate(NSMutableOrderedSet<NSString *> *candidates,
+                                                     NSString *path) {
+    NSString *trimmed = [SpliceKitURLImportTrimmedString(path) stringByStandardizingPath];
+    if (trimmed.length > 0) [candidates addObject:trimmed];
+}
+
 static NSString *SpliceKitURLImportExecutablePath(NSArray<NSString *> *candidates) {
     NSFileManager *fm = [NSFileManager defaultManager];
     for (NSString *path in candidates) {
@@ -162,31 +168,114 @@ static NSString *SpliceKitURLImportExecutablePath(NSArray<NSString *> *candidate
     return nil;
 }
 
-static NSString *SpliceKitURLImportYTDLPPath(void) {
+static NSString *SpliceKitURLImportExecutablePathFromLoginShell(NSString *name) {
+    NSString *trimmedName = SpliceKitURLImportTrimmedString(name);
+    if (trimmedName.length == 0) return nil;
+
+    NSFileManager *fm = [NSFileManager defaultManager];
+    NSMutableOrderedSet<NSString *> *shells = [NSMutableOrderedSet orderedSet];
+    NSString *preferredShell = [NSProcessInfo processInfo].environment[@"SHELL"];
+    if ([fm isExecutableFileAtPath:preferredShell]) {
+        [shells addObject:[preferredShell stringByStandardizingPath]];
+    }
+    for (NSString *candidate in @[@"/bin/zsh", @"/bin/bash", @"/bin/sh"]) {
+        if ([fm isExecutableFileAtPath:candidate]) [shells addObject:candidate];
+    }
+
+    NSString *command = [NSString stringWithFormat:@"command -v %@ 2>/dev/null || which %@ 2>/dev/null",
+                         trimmedName, trimmedName];
+    for (NSString *shellPath in shells) {
+        NSTask *task = [[NSTask alloc] init];
+        task.executableURL = [NSURL fileURLWithPath:shellPath];
+        task.arguments = @[@"-lc", command];
+
+        NSPipe *pipe = [NSPipe pipe];
+        task.standardOutput = pipe;
+        task.standardError = pipe;
+
+        NSError *launchError = nil;
+        if (![task launchAndReturnError:&launchError]) {
+            continue;
+        }
+
+        [task waitUntilExit];
+        NSData *data = [[pipe fileHandleForReading] readDataToEndOfFile];
+        NSString *output = SpliceKitURLImportStringFromData(data);
+        NSArray<NSString *> *lines = [output componentsSeparatedByCharactersInSet:
+            [NSCharacterSet newlineCharacterSet]];
+        for (NSString *line in lines) {
+            NSString *resolved = [SpliceKitURLImportTrimmedString(line) stringByStandardizingPath];
+            if ([fm isExecutableFileAtPath:resolved]) return resolved;
+        }
+    }
+
+    return nil;
+}
+
+static NSString *SpliceKitURLImportDependencyPath(NSString *toolName,
+                                                  NSString *overrideEnvVar) {
+    NSFileManager *fm = [NSFileManager defaultManager];
+    NSMutableOrderedSet<NSString *> *candidates = [NSMutableOrderedSet orderedSet];
+    NSString *home = NSHomeDirectory();
     NSString *tools = SpliceKitURLImportToolsDirectory();
-    return SpliceKitURLImportExecutablePath(@[
-        [tools stringByAppendingPathComponent:@"yt-dlp"],
-        @"/opt/homebrew/bin/yt-dlp",
-        @"/usr/local/bin/yt-dlp",
-        @"/usr/bin/yt-dlp",
-    ]);
+
+    SpliceKitURLImportAddExecutableCandidate(candidates,
+        [NSProcessInfo processInfo].environment[overrideEnvVar]);
+    SpliceKitURLImportAddExecutableCandidate(candidates,
+        [tools stringByAppendingPathComponent:toolName]);
+
+    NSString *processPath = [NSProcessInfo processInfo].environment[@"PATH"];
+    for (NSString *directory in [processPath componentsSeparatedByString:@":"]) {
+        NSString *trimmed = SpliceKitURLImportTrimmedString(directory);
+        if (trimmed.length == 0) continue;
+        SpliceKitURLImportAddExecutableCandidate(candidates,
+            [trimmed stringByAppendingPathComponent:toolName]);
+    }
+
+    for (NSString *directory in @[
+        [home stringByAppendingPathComponent:@".local/bin"],
+        [home stringByAppendingPathComponent:@".pyenv/shims"],
+        [home stringByAppendingPathComponent:@".asdf/shims"],
+        [home stringByAppendingPathComponent:@".nix-profile/bin"],
+        @"/nix/var/nix/profiles/default/bin",
+        @"/opt/homebrew/bin",
+        @"/usr/local/bin",
+        @"/opt/local/bin",
+        @"/usr/bin",
+    ]) {
+        SpliceKitURLImportAddExecutableCandidate(candidates,
+            [directory stringByAppendingPathComponent:toolName]);
+    }
+
+    NSString *resolvedFromShell = SpliceKitURLImportExecutablePathFromLoginShell(toolName);
+    if ([fm isExecutableFileAtPath:resolvedFromShell]) {
+        SpliceKitURLImportAddExecutableCandidate(candidates, resolvedFromShell);
+    }
+
+    return SpliceKitURLImportExecutablePath(candidates.array);
+}
+
+static NSString *SpliceKitURLImportYTDLPPath(void) {
+    return SpliceKitURLImportDependencyPath(@"yt-dlp", @"SPLICEKIT_YTDLP_PATH");
 }
 
 static NSString *SpliceKitURLImportFFmpegPath(void) {
-    NSString *tools = SpliceKitURLImportToolsDirectory();
-    return SpliceKitURLImportExecutablePath(@[
-        [tools stringByAppendingPathComponent:@"ffmpeg"],
-        @"/opt/homebrew/bin/ffmpeg",
-        @"/usr/local/bin/ffmpeg",
-        @"/usr/bin/ffmpeg",
-    ]);
+    return SpliceKitURLImportDependencyPath(@"ffmpeg", @"SPLICEKIT_FFMPEG_PATH");
 }
 
-static NSString *SpliceKitURLImportProviderDependencyMessage(NSString *provider) {
+static NSString *SpliceKitURLImportProviderDependencyMessage(NSString *provider,
+                                                            NSString *ytDLP,
+                                                            NSString *ffmpeg) {
     NSString *label = provider.length > 0 ? provider : @"Provider";
+    NSMutableArray<NSString *> *missing = [NSMutableArray array];
+    if (ytDLP.length == 0) [missing addObject:@"yt-dlp"];
+    if (ffmpeg.length == 0) [missing addObject:@"ffmpeg"];
+    NSString *missingList = missing.count > 0
+        ? [missing componentsJoinedByString:@" and "]
+        : @"yt-dlp and ffmpeg";
     return [NSString stringWithFormat:
-        @"%@ import requires yt-dlp and ffmpeg. Install them with `brew install yt-dlp ffmpeg`, then re-run `make deploy` so SpliceKit can see them in ~/Applications/SpliceKit/tools/.",
-        label];
+        @"%@ import requires %@. SpliceKit looks in ~/Applications/SpliceKit/tools, your PATH, and common package-manager locations. If they're already installed somewhere custom, run `make url-import-tools` or symlink them into ~/Applications/SpliceKit/tools/.",
+        label, missingList];
 }
 
 static NSString *SpliceKitURLImportStringFromData(NSData *data) {
@@ -421,7 +510,7 @@ static void SpliceKitURLImportResolveProviderURL(NSString *provider,
     NSString *ytDLP = SpliceKitURLImportYTDLPPath();
     NSString *ffmpeg = SpliceKitURLImportFFmpegPath();
     if (ytDLP.length == 0 || ffmpeg.length == 0) {
-        completion(nil, nil, nil, SpliceKitURLImportProviderDependencyMessage(provider));
+        completion(nil, nil, nil, SpliceKitURLImportProviderDependencyMessage(provider, ytDLP, ffmpeg));
         return;
     }
 

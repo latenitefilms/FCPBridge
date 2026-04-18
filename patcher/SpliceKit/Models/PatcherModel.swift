@@ -210,6 +210,27 @@ class PatcherModel: ObservableObject {
         }
     }
 
+    private func deployTools(to toolsDir: String,
+                             silenceBin: String,
+                             parakeetBin: String) async {
+        shell("mkdir -p \(shellQuote(toolsDir))")
+        if FileManager.default.fileExists(atPath: silenceBin) {
+            shell("cp \(shellQuote(silenceBin)) \(shellQuote(toolsDir + "/silence-detector"))")
+        }
+        if FileManager.default.fileExists(atPath: parakeetBin) {
+            shell("cp \(shellQuote(parakeetBin)) \(shellQuote(toolsDir + "/parakeet-transcriber"))")
+        }
+
+        for toolName in ["yt-dlp", "ffmpeg"] {
+            if let resolved = resolveExecutable(named: toolName) {
+                shell("ln -sf \(shellQuote(resolved)) \(shellQuote(toolsDir + "/\(toolName)"))")
+                await logAsync("Linked \(toolName) -> \(resolved)")
+            } else {
+                await logAsync("WARNING: \(toolName) not found. URL import for hosted video may need it linked manually later.")
+            }
+        }
+    }
+
     /// Evaluate install state: is SpliceKit injected? Is it the current build? Is FCP up to date?
     func checkStatus() {
         let binary = moddedApp + "/Contents/MacOS/Final Cut Pro"
@@ -562,13 +583,7 @@ class PatcherModel: ObservableObject {
 
         // Deploy tools
         let toolsDir = NSHomeDirectory() + "/Applications/SpliceKit/tools"
-        shell("mkdir -p '\(toolsDir)'")
-        if FileManager.default.fileExists(atPath: silenceBin) {
-            shell("cp '\(silenceBin)' '\(toolsDir)/silence-detector'")
-        }
-        if FileManager.default.fileExists(atPath: parakeetBin) {
-            shell("cp '\(parakeetBin)' '\(toolsDir)/parakeet-transcriber'")
-        }
+        await deployTools(to: toolsDir, silenceBin: silenceBin, parakeetBin: parakeetBin)
 
         await logAsync("Framework installed")
         await completeStepAsync(.installFramework)
@@ -815,13 +830,7 @@ class PatcherModel: ObservableObject {
 
         // Deploy tools
         let toolsDir = NSHomeDirectory() + "/Applications/SpliceKit/tools"
-        shell("mkdir -p '\(toolsDir)'")
-        if FileManager.default.fileExists(atPath: silenceBin) {
-            shell("cp '\(silenceBin)' '\(toolsDir)/silence-detector'")
-        }
-        if FileManager.default.fileExists(atPath: parakeetBin) {
-            shell("cp '\(parakeetBin)' '\(toolsDir)/parakeet-transcriber'")
-        }
+        await deployTools(to: toolsDir, silenceBin: silenceBin, parakeetBin: parakeetBin)
 
         await logAsync("Framework updated")
         await completeStepAsync(.installFramework)

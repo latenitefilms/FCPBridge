@@ -25,6 +25,112 @@ func shellQuote(_ value: String) -> String {
     "'" + value.replacingOccurrences(of: "'", with: "'\\''") + "'"
 }
 
+private func normalizeExecutablePath(_ path: String) -> String {
+    let expanded = (path as NSString).expandingTildeInPath
+    return (expanded as NSString).standardizingPath
+}
+
+private func runCapturedProcess(executablePath: String, arguments: [String]) -> (output: String, status: Int32)? {
+    let process = Process()
+    let pipe = Pipe()
+    process.standardOutput = pipe
+    process.standardError = pipe
+    process.executableURL = URL(fileURLWithPath: executablePath)
+    process.arguments = arguments
+    do {
+        try process.run()
+    } catch {
+        return nil
+    }
+    process.waitUntilExit()
+    let data = pipe.fileHandleForReading.readDataToEndOfFile()
+    return (String(data: data, encoding: .utf8) ?? "", process.terminationStatus)
+}
+
+private func firstExecutablePath(in output: String) -> String? {
+    let fm = FileManager.default
+    for rawLine in output.split(whereSeparator: \.isNewline) {
+        let candidate = normalizeExecutablePath(String(rawLine).trimmingCharacters(in: .whitespacesAndNewlines))
+        if !candidate.isEmpty && fm.isExecutableFile(atPath: candidate) {
+            return candidate
+        }
+    }
+    return nil
+}
+
+func resolveExecutable(named executableName: String) -> String? {
+    let trimmedName = executableName.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmedName.isEmpty else { return nil }
+
+    let fm = FileManager.default
+    let home = NSHomeDirectory()
+    let overrideEnvName = "SPLICEKIT_" + trimmedName
+        .uppercased()
+        .replacingOccurrences(of: "-", with: "_") + "_PATH"
+
+    var seen = Set<String>()
+    var candidates: [String] = []
+    func addCandidate(_ path: String?) {
+        guard let path else { return }
+        let normalized = normalizeExecutablePath(path)
+        guard !normalized.isEmpty else { return }
+        if seen.insert(normalized).inserted {
+            candidates.append(normalized)
+        }
+    }
+
+    addCandidate(ProcessInfo.processInfo.environment[overrideEnvName])
+    if let pathEnv = ProcessInfo.processInfo.environment["PATH"] {
+        for directory in pathEnv.split(separator: ":") where !directory.isEmpty {
+            addCandidate(String(directory) + "/\(trimmedName)")
+        }
+    }
+
+    [
+        home + "/Applications/SpliceKit/tools/\(trimmedName)",
+        home + "/.local/bin/\(trimmedName)",
+        home + "/.pyenv/shims/\(trimmedName)",
+        home + "/.asdf/shims/\(trimmedName)",
+        home + "/.nix-profile/bin/\(trimmedName)",
+        "/nix/var/nix/profiles/default/bin/\(trimmedName)",
+        "/opt/homebrew/bin/\(trimmedName)",
+        "/usr/local/bin/\(trimmedName)",
+        "/opt/local/bin/\(trimmedName)",
+        "/usr/bin/\(trimmedName)"
+    ].forEach(addCandidate)
+
+    for candidate in candidates where fm.isExecutableFile(atPath: candidate) {
+        return candidate
+    }
+
+    let shellCommand = "command -v \(shellQuote(trimmedName)) 2>/dev/null || which \(shellQuote(trimmedName)) 2>/dev/null"
+    var shells: [String] = []
+    func addShell(_ path: String?) {
+        guard let path else { return }
+        let normalized = normalizeExecutablePath(path)
+        guard !normalized.isEmpty, !shells.contains(normalized), fm.isExecutableFile(atPath: normalized) else {
+            return
+        }
+        shells.append(normalized)
+    }
+
+    addShell(ProcessInfo.processInfo.environment["SHELL"])
+    addShell("/bin/zsh")
+    addShell("/bin/bash")
+    addShell("/bin/sh")
+
+    for shellPath in shells {
+        guard let result = runCapturedProcess(executablePath: shellPath, arguments: ["-lc", shellCommand]),
+              result.status == 0,
+              let resolved = firstExecutablePath(in: result.output) else {
+            continue
+        }
+        return resolved
+    }
+
+    return nil
+}
+
 /// Find the best available codesigning identity on this machine.
 /// Prefers Apple Development, then Developer ID Application, then any available.
 func preferredSigningIdentity() -> String? {
