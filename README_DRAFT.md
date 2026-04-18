@@ -2,15 +2,16 @@
 
 ### Final Cut Pro, Unlocked.
 
-SpliceKit turns Final Cut Pro into a programmable, pluggable video editor. It's three things in one:
+[![Release](https://img.shields.io/github/v/release/elliotttate/SpliceKit)](https://github.com/elliotttate/SpliceKit/releases/latest)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Discord](https://img.shields.io/badge/Discord-FCP%20Cafe-5865F2?logo=discord&logoColor=white)](https://discord.com/invite/HD3FPc4Azu)
+[![Docs](https://img.shields.io/badge/docs-splicekit.fcp.cafe-0A84FF)](https://splicekit.fcp.cafe)
 
-1. **A Command Palette inside FCP** — hit `Cmd+Shift+P`, type what you want (or describe it in plain English), and Apple Intelligence runs it for you.
-2. **An MCP server** — so Claude, or any other AI client, can read and edit your timeline directly.
-3. **A plugin framework** — every "feature" SpliceKit ships with is really just an example plugin. You (or an AI) can build more.
+**SpliceKit turns Final Cut Pro into a programmable, pluggable video editor — with a Command Palette, an MCP server, and an open plugin framework.**
 
-The same Final Cut Pro you already know — just with an API, a scripting layer, and a growing library of community-built tools sitting on top.
-
-> **New here?** Start with the [official site](https://splicekit.fcp.cafe) and the [FAQ](https://splicekit.fcp.cafe/faq/). Prefer to chat with real humans? Join the [FCP Cafe Discord](https://discord.com/invite/HD3FPc4Azu).
+| 🎹 Command Palette | 🤖 MCP Server | 🧩 Plugin Framework |
+|---|---|---|
+| Hit `Cmd+Shift+P` and type what you want. Apple Intelligence runs it. | Any LLM can read and edit your timeline — and build new tools as it goes. | Every built-in feature is just an example plugin. You (or an AI) can ship more. |
 
 ---
 
