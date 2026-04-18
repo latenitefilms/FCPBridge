@@ -401,6 +401,9 @@ static inline void SpliceKitBRAWHudRunInUndoAction(NSString *label, void (^block
     panel.becomesKeyOnlyIfNeeded = YES;
     panel.hidesOnDeactivate = NO;
     panel.delegate = self;
+    // Lock to dark appearance — the panel uses dark grouped container colors
+    // that don't re-tint correctly when the system is in light mode.
+    panel.appearance = [NSAppearance appearanceNamed:NSAppearanceNameDarkAqua];
     self.panel = panel;
 
     NSView *content = [[NSView alloc] initWithFrame:frame];
