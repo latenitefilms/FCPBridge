@@ -225,14 +225,14 @@ Short answers: **Yes, it's safe. Yes, it's legal. No, Apple won't ban you.**
 - **Apple doesn't ban Apple IDs for running modded local apps.** There's no precedent, and the mechanism (dyld injection + code signing) is the same one used by BetterTouchTool, Alfred, Hammerspoon, accessibility tools, and every Xcode debugger session.
 - **The realistic risks** are that FCP updates can break compatibility (just re-patch) and that private APIs can behave unexpectedly in edge cases (Cmd+Z is your friend).
 
-### Will it crash my FCP?
+### Built to be stable
 
-**Probably less than you'd expect — and the design goes out of its way to keep it that way.**
+**SpliceKit is designed to be at least as stable as stock FCP — and in several places, measurably more.**
 
-- **Nothing changes how FCP works on disk.** SpliceKit adds capabilities on top of FCP; it doesn't modify how projects, libraries, or media are stored. You can quit the patched copy at any time, open the same library in vanilla App Store FCP, and keep editing. Nothing is locked in.
-- **Stability is in the same ballpark as an FXPlug 4 plugin.** Any third-party effect has the power to crash FCP; SpliceKit plugins live at the same level. The difference is that SpliceKit has *more* control than the FXPlug sandbox — we can preemptively guard against things that FXPlug plugins just have to hope FCP recovers from (performance spikes, blocking the main thread, stepping on FCP's own state). Expensive work goes on background threads, hot paths are explicitly designed not to contend, and when something does go sideways we can often isolate it instead of letting it take the whole app down.
-- **SpliceKit already fixes several native FCP bugs.** In a few areas the patched copy is measurably more stable than stock FCP — [here's one example on video](https://youtu.be/SNUpQvBef0k).
-- **Crash reporting is being wired up** so any issue shows up automatically and gets fixed quickly. If something does go wrong in the meantime, sharing your logs (in the SpliceKit Discord or on GitHub Issues) is usually enough to get a fix out fast.
+- **Fully reversible, any time.** SpliceKit never changes how FCP stores your projects, libraries, or media. Quit the patched copy whenever you want, open the exact same library in your vanilla App Store FCP, and keep editing with zero loss. Nothing is locked in, nothing is migrated.
+- **Same safety level as any FXPlug 4 plugin — with more headroom.** SpliceKit plugins run at the same level of trust as Apple's own FXPlug system, and the architecture gives us more tools than FXPlug does. Expensive work runs on background threads, hot paths are explicitly designed not to contend, and state changes are guarded so plugins don't step on FCP's internals. Where an FXPlug plugin has to hope FCP recovers from a performance spike, SpliceKit is built to prevent the spike from happening in the first place.
+- **SpliceKit actively fixes native FCP bugs.** A handful of long-standing issues in FCP are already patched in the modded copy, which means the patched build is measurably more stable than stock in those areas — [here's a video example](https://youtu.be/SNUpQvBef0k).
+- **Automatic crash reporting is on the way** (via Sentry), so anything unexpected surfaces immediately and gets turned around fast. Until it lands, sharing your logs in the [Discord](https://discord.com/invite/HD3FPc4Azu) or on [GitHub Issues](https://github.com/elliotttate/SpliceKit/issues) gets fixes out just as quickly.
 
 The full plain-English version is in [docs/WHAT_IS_SPLICEKIT.md](docs/WHAT_IS_SPLICEKIT.md).
 
