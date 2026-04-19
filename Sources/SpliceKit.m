@@ -2388,8 +2388,8 @@ static void SpliceKit_installMenu(void) {
         return;
     }
 
-    // Create "Enhancements" top-level menu
-    NSMenu *bridgeMenu = [[NSMenu alloc] initWithTitle:@"Enhancements"];
+    // Create "Splices" top-level menu
+    NSMenu *bridgeMenu = [[NSMenu alloc] initWithTitle:@"Splices"];
 
     NSMenuItem *transcriptItem = [[NSMenuItem alloc]
         initWithTitle:@"Transcript Editor"
@@ -2668,7 +2668,7 @@ static void SpliceKit_installMenu(void) {
     [bridgeMenu addItem:optionsMenuItem];
 
     // Add the menu to the menu bar (before the last item which is usually "Help")
-    NSMenuItem *bridgeMenuItem = [[NSMenuItem alloc] initWithTitle:@"Enhancements" action:nil keyEquivalent:@""];
+    NSMenuItem *bridgeMenuItem = [[NSMenuItem alloc] initWithTitle:@"Splices" action:nil keyEquivalent:@""];
     bridgeMenuItem.submenu = bridgeMenu;
 
     NSInteger helpIndex = [mainMenu indexOfItemWithTitle:@"Help"];
@@ -3228,7 +3228,7 @@ static void SpliceKit_appDidLaunch(void) {
     free(allClasses);
     SpliceKit_log(@"Total ObjC classes in process: %u", classCount);
 
-    // Install Enhancements menu in the menu bar
+    // Install Splices menu in the menu bar
     SpliceKit_installMenu();
 
     // Install toolbar button in FCP's main window
@@ -3318,7 +3318,7 @@ static void SpliceKit_appDidLaunch(void) {
     // Rebuild FCP's hidden Debug pane + Debug menu bar (Apple strips the NIB
     // and leaves the menu unassigned in release builds; we reconstruct both).
     SpliceKit_installDebugSettingsPanel();
-    SpliceKit_installDebugMenuBar();
+    // SpliceKit_installDebugMenuBar();  // disabled — don't add the Debug menu to the bar
 
     // Install right-click context menu for structure block color changes
     SpliceKit_safeInstall("StructureBlockContextMenu", ^{

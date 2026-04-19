@@ -1045,8 +1045,8 @@ BOOL SpliceKit_installDebugMenuBar(void) {
         NSMenuItem *debugItem = SKDebug_buildDebugMenuItem();
         [SpliceKitDebugController shared].debugMenuItem = debugItem;
 
-        // Insert before "Enhancements" (if present) or "Help".
-        NSInteger insertIdx = [mainMenu indexOfItemWithTitle:@"Enhancements"];
+        // Insert before "Splices" (if present) or "Help".
+        NSInteger insertIdx = [mainMenu indexOfItemWithTitle:@"Splices"];
         if (insertIdx < 0) insertIdx = [mainMenu indexOfItemWithTitle:@"Help"];
         if (insertIdx < 0) {
             [mainMenu addItem:debugItem];
