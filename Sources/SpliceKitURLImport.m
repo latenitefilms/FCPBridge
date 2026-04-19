@@ -454,6 +454,62 @@ static NSString *SpliceKitURLImportOutputExtensionForNormalizationMode(NSString 
     return @"mov";
 }
 
+// Video codecs we can stream-copy from MKV/WebM into an MP4 container without
+// re-encoding. AVFoundation and Final Cut play these natively (VP9/VP8 via the
+// SpliceKit VP9 decoder bundle; h264/hevc/av1/mpeg4/prores via the system).
+static BOOL SpliceKitURLImportVideoCodecCanStreamCopyToMP4(NSString *codecName) {
+    NSString *normalized = SpliceKitURLImportTrimmedString(codecName).lowercaseString;
+    if (normalized.length == 0) return NO;
+    return [normalized isEqualToString:@"vp9"] ||
+           [normalized isEqualToString:@"vp8"] ||
+           [normalized isEqualToString:@"h264"] ||
+           [normalized isEqualToString:@"avc"] ||
+           [normalized isEqualToString:@"avc1"] ||
+           [normalized isEqualToString:@"hevc"] ||
+           [normalized isEqualToString:@"h265"] ||
+           [normalized isEqualToString:@"av1"] ||
+           [normalized isEqualToString:@"mpeg4"] ||
+           [normalized isEqualToString:@"mpeg2video"] ||
+           [normalized isEqualToString:@"prores"];
+}
+
+// Audio codecs we can stream-copy into an MP4 container. Everything else is
+// re-encoded to AAC 192k during the remux so the shadow MP4 is guaranteed to
+// be playable in Final Cut.
+static BOOL SpliceKitURLImportAudioCodecCanStreamCopyToMP4(NSString *codecName) {
+    NSString *normalized = SpliceKitURLImportTrimmedString(codecName).lowercaseString;
+    if (normalized.length == 0) return NO;
+    if ([normalized containsString:@"aac"]) return YES;
+    return [normalized isEqualToString:@"mp3"] ||
+           [normalized isEqualToString:@"ac3"] ||
+           [normalized isEqualToString:@"eac3"] ||
+           [normalized isEqualToString:@"alac"] ||
+           [normalized isEqualToString:@"mp4a"] ||
+           [normalized hasPrefix:@"pcm"];
+}
+
+// True when the video codec in an MKV/WebM benefits from CFR timestamp rewriting
+// during stream-copy to MP4. Every codec we stream-copy suffers the same MKV
+// millisecond-quantization problem — avg deltas of 42/41/42ms land as an ugly
+// 1/16000 MP4 time_base instead of the canonical 1/24000 (or 1/30000, etc.).
+// The setts bitstream filter rewrites packet PTS/DTS to a clean CFR grid using
+// a B-frame-safe expression (see the ffmpeg command below), so we apply it to
+// h264/hevc/av1 alongside VP9/VP8.
+static BOOL SpliceKitURLImportVideoCodecNeedsTimestampRewrite(NSString *codecName) {
+    NSString *normalized = SpliceKitURLImportTrimmedString(codecName).lowercaseString;
+    if (normalized.length == 0) return NO;
+    return [normalized isEqualToString:@"vp9"] ||
+           [normalized isEqualToString:@"vp8"] ||
+           [normalized isEqualToString:@"h264"] ||
+           [normalized isEqualToString:@"avc"] ||
+           [normalized isEqualToString:@"avc1"] ||
+           [normalized isEqualToString:@"hevc"] ||
+           [normalized isEqualToString:@"h265"] ||
+           [normalized isEqualToString:@"av1"] ||
+           [normalized isEqualToString:@"mpeg4"] ||
+           [normalized isEqualToString:@"mpeg2video"];
+}
+
 static NSString *SpliceKitURLImportProviderDependencyMessage(NSString *provider,
                                                             NSString *ytDLP,
                                                             NSString *ffmpeg) {
@@ -1332,10 +1388,15 @@ static void SpliceKitURLImportResolveProviderURL(NSString *provider,
 
         NSString *videoCodecName = SpliceKitURLImportTrimmedString(videoStream[@"codec_name"]).lowercaseString;
         NSString *audioCodecName = SpliceKitURLImportTrimmedString(audioStream[@"codec_name"]).lowercaseString;
-        BOOL audioIsAACOrAbsent = (audioStream == nil) || [audioCodecName containsString:@"aac"];
-        BOOL canStreamCopyToMP4 = ([videoCodecName isEqualToString:@"vp9"] ||
-                                   [videoCodecName isEqualToString:@"vp8"]) &&
-                                  audioIsAACOrAbsent;
+        BOOL videoCanStreamCopy = (videoStream != nil) &&
+            SpliceKitURLImportVideoCodecCanStreamCopyToMP4(videoCodecName);
+        BOOL audioCanStreamCopy = (audioStream == nil) ||
+            SpliceKitURLImportAudioCodecCanStreamCopyToMP4(audioCodecName);
+        // The shadow-MP4 path can always handle audio — if the codec can't
+        // stream-copy into MP4, we transcode just the audio track to AAC and
+        // still stream-copy the video. The gating decision is therefore on the
+        // video side only.
+        BOOL canStreamCopyToMP4 = videoCanStreamCopy;
 
         double fps = SpliceKitURLImportParseFractionString(videoStream[@"avg_frame_rate"]);
         if (!(fps > 0.0)) {
@@ -1370,9 +1431,12 @@ static void SpliceKitURLImportResolveProviderURL(NSString *provider,
         if (canonicalFrameTicks > 0) info[@"canonicalFrameTicks"] = @(canonicalFrameTicks);
         info[@"frameTimingLooksCanonical"] = @(frameTimingLooksCanonical);
         info[@"canStreamCopyToMP4"] = @(canStreamCopyToMP4);
+        info[@"audioCanStreamCopy"] = @(audioCanStreamCopy);
 
         if (canStreamCopyToMP4) {
             info[@"requiresNormalization"] = @YES;
+            BOOL rewriteTimestamps = hasCanonicalTiming &&
+                SpliceKitURLImportVideoCodecNeedsTimestampRewrite(videoCodecName);
             // Matroska + VP9/VP8: ALWAYS rewrite timestamps to canonical CFR
             // rather than trusting avg_frame_rate to be representative.
             // MKV packets are typically millisecond-quantized, so individual
@@ -1381,7 +1445,10 @@ static void SpliceKitURLImportResolveProviderURL(NSString *provider,
             // those timestamps into MP4 (time_base ends up 1/16000), FCP
             // plays back with visible pacing artifacts. The setts bsf gives
             // us a proper 24000/1001 time_base with uniform deltas.
-            info[@"normalizationMode"] = hasCanonicalTiming
+            // Other codecs (h264/hevc/av1) get the clean MP4 time_base from
+            // ffmpeg's muxer directly; running setts on them would risk
+            // breaking B-frame DTS ordering.
+            info[@"normalizationMode"] = rewriteTimestamps
                 ? @"remux_copy_rewrite_timestamps"
                 : @"remux_copy";
         } else {
@@ -1866,22 +1933,66 @@ static void SpliceKitURLImportResolveProviderURL(NSString *provider,
         NSString *outputPath = [self pathForFilename:outputName directory:[self normalizedDirectory]];
         [[NSFileManager defaultManager] removeItemAtPath:outputPath error:nil];
 
+        BOOL audioCanStreamCopy = ![mediaInfo[@"audioCanStreamCopy"] isKindOfClass:[NSNumber class]] ||
+            [mediaInfo[@"audioCanStreamCopy"] boolValue];
+        NSString *videoCodec = SpliceKitURLImportTrimmedString(mediaInfo[@"videoCodec"]).lowercaseString;
+        BOOL videoIsHEVC = [videoCodec isEqualToString:@"hevc"] || [videoCodec isEqualToString:@"h265"];
+
         NSTask *task = [[NSTask alloc] init];
         task.executableURL = [NSURL fileURLWithPath:ffmpeg];
+        // Map only the first video and audio track explicitly. `-map 0` would
+        // pull subtitle and attachment streams into the MP4 mux and fail on
+        // any container (e.g. MKV with a subrip subtitle track, or WebM with
+        // an embedded image attachment) that isn't valid inside ISO BMFF.
         NSMutableArray *arguments = [NSMutableArray arrayWithArray:@[
             @"-hide_banner",
             @"-y",
             @"-i", sourcePath,
-            @"-map", @"0",
-            @"-c", @"copy",
+            @"-map", @"0:v:0",
+            @"-map", @"0:a:0?",
+            @"-c:v", @"copy",
         ]];
+        if (videoIsHEVC) {
+            // Apple's AVFoundation / Final Cut / QuickTime stack only decodes
+            // HEVC when the MP4 sample-entry is `hvc1` (parameter sets in
+            // extradata). Matroska's HEVC comes out as `hev1` by default from
+            // ffmpeg — which plays in VLC but refuses to open in FCP. Force
+            // the Apple-friendly tag.
+            [arguments addObjectsFromArray:@[@"-tag:v", @"hvc1"]];
+        }
+        if (audioCanStreamCopy) {
+            [arguments addObjectsFromArray:@[@"-c:a", @"copy"]];
+        } else {
+            [arguments addObjectsFromArray:@[
+                @"-c:a", @"aac",
+                @"-b:a", @"192k",
+                @"-ac", @"2",
+            ]];
+        }
         if (needsTimestampRewrite) {
+            // B-frame-safe CFR timestamp rewrite.
+            //   DTS = N * frameTicks — packets arrive in decode (DTS) order
+            //     so the packet index N is already the decode index.
+            //   PTS = DTS + round((src_pts - src_dts) in source frames) * frameTicks
+            //     preserves h264/hevc/av1 B-frame display order. The round()
+            //     snaps the offset to a whole frame-duration, cancelling the
+            //     millisecond quantization in the source MKV — without it the
+            //     output timestamps inherit the 42/41ms source jitter. The
+            //     conversion chain: `(PTS-DTS)*TB` is the offset in seconds,
+            //     times `canonicalTimescale/canonicalFrameTicks` (= fps) yields
+            //     the offset in source frames, round() snaps to whole frames,
+            //     times `canonicalFrameTicks` converts back to output ticks.
+            //   For VP9/VP8 the source PTS always equals DTS, so the offset
+            //     term collapses to 0 and this reduces to `pts=N*frameTicks`.
             NSString *settsArg = [NSString stringWithFormat:
-                @"setts=pts=N*%d:dts=N*%d:duration=%d:time_base=1/%d",
+                @"setts=time_base=1/%d:dts=N*%d:pts=N*%d+round((PTS-DTS)*TB*%d/%d)*%d:duration=%d",
+                canonicalTimescale,
                 canonicalFrameTicks,
                 canonicalFrameTicks,
+                canonicalTimescale,
                 canonicalFrameTicks,
-                canonicalTimescale];
+                canonicalFrameTicks,
+                canonicalFrameTicks];
             [arguments addObjectsFromArray:@[@"-bsf:v", settsArg]];
         }
         [arguments addObjectsFromArray:@[@"-movflags", @"+faststart", outputPath]];
@@ -2347,6 +2458,11 @@ static NSDictionary *SpliceKitURLImportRewriteVP9TimestampsSynchronously(NSStrin
         return nil;
     }
 
+    BOOL audioCanStreamCopy = ![mediaInfo[@"audioCanStreamCopy"] isKindOfClass:[NSNumber class]] ||
+        [mediaInfo[@"audioCanStreamCopy"] boolValue];
+    NSString *videoCodec = SpliceKitURLImportTrimmedString(mediaInfo[@"videoCodec"]).lowercaseString;
+    BOOL videoIsHEVC = [videoCodec isEqualToString:@"hevc"] || [videoCodec isEqualToString:@"h265"];
+
     NSString *safeName = SpliceKitURLImportSanitizeFilename(clipName.length > 0
         ? clipName
         : [[sourcePath lastPathComponent] stringByDeletingPathExtension]);
@@ -2358,24 +2474,51 @@ static NSDictionary *SpliceKitURLImportRewriteVP9TimestampsSynchronously(NSStrin
 
     NSTask *task = [[NSTask alloc] init];
     task.executableURL = [NSURL fileURLWithPath:ffmpeg];
+    // Explicit per-stream mapping keeps subtitle/attachment streams out of the
+    // MP4 mux. MKV files regularly ship with subrip subtitles and font
+    // attachments that the ISO BMFF muxer can't handle.
     NSMutableArray *arguments = [NSMutableArray arrayWithArray:@[
         @"-hide_banner",
         @"-y",
         @"-i", sourcePath,
-        @"-map", @"0",
-        @"-c", @"copy",
+        @"-map", @"0:v:0",
+        @"-map", @"0:a:0?",
+        @"-c:v", @"copy",
     ]];
+    if (videoIsHEVC) {
+        // Force the `hvc1` sample-entry tag — AVFoundation / Final Cut refuse
+        // to decode HEVC muxed with ffmpeg's default `hev1` tag.
+        [arguments addObjectsFromArray:@[@"-tag:v", @"hvc1"]];
+    }
+    if (audioCanStreamCopy) {
+        [arguments addObjectsFromArray:@[@"-c:a", @"copy"]];
+    } else {
+        [arguments addObjectsFromArray:@[
+            @"-c:a", @"aac",
+            @"-b:a", @"192k",
+            @"-ac", @"2",
+        ]];
+    }
     if (needsTimestampRewrite) {
+        // B-frame-safe CFR timestamp rewrite (see the matching comment in
+        // normalizeJob:). DTS = N * frameTicks; PTS preserves the source
+        // PTS-DTS offset snapped to whole frame-durations so h264/hevc/av1
+        // display order survives. For VP9/VP8 the offset term collapses to 0.
         NSString *settsArg = [NSString stringWithFormat:
-            @"setts=pts=N*%d:dts=N*%d:duration=%d:time_base=1/%d",
+            @"setts=time_base=1/%d:dts=N*%d:pts=N*%d+round((PTS-DTS)*TB*%d/%d)*%d:duration=%d",
+            canonicalTimescale,
             canonicalFrameTicks,
             canonicalFrameTicks,
+            canonicalTimescale,
             canonicalFrameTicks,
-            canonicalTimescale];
+            canonicalFrameTicks,
+            canonicalFrameTicks];
         [arguments addObjectsFromArray:@[@"-bsf:v", settsArg]];
     }
     [arguments addObjectsFromArray:@[@"-movflags", @"+faststart", outputPath]];
     task.arguments = arguments;
+
+    SpliceKit_log(@"[VP9Import] ffmpeg remux args: %@", [arguments componentsJoinedByString:@" "]);
 
     NSPipe *pipe = [NSPipe pipe];
     task.standardOutput = pipe;
@@ -2470,6 +2613,55 @@ static BOOL SpliceKitURLImport_installProviderShim(void) {
     }
 }
 
+// Deterministic shadow path: same source file → same .mp4 filename. The hash
+// folds in size + mtime, so any change to the source invalidates the shadow
+// automatically. Restarts don't produce duplicates (Fix.mp4, Fix-1.mp4,
+// Fix-2.mp4, …) because the shadow path is a pure function of the source;
+// before remuxing we just check whether the destination already exists.
+//
+// Using the filesystem as the cache has a nice side-effect: a single FCP
+// session that triggers the hook 5× per Media Import row (thumbnail →
+// metadata → preview → validate → import) pays the ~200ms ffmpeg cost once
+// and then reuses the on-disk shadow instantly.
+static NSString *SpliceKitURLImportShadowFilenameForSource(NSString *sourcePath, NSString *extension) {
+    if (sourcePath.length == 0) return nil;
+    NSError *attrError = nil;
+    NSDictionary *attrs = [[NSFileManager defaultManager] attributesOfItemAtPath:sourcePath
+                                                                            error:&attrError];
+    NSDate *mtime = attrs.fileModificationDate;
+    unsigned long long size = attrs.fileSize;
+    long long mtimeInt = mtime ? (long long)llround(mtime.timeIntervalSince1970) : 0;
+
+    NSString *base = SpliceKitURLImportSanitizeFilename(
+        [[sourcePath lastPathComponent] stringByDeletingPathExtension]);
+    if (base.length == 0) base = @"shadow";
+
+    NSString *key = [NSString stringWithFormat:@"%@|%llu|%lld", sourcePath, size, mtimeInt];
+    const char *cStr = key.UTF8String;
+    NSUInteger hash = 5381;
+    for (NSUInteger i = 0; cStr && cStr[i]; i++) {
+        hash = ((hash << 5) + hash) ^ (unsigned char)cStr[i];
+    }
+    return [NSString stringWithFormat:@"%@.%08lx.%@", base, (unsigned long)(hash & 0xffffffff),
+            extension.length > 0 ? extension : @"mp4"];
+}
+
+// Matroska-family extensions are the only source formats our shadow-remux path
+// handles. Every other extension short-circuits immediately — without this
+// gate, a hook like FFFileImporter.scanURLForFiles: triggered by opening the
+// Media Import window on a folder with thousands of unrelated files (Motion
+// templates, JDownloader class files, thumbnails, etc.) would call
+// inspectMediaAtPath on each one, spawning a tree-wide storm of ffprobe calls
+// that visibly stalls FCP's Processing Files dialog.
+static BOOL SpliceKitURLImportPathHasMatroskaExtension(NSString *path) {
+    NSString *ext = [[path pathExtension] lowercaseString];
+    if (ext.length == 0) return NO;
+    return [ext isEqualToString:@"mkv"] ||
+           [ext isEqualToString:@"webm"] ||
+           [ext isEqualToString:@"mka"] ||
+           [ext isEqualToString:@"mk3d"];
+}
+
 static NSURL *SpliceKitURLImportMaybeRewriteLocalFileURL(NSURL *fileURL,
                                                          NSString **outError) {
     if (![fileURL isKindOfClass:[NSURL class]] || !fileURL.isFileURL) return fileURL;
@@ -2479,6 +2671,28 @@ static NSURL *SpliceKitURLImportMaybeRewriteLocalFileURL(NSURL *fileURL,
                                                 SpliceKitURLImportSharedNormalizedDirectory())) {
         return fileURL;
     }
+    if (!SpliceKitURLImportPathHasMatroskaExtension(sourcePath)) {
+        return fileURL;
+    }
+
+    // Filesystem-level cache: same source (path+size+mtime) → same shadow path.
+    // If the shadow exists already (from a previous hook call in this session
+    // or even a previous FCP launch), reuse it instead of re-running ffmpeg.
+    NSString *shadowDir = SpliceKitURLImportSharedNormalizedDirectory();
+    NSString *shadowName = SpliceKitURLImportShadowFilenameForSource(sourcePath, @"mp4");
+    NSString *shadowPath = shadowName.length > 0
+        ? [shadowDir stringByAppendingPathComponent:shadowName]
+        : nil;
+
+    if (shadowPath.length > 0 &&
+        [[NSFileManager defaultManager] fileExistsAtPath:shadowPath]) {
+        SpliceKit_log(@"[VP9Import] shadow HIT: %@ -> %@",
+                      sourcePath.lastPathComponent, shadowName);
+        return [NSURL fileURLWithPath:shadowPath];
+    }
+
+    SpliceKit_log(@"[VP9Import] shadow MISS, remuxing: %@ -> %@",
+                  sourcePath.lastPathComponent, shadowName ?: @"<nil>");
 
     NSDictionary *mediaInfo = [[SpliceKitURLImportService sharedService] inspectMediaAtPath:sourcePath];
     NSString *normalizationMode = SpliceKitURLImportTrimmedString(mediaInfo[@"normalizationMode"]);
@@ -2491,6 +2705,26 @@ static NSURL *SpliceKitURLImportMaybeRewriteLocalFileURL(NSURL *fileURL,
                                                                                       outError);
     NSString *rewrittenPath = SpliceKitURLImportTrimmedString(rewriteResult[@"path"]);
     if (rewrittenPath.length == 0) return fileURL;
+
+    // The synchronous remuxer picks a unique filename via
+    // `SpliceKitURLImportUniquePathForFilename`, so its output may not match
+    // our deterministic shadowPath. Rename into place so future calls hit the
+    // shadow HIT branch above. Fall back to the remuxer's path if the rename
+    // fails (e.g. cross-device move) so the import still works.
+    if (shadowPath.length > 0 && ![rewrittenPath isEqualToString:shadowPath]) {
+        NSFileManager *fm = [NSFileManager defaultManager];
+        [fm removeItemAtPath:shadowPath error:nil];
+        NSError *moveError = nil;
+        if ([fm moveItemAtPath:rewrittenPath toPath:shadowPath error:&moveError]) {
+            rewrittenPath = shadowPath;
+        } else {
+            SpliceKit_log(@"[VP9Import] could not rename %@ -> %@: %@",
+                          rewrittenPath.lastPathComponent,
+                          shadowPath.lastPathComponent,
+                          moveError.localizedDescription ?: @"unknown");
+        }
+    }
+
     return [NSURL fileURLWithPath:rewrittenPath];
 }
 
@@ -2690,27 +2924,18 @@ static id SpliceKitURLImport_swizzled_newClipFromURL_manageFileType(id self,
     @try {
         if ([sourceURL isKindOfClass:[NSURL class]] && ((NSURL *)sourceURL).isFileURL) {
             NSURL *fileURL = (NSURL *)sourceURL;
-            NSString *sourcePath = fileURL.path.stringByStandardizingPath;
-            NSDictionary *mediaInfo = [[SpliceKitURLImportService sharedService] inspectMediaAtPath:sourcePath];
-            NSString *normalizationMode = SpliceKitURLImportTrimmedString(mediaInfo[@"normalizationMode"]);
-            if (SpliceKitURLImportNormalizationModeUsesStreamCopy(normalizationMode)) {
-                SpliceKit_log(@"[VP9Import] Preparing local import %@ with mode %@",
-                              sourcePath, normalizationMode);
-                NSString *errorText = nil;
-                NSString *clipName = [[sourcePath lastPathComponent] stringByDeletingPathExtension];
-                NSDictionary *rewriteResult = SpliceKitURLImportRewriteVP9TimestampsSynchronously(sourcePath,
-                                                                                                  clipName,
-                                                                                                  mediaInfo,
-                                                                                                  &errorText);
-                NSString *rewrittenPath = SpliceKitURLImportTrimmedString(rewriteResult[@"path"]);
-                if (rewrittenPath.length > 0) {
-                    importURL = [NSURL fileURLWithPath:rewrittenPath];
-                    SpliceKit_log(@"[VP9Import] Rewrote local import %@ -> %@",
-                                  sourcePath, rewrittenPath);
-                } else if (errorText.length > 0) {
-                    SpliceKit_log(@"[VP9Import] Stream-copy normalization failed for %@: %@. Falling back to original file.",
-                                  sourcePath, errorText);
-                }
+            NSString *errorText = nil;
+            // Route through the shared cache-aware helper so every remux site
+            // benefits from the deterministic shadow path — avoids creating
+            // Fix-1.mp4, Fix-2.mp4, … on each Media Import hook trigger.
+            NSURL *rewrittenURL = SpliceKitURLImportMaybeRewriteLocalFileURL(fileURL, &errorText);
+            if (rewrittenURL && ![rewrittenURL isEqual:fileURL]) {
+                importURL = rewrittenURL;
+                SpliceKit_log(@"[VP9Import] Rewrote local import %@ -> %@",
+                              fileURL.path, rewrittenURL.path);
+            } else if (errorText.length > 0) {
+                SpliceKit_log(@"[VP9Import] Stream-copy normalization failed for %@: %@. Falling back to original file.",
+                              fileURL.path, errorText);
             }
         }
     } @catch (NSException *e) {
