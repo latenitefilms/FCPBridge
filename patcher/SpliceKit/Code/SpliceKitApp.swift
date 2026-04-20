@@ -1,5 +1,6 @@
 import SwiftUI
 import Sparkle
+import AppKit
 
 // MARK: - Sparkle Auto-Update
 
@@ -28,6 +29,7 @@ struct CheckForUpdatesView: View {
 
 @main
 struct SpliceKitApp: App {
+    private static let helpURL = URL(string: "https://splicekit.fcp.cafe/installation/")!
     private let updaterController: SPUStandardUpdaterController
     @StateObject private var checkForUpdatesVM: CheckForUpdatesViewModel
     @StateObject private var model = PatcherModel()
@@ -57,6 +59,12 @@ struct SpliceKitApp: App {
                     viewModel: checkForUpdatesVM,
                     updater: updaterController.updater
                 )
+            }
+
+            CommandGroup(replacing: .help) {
+                Button("SpliceKit Help") {
+                    NSWorkspace.shared.open(Self.helpURL)
+                }
             }
         }
 
