@@ -145,6 +145,7 @@ static int32_t OV_sequenceTimescale(void) {
 
 + (instancetype)shared;
 - (void)invalidateImageCache;
+- (void)scheduleInitialRerender;
 - (void)rerenderIfNeeded;
 - (void)startDisplayLink;
 - (void)stopDisplayLink;
@@ -187,6 +188,18 @@ static int32_t OV_sequenceTimescale(void) {
     [self rerenderIfNeeded];
 }
 
+- (void)scheduleInitialRerender {
+    // The overview renderer crashes if we hit it synchronously while the child
+    // panel is still attaching or the sequence is still becoming active.
+    [NSObject cancelPreviousPerformRequestsWithTarget:self
+                                             selector:@selector(invalidateImageCacheAndRerender)
+                                               object:nil];
+    [self performSelector:@selector(invalidateImageCacheAndRerender)
+               withObject:nil
+               afterDelay:0.15
+                  inModes:@[NSRunLoopCommonModes]];
+}
+
 - (void)viewDidMoveToWindow {
     [super viewDidMoveToWindow];
     // Defer first render — do NOT call the renderer synchronously here. The
@@ -195,21 +208,7 @@ static int32_t OV_sequenceTimescale(void) {
     // when we render immediately on window attach). Retry a few times in
     // case the collection isn't renderable yet — after that, the notification
     // observers take over.
-    __weak typeof(self) weakSelf = self;
-    __block int attempts = 0;
-    __block void (^tryRender)(void) = NULL;
-    __block void (^tryRenderStrong)(void) = ^{
-        typeof(self) s = weakSelf;
-        if (!s) return;
-        [s rerenderIfNeeded];
-        if (s.cachedImage) return; // success
-        if (++attempts >= 10) return;
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.15 * NSEC_PER_SEC)),
-                       dispatch_get_main_queue(), tryRender);
-    };
-    tryRender = tryRenderStrong;
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.15 * NSEC_PER_SEC)),
-                   dispatch_get_main_queue(), tryRender);
+    [self scheduleInitialRerender];
 }
 
 - (void)setFrameSize:(NSSize)newSize {
@@ -924,7 +923,7 @@ void SpliceKit_installTimelineOverviewBar(void) {
         [parent addChildWindow:sOverviewPanel ordered:NSWindowAbove];
         [sOverviewPanel orderFront:nil];
 
-        [bar rerenderIfNeeded];
+        [bar scheduleInitialRerender];
 
         // ── Playback state → CADisplayLink ─────────────────────────────────
         // These notifications tell us exactly when playback starts and stops.
