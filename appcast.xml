@@ -6,6 +6,22 @@
     <description>SpliceKit Patcher release updates</description>
     <language>en</language>
     <item>
+      <title>SpliceKit v3.2.08</title>
+      <sparkle:version>3.2.08</sparkle:version>
+      <sparkle:shortVersionString>3.2.08</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <pubDate>Mon, 20 Apr 2026 20:01:42 +0000</pubDate>
+      <description><![CDATA[
+        <h2>What's New in 3.2.08</h2>
+        <p>Inline timeline overview bar sits below the ruler and shows a scaled-down view of the whole project, color-coded by lane. Click or double-click anywhere to jump the playhead; drag the visible-region rectangle's body to pan the main timeline or its edges to zoom. Uses FCP's own FFAnchoredCollectionImageCreation renderer (the same one the Touch Bar overview uses) so lanes match FCP's internal representation exactly. All redraws are event-driven — CADisplayLink during playback (matches 60Hz / 120Hz ProMotion display refresh), TLKPlayheadViewFrameDidChangeNotification for scrub or step, FFSequenceEditedNotification for edits — zero CPU when idle. Toggle from Splices menu > Overview, or via the timelineOverviewBar bridge option.</p>
+      ]]></description>
+      <enclosure
+        url="https://github.com/elliotttate/SpliceKit/releases/download/v3.2.08/SpliceKit-v3.2.08.dmg"
+        sparkle:edSignature="fTrYbJh3tukWRPOhDE04+RYTXBvT6TA0jhtqAh463C7nd4/tct5hnilVPZ8EHg8ZnOn5w3Wwj6qQZ4M36PIWBQ=="
+        length="21079285"
+        type="application/octet-stream" />
+    </item>
+    <item>
       <title>SpliceKit v3.2.07</title>
       <sparkle:version>3.2.07</sparkle:version>
       <sparkle:shortVersionString>3.2.07</sparkle:shortVersionString>
