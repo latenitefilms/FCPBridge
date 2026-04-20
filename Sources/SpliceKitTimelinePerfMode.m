@@ -22,7 +22,10 @@ static NSString * const kDefTimelinePerfMode = @"SpliceKitTimelinePerformanceMod
 
 BOOL SpliceKit_isTimelinePerformanceModeEnabled(void) {
     NSNumber *n = [[NSUserDefaults standardUserDefaults] objectForKey:kDefTimelinePerfMode];
-    return n ? [n boolValue] : NO;
+    // Default ON: fresh installs get Smooth Scroll turned on in the Splices
+    // menu. Users who turned it off explicitly have a saved NSNumber here
+    // which we respect.
+    return n ? [n boolValue] : YES;
 }
 
 void SpliceKit_setTimelinePerformanceModeEnabled(BOOL enabled) {
@@ -38,7 +41,9 @@ void SpliceKit_setTimelinePerformanceModeEnabled(BOOL enabled) {
     SpliceKit_log(@"[PerfMode] Timeline Performance Mode %@", enabled ? @"ON" : @"OFF");
 }
 
-// Called from appDidLaunch. Applies whatever the user last set.
+// Called from appDidLaunch. Applies whatever the user last set — defaulting
+// to ON for fresh installs so Smooth Scroll is active out of the box. Users
+// can still toggle it off from the Splices menu or via the bridge option.
 void SpliceKit_installTimelinePerformanceMode(void) {
     BOOL enabled = SpliceKit_isTimelinePerformanceModeEnabled();
     if (!enabled) {

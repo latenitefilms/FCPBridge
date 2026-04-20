@@ -2478,13 +2478,13 @@ static void SpliceKit_installMenu(void) {
     [bridgeMenu addItem:overviewItem];
 
     NSMenuItem *perfModeItem = [[NSMenuItem alloc]
-        initWithTitle:@"Performance Mode"
+        initWithTitle:@"Smooth Scroll"
                action:@selector(toggleTimelinePerformanceMode:)
         keyEquivalent:@""];
     perfModeItem.target = [SpliceKitMenuController shared];
-    perfModeItem.toolTip = @"Suspend filmstrip updates during pinch/scroll, "
-                           @"smooth 120Hz playhead, and enable TLKOptimizedReload. "
-                           @"Master toggle for A/B testing timeline performance.";
+    perfModeItem.toolTip = @"120Hz centered-scroll playback, suspended filmstrip "
+                           @"updates during pinch/scroll, and Apple's hidden "
+                           @"TLKOptimizedReload fast-path.";
     [bridgeMenu addItem:perfModeItem];
 
     NSMenuItem *mixerItem = [[NSMenuItem alloc]

@@ -83,6 +83,13 @@ static CFTimeInterval sObservedWall = 0;
 static double     sObservedRate = 0.0;
 static os_unfair_lock sObservedLock = OS_UNFAIR_LOCK_INIT;
 
+// The exact TLKTimelineView that received the most recent
+// _setPlayheadTime_NoKVO:animate: swizzled call. Preferred over window-walking
+// in the display-link tick because it's the object actually receiving
+// playhead updates — no risk of ending up on a wrong timeline view when the
+// dual-timeline panel is open. Set under sObservedLock.
+static __weak NSView *sSwizzleCapturedViewWeak = nil;
+
 static IMP sOrigSetPlayheadTimeNoKVO = NULL;
 
 // ---- Helpers ----
@@ -98,6 +105,14 @@ static NSView *PO_findFFProTimelineView(NSView *root, NSInteger depth) {
 }
 
 static NSView *PO_currentTimelineView(void) {
+    // Prefer the view captured in the swizzle — it's the one actually
+    // receiving playhead updates right now, even across dual-timeline /
+    // focus changes.
+    NSView *fromSwizzle = sSwizzleCapturedViewWeak;
+    if (fromSwizzle && fromSwizzle.window) {
+        sTimelineViewWeak = fromSwizzle;
+        return fromSwizzle;
+    }
     NSView *existing = sTimelineViewWeak;
     if (existing && existing.window) return existing;
     for (NSWindow *w in [NSApp windows]) {
@@ -177,6 +192,12 @@ static void SpliceKit_swizzled_setPlayheadTimeNoKVO(id self_, SEL _cmd,
     sObservedTime = time;
     sObservedWall = now;
     sObservedRate = rate;
+    // Capture the actual TLKTimelineView receiving the update — the tick
+    // should prefer this over window-walking so dual-timeline / focus
+    // changes don't land us on a stale view.
+    if ([self_ isKindOfClass:[NSView class]]) {
+        sSwizzleCapturedViewWeak = (NSView *)self_;
+    }
     os_unfair_lock_unlock(&sObservedLock);
 }
 
@@ -274,16 +295,21 @@ static BOOL PO_keepsPlayheadCentered(id timelineView) {
     }
 
     // ── Smooth centered-scroll path ──────────────────────────────────────
-    // During Perf Mode playback we've paused Apple's TLKScrollingTimeline
-    // so our tick is authoritative. Drive the scroll directly on the clip
-    // view — that's what Apple's own scrollPoint: ultimately does, minus
-    // any guards in -[TLKTimelineView scrollTimelineToPoint:] that can
-    // short-circuit when the tlkViewFlags re-entrancy bit happens to be set.
+    // During Perf Mode playback (when the safety gate accepted), Apple's
+    // TLKScrollingTimeline is paused and our tick is authoritative. Drive
+    // the scroll directly on the clip view — that's what Apple's own
+    // scrollPoint: ultimately does, minus any guards in
+    // -[TLKTimelineView scrollTimelineToPoint:] that can short-circuit
+    // when the tlkViewFlags re-entrancy bit happens to be set.
     NSRect vrect = NSZeroRect;
     @try {
         vrect = [view visibleRect];
     } @catch (...) {}
-    if (vrect.size.width > 0.0) {
+
+    BOOL drivingScroll = (sPausedScrollingTimelineWeak != nil);
+    CGFloat overlayX = x;  // content-space x for the overlay line
+
+    if (drivingScroll && vrect.size.width > 0.0) {
         CGFloat halfWidth = vrect.size.width * 0.5;
         CGFloat targetOriginX = x - halfWidth;
 
@@ -310,9 +336,12 @@ static BOOL PO_keepsPlayheadCentered(id timelineView) {
                 // scrollTimelineToPoint: reentrancy guard.
                 [clipView setBoundsOrigin:newOrigin];
                 [clipView.enclosingScrollView reflectScrolledClipView:clipView];
+                // Update vrect so the center-pin math below uses the new origin.
+                vrect.origin.x = targetOriginX;
             } else {
                 // Fallback: standard scrollPoint on the timeline view.
                 [view scrollPoint:newOrigin];
+                vrect.origin.x = targetOriginX;
             }
             [CATransaction commit];
 
@@ -328,9 +357,16 @@ static BOOL PO_keepsPlayheadCentered(id timelineView) {
                 sLogged++;
             }
         }
+
+        // Leave overlayX at content-space x (the real playhead position).
+        // When we successfully centered, x == vrect.origin.x + halfWidth
+        // anyway — so the overlay naturally appears at screen center. When
+        // the viewport was clamped (playhead near content start/end and we
+        // couldn't scroll further), x stays at the actual playhead position
+        // instead of lying about being in the middle.
     }
 
-    sOverlayLayer.position = CGPointMake(x, 0.0);
+    sOverlayLayer.position = CGPointMake(overlayX, 0.0);
 }
 @end
 
@@ -368,21 +404,35 @@ static void PO_onPlaybackBegan(void) {
     PO_attachOverlayLayerIfNeeded(view);
     PO_updateOverlayPath(view);
 
-    // Initialize observation with current playhead time if we haven't captured one yet.
-    os_unfair_lock_lock(&sObservedLock);
-    BOOL needSeed = (sObservedTime.timescale <= 0);
-    os_unfair_lock_unlock(&sObservedLock);
-    if (needSeed) {
-        SEL phSel = @selector(playheadTime);
-        if ([view respondsToSelector:phSel]) {
-            PO_CMTime t = ((PO_CMTime (*)(id, SEL))PO_STRET)(view, phSel);
-            if (t.timescale > 0) {
-                os_unfair_lock_lock(&sObservedLock);
-                sObservedTime = t;
-                sObservedWall = CACurrentMediaTime();
-                sObservedRate = PO_currentRate();
-                os_unfair_lock_unlock(&sObservedLock);
-            }
+    // Always re-seed observation on playback begin so extrapolation starts
+    // from the current-known state, not stale data from a previous session.
+    SEL phSel = @selector(playheadTime);
+    if ([view respondsToSelector:phSel]) {
+        PO_CMTime t = ((PO_CMTime (*)(id, SEL))PO_STRET)(view, phSel);
+        if (t.timescale > 0) {
+            os_unfair_lock_lock(&sObservedLock);
+            sObservedTime = t;
+            sObservedWall = CACurrentMediaTime();
+            sObservedRate = PO_currentRate();
+            os_unfair_lock_unlock(&sObservedLock);
+        }
+    }
+
+    // Safety gate: only pause Apple's scroll machinery if we can actually
+    // drive our own replacement. If locationRangeForTime: or the clip-view
+    // lookup fails, leave Apple's scroller running and show only a cosmetic
+    // line on top — still a visual win, no functional regression.
+    BOOL canDriveScroll = NO;
+    if ([view respondsToSelector:phSel]) {
+        PO_CMTime probeTime = ((PO_CMTime (*)(id, SEL))PO_STRET)(view, phSel);
+        double probeX = 0.0;
+        BOOL gotX = (probeTime.timescale > 0) && PO_xForTime(view, probeTime, &probeX);
+        BOOL gotClip = [view.superview isKindOfClass:[NSClipView class]];
+        canDriveScroll = gotX && gotClip && isfinite(probeX);
+        if (!canDriveScroll) {
+            SpliceKit_log(@"[PlayheadOverlay] Safety gate: not pausing Apple scroller "
+                          @"(gotX=%d gotClip=%d) — overlay-only mode",
+                          (int)gotX, (int)gotClip);
         }
     }
 
@@ -395,35 +445,36 @@ static void PO_onPlaybackBegan(void) {
 
     // Pause Apple's auto-scroll. TLKScrollingTimeline otherwise runs
     // step-based `scrollPlayheadTowardMiddle` / `scrollPlayheadTowardSide`
-    // on every playhead-time update (30Hz on a 30p project). On a ProMotion
+    // on every playhead-time update (30Hz on a 30p project); on a ProMotion
     // display that reads as the timeline hopping sideways a few times per
-    // second. We pause it unconditionally during Perf-Mode playback so our
-    // 120Hz tick is authoritative.
+    // second. After takeover, our 120Hz tick is authoritative.
     //
-    // The overlay's tick always drives smooth centered scroll regardless of
-    // the user's keepsPlayheadCenteredDuringPlayback preference — the whole
-    // point of Perf Mode is smooth playback. Restoring the prior state on
-    // playback end keeps the rest of FCP behaving normally outside of play.
+    // We accept a slight hitch at play-begin in exchange for the overlay
+    // being centered immediately — the alternative (deferred takeover) made
+    // the playhead visibly jump from its current viewport position to the
+    // center after ~130ms, which felt worse.
     sPausedScrollingTimelineWeak = nil;
     sScrollingTimelineWasPaused = NO;
-    @try {
-        SEL stSel = NSSelectorFromString(@"scrollingTimeline");
-        id scrollingTimeline = [view respondsToSelector:stSel]
-            ? ((id (*)(id, SEL))objc_msgSend)(view, stSel) : nil;
-        if (scrollingTimeline) {
-            SEL pausedGet = NSSelectorFromString(@"paused");
-            SEL pausedSet = NSSelectorFromString(@"setPaused:");
-            if ([scrollingTimeline respondsToSelector:pausedGet]) {
-                sScrollingTimelineWasPaused =
-                    ((BOOL (*)(id, SEL))objc_msgSend)(scrollingTimeline, pausedGet);
+    if (canDriveScroll) {
+        @try {
+            SEL stSel = NSSelectorFromString(@"scrollingTimeline");
+            id scrollingTimeline = [view respondsToSelector:stSel]
+                ? ((id (*)(id, SEL))objc_msgSend)(view, stSel) : nil;
+            if (scrollingTimeline) {
+                SEL pausedGet = NSSelectorFromString(@"paused");
+                SEL pausedSet = NSSelectorFromString(@"setPaused:");
+                if ([scrollingTimeline respondsToSelector:pausedGet]) {
+                    sScrollingTimelineWasPaused =
+                        ((BOOL (*)(id, SEL))objc_msgSend)(scrollingTimeline, pausedGet);
+                }
+                if ([scrollingTimeline respondsToSelector:pausedSet]) {
+                    ((void (*)(id, SEL, BOOL))objc_msgSend)(scrollingTimeline, pausedSet, YES);
+                    sPausedScrollingTimelineWeak = scrollingTimeline;
+                    SpliceKit_log(@"[PlayheadOverlay] Paused TLKScrollingTimeline for smooth playback");
+                }
             }
-            if ([scrollingTimeline respondsToSelector:pausedSet]) {
-                ((void (*)(id, SEL, BOOL))objc_msgSend)(scrollingTimeline, pausedSet, YES);
-                sPausedScrollingTimelineWeak = scrollingTimeline;
-                SpliceKit_log(@"[PlayheadOverlay] Paused TLKScrollingTimeline for smooth playback");
-            }
-        }
-    } @catch (...) {}
+        } @catch (...) {}
+    }
 
     sOverlayLayer.hidden = NO;
     PO_startDisplayLink(view);
