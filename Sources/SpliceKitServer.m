@@ -14121,7 +14121,7 @@ static NSDictionary *SpliceKit_handleBrowserConnectClip(NSDictionary *params) {
 // This is the escape hatch for actions that don't have a known ObjC selector.
 //
 
-static NSDictionary *SpliceKit_handleMenuExecute(NSDictionary *params) {
+NSDictionary *SpliceKit_handleMenuExecute(NSDictionary *params) {
     NSArray *menuPath = params[@"menuPath"];
     if (!menuPath || menuPath.count < 2) {
         return @{@"error": @"menuPath array required (e.g. [\"File\", \"New\", \"Project...\"])"};
@@ -22888,7 +22888,7 @@ static NSDictionary *SpliceKit_handleAssembleRandomClipsToBeats(NSDictionary *pa
 
 // ---------- 1. flexmusic.listSongs ----------
 
-static NSDictionary *SpliceKit_handleFlexMusicListSongs(NSDictionary *params) {
+NSDictionary *SpliceKit_handleFlexMusicListSongs(NSDictionary *params) {
     NSString *filter = params[@"filter"];
 
     __block NSDictionary *result = nil;
@@ -23781,7 +23781,7 @@ static NSDictionary *SpliceKit_handleFlexMusicAddToTimeline(NSDictionary *params
 
 // ---------- 6. montage.analyzeClips ----------
 
-static NSDictionary *SpliceKit_handleMontageAnalyze(NSDictionary *params) {
+NSDictionary *SpliceKit_handleMontageAnalyze(NSDictionary *params) {
     NSString *eventFilter = params[@"eventName"];
 
     __block NSDictionary *result = nil;

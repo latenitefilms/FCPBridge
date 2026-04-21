@@ -267,6 +267,18 @@ $(BUILD_DIR)/obj/%.o: Sources/%.mm Sources/SpliceKit.h $(SENTRY_FRAMEWORK) | $(B
 $(OUTPUT): $(OBJS) $(LUA_LIB) $(SENTRY_FRAMEWORK) | $(BUILD_DIR)
 	$(CC) $(ARCHS) $(MIN_VERSION) $(FRAMEWORKS) $(LINKER_FLAGS) \
 		$(INSTALL_NAME) $(OBJS) $(LUA_LIB) $(SENTRY_FLAGS) $(CPP_LIBS) -o $(OUTPUT)
+	@# -undefined dynamic_lookup lets calls into FCP internals resolve at load time,
+	@# but it also silently permits unresolved SpliceKit_* symbols (missing .m files
+	@# not listed in SOURCES.txt). Those become NULL in the host and crash FCP with
+	@# pc=0 during init. Fail the build if any SpliceKit_ symbol is undefined.
+	@undef="$$(nm -u $(OUTPUT) | awk '/^_SpliceKit_/ {print $$NF}' | sort -u)"; \
+	if [ -n "$$undef" ]; then \
+		echo "ERROR: undefined SpliceKit_* symbols in $(OUTPUT):" >&2; \
+		echo "$$undef" | sed 's/^/  /' >&2; \
+		echo "Add the missing .m file(s) to Sources/SOURCES.txt." >&2; \
+		rm -f $(OUTPUT); \
+		exit 1; \
+	fi
 	@echo "Built: $(OUTPUT)"
 	@file $(OUTPUT)
 
