@@ -6,6 +6,22 @@
     <description>SpliceKit Patcher release updates</description>
     <language>en</language>
     <item>
+      <title>SpliceKit v3.3.0</title>
+      <sparkle:version>3.3.0</sparkle:version>
+      <sparkle:shortVersionString>3.3.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <pubDate>Tue, 21 Apr 2026 02:36:13 +0000</pubDate>
+      <description><![CDATA[
+        <h2>What's New in 3.3.0</h2>
+        <p>New icon by Matthew Skiles. Wider Wizard layout so the update buttons fit correctly when updating. Launch FCP button improvements. Help button fix. Switched Sparkle from a vendored framework to Swift Package Manager for easier updating. Closes #34 and #47. Thanks to @latenitefilms for the contribution.</p>
+      ]]></description>
+      <enclosure
+        url="https://github.com/elliotttate/SpliceKit/releases/download/v3.3.0/SpliceKit-v3.3.0.dmg"
+        sparkle:edSignature="LfAS2IJ5dGphDhsV0eKWv0UseNYk6M0b5t0m0jVOK8T0ZVIdYDv5a56HTIqXxCQngAOnuCCbGC6w/n25Xoq5Aw=="
+        length="19291858"
+        type="application/octet-stream" />
+    </item>
+    <item>
       <title>SpliceKit v3.2.10</title>
       <sparkle:version>3.2.10</sparkle:version>
       <sparkle:shortVersionString>3.2.10</sparkle:shortVersionString>
