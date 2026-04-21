@@ -8,6 +8,25 @@ same page or via `appcast.xml`.
 
 ## [Unreleased]
 
+### Changed
+- **SpliceKit is now authoritative for BRAW playback even when third-party
+  Media Extensions are installed.** Apple prioritises Media Extension
+  video decoders (e.g. BRAW Toolbox's Decoder.appex) over legacy
+  in-process VT registrations, so `-[FFMediaExtensionManager copyDecoderInfo:]`
+  was routing every BRAW frame through whichever decoder won the lookup
+  race — usually the third-party extension, even for the brxq/brst/
+  brvn/brs2/brxh variants that the third party doesn't actually
+  advertise in its `CodecInfo`. SpliceKit's swizzle on `copyDecoderInfo:`
+  now short-circuits to nil for the six BRAW FourCCs SpliceKit handles
+  (`braw`, `brxq`, `brst`, `brvn`, `brs2`, `brxh`), making FCP's Media
+  Extension lookup miss and the decoder selection fall through to
+  `VTRegisterVideoDecoder`'s in-process registry where
+  `SpliceKitBRAW_registerInProcessDecoder` has bound all six variants
+  to `SpliceKitBRAWInProcess_CreateInstance`. Other codecs are still
+  routed to whichever Media Extension claims them (Sony Raw via nablet,
+  AVI/MKV via QLVideo, etc.). The first redirect for each FourCC logs
+  one line so it's visible at startup; subsequent calls are silent.
+
 ### Fixed
 - **Crash in FCP's thumbnail manager when an installed Media Extension
   returns nil for a VTExtensionProperties key.** FCP's thumbnail dispatch
@@ -20,16 +39,15 @@ same page or via `appcast.xml`.
   FourCC the format description carries — VT calls
   `__setObject:forKey:` with nil and `__NSDictionaryM` raises
   `NSInvalidArgumentException`. The exception unwinds to FCP's uncaught
-  handler and abort()s the process. We saw this on a multicam clip with
-  BRAW angles where SpliceKit registers the brxq/brst/brvn/brs2/brxh
-  variants but installed third-party decoders only advertise 'braw'.
-  SpliceKit now wraps `copyDecoderInfo:` with a `@try`/`@catch` that
-  swallows that one specific exception (matched on
-  `__setObject:forKey:` + `object cannot be nil` reason text) and
-  returns nil, mirroring the `kVTCouldNotFindExtensionErr` path that FCP
-  already handles cleanly. Any other exception is re-raised so we don't
-  hide unrelated bugs. First catch logs in full; subsequent catches
-  throttle to one log line per minute with a running count.
+  handler and abort()s the process. SpliceKit now wraps non-BRAW codec
+  lookups in a `@try`/`@catch` that swallows that one specific exception
+  (matched on `__setObject:forKey:` + `object cannot be nil` reason text)
+  and returns nil, mirroring the `kVTCouldNotFindExtensionErr` path that
+  FCP already handles cleanly. Any other exception is re-raised so we
+  don't hide unrelated bugs. (BRAW codecs avoid the original method
+  entirely under the routing change above, so they can't reach the
+  crash.) First catch logs in full; subsequent catches throttle to one
+  log line per minute with a running count.
 
 ## [3.2.10] — 2026-04-20
 
