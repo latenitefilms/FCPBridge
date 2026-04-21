@@ -6,7 +6,7 @@ notarization ticket, and Sparkle signature live on the
 Sparkle users are notified automatically; manual download is available from the
 same page or via `appcast.xml`.
 
-## [Unreleased]
+## [3.3.2] — 2026-04-21
 
 ### Changed
 - **SpliceKit is now authoritative for BRAW playback even when third-party
@@ -69,6 +69,51 @@ same page or via `appcast.xml`.
   entirely under the routing change above, so they can't reach the
   crash.) First catch logs in full; subsequent catches throttle to one
   log line per minute with a running count.
+- **LiveCam camera/microphone access is restored.** Re-signing Final Cut
+  Pro with `--entitlements` replaces Apple's full entitlement set on the
+  bundle, which stripped `com.apple.security.device.camera`,
+  `com.apple.security.device.microphone`, and
+  `com.apple.security.device.audio-input` so LiveCam's "Allow Camera"
+  button did nothing and TCC silently denied every request. The patcher
+  now injects the three device entitlements into every codesign invocation
+  (BRAW plugin bundles, framework, app bundle) and signs with
+  `--options runtime` so the hardened runtime is engaged. The modded
+  app's `Info.plist` also gains `NSCameraUsageDescription` and
+  `NSMicrophoneUsageDescription` so TCC has a consent string to show.
+- **Final Cut Pro is now launched via `NSWorkspace.openApplication`
+  instead of `Process()`.** macOS TCC tracks a "responsible process" for
+  privacy decisions; spawning FCP through fork+exec from the patcher made
+  the patcher the responsible process for all of FCP's subsequent
+  camera/mic requests, so tccd checked the patcher's entitlements and
+  declined. Routing through LaunchServices makes FCP its own top-level
+  process and lets TCC evaluate FCP's own entitlements.
+- **Patcher install + update now strip extended attributes immediately
+  before each `codesign` invocation.** The initial post-copy sweep can be
+  invalidated by the steps in between it and signing (insert_dylib
+  rewriting the Mach-O, PlistBuddy edits to `Info.plist`, BRAW bundle
+  copies from quarantined sources), which re-attach
+  `com.apple.FinderInfo` or resource forks and trigger codesign's
+  "resource fork, Finder information, or similar detritus not allowed"
+  rejection. The extra strip runs as the first step of the sign shell
+  pipeline in both the fresh-install and update paths, on both the
+  Developer ID and ad-hoc fallback attempts.
+- **"Launch FCP" now surfaces a clear error when the modded bundle is
+  missing.** `canLaunchFCP` only inspects patcher state (not patching,
+  not already launching, not running); it does not verify the bundle is
+  still on disk. If the user deleted the modded app or the patch never
+  completed, `NSWorkspace.openApplication` surfaced this as a raw
+  `NSCocoaErrorDomain Code 4` Sentry event with no actionable guidance.
+  A `FileManager.fileExists` pre-flight at the top of `launch()` now
+  catches this case and writes a clear "run the patch again" message to
+  the patcher log instead.
+- **Build fails fast on undefined `SpliceKit_` symbols.** The dylib was
+  built with `-undefined dynamic_lookup`, so missing implementation files
+  were never caught at link time — they only surfaced in production as
+  `PC=0x0` crashes inside `safeInstall` blocks at launch. The build
+  system now scans `nm -u build/SpliceKit` for any unresolved
+  `_SpliceKit_*` symbol and fails the build if one is present. Three
+  latent crash sites that would have triggered this were fixed in the
+  same pass.
 
 ## [3.2.10] — 2026-04-20
 
