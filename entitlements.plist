@@ -12,5 +12,14 @@
     <true/>
     <key>com.apple.security.get-task-allow</key>
     <true/>
+    <!-- Hardened runtime requires explicit resource entitlements. FCP originally declares -->
+    <!-- these; re-signing with an entitlements file replaces the full set, so we must keep -->
+    <!-- them here or LiveCam / voiceover record / USB devices stop working. -->
+    <key>com.apple.security.device.camera</key>
+    <true/>
+    <key>com.apple.security.device.microphone</key>
+    <true/>
+    <key>com.apple.security.device.audio-input</key>
+    <true/>
 </dict>
 </plist>

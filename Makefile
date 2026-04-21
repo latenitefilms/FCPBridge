@@ -483,8 +483,8 @@ deploy: $(OUTPUT) $(SILENCE_DETECTOR) $(STRUCTURE_ANALYZER) $(MIXER_APP) braw-pr
 	if [ -d "$(REGISTER_PRO_EXTENSION_APP)" ]; then \
 		codesign --force --sign "$$sign_identity" --entitlements $(ENTITLEMENTS) "$(REGISTER_PRO_EXTENSION_APP)"; \
 	fi; \
-	if ! codesign --force --sign "$$sign_identity" "$(FW_DIR)" || \
-	   ! codesign --force --sign "$$sign_identity" --entitlements $(ENTITLEMENTS) "$(MODDED_APP)"; then \
+	if ! codesign --force --options runtime --sign "$$sign_identity" "$(FW_DIR)" || \
+	   ! codesign --force --options runtime --sign "$$sign_identity" --entitlements $(ENTITLEMENTS) "$(MODDED_APP)"; then \
 		if [ "$$sign_identity" = "-" ]; then \
 			exit 1; \
 		fi; \
@@ -508,8 +508,8 @@ deploy: $(OUTPUT) $(SILENCE_DETECTOR) $(STRUCTURE_ANALYZER) $(MIXER_APP) braw-pr
 		if [ -d "$(REGISTER_PRO_EXTENSION_APP)" ]; then \
 			codesign --force --sign - --entitlements $(ENTITLEMENTS) "$(REGISTER_PRO_EXTENSION_APP)"; \
 		fi; \
-		codesign --force --sign - "$(FW_DIR)"; \
-		codesign --force --sign - --entitlements $(ENTITLEMENTS) "$(MODDED_APP)"; \
+		codesign --force --options runtime --sign - "$(FW_DIR)"; \
+		codesign --force --options runtime --sign - --entitlements $(ENTITLEMENTS) "$(MODDED_APP)"; \
 	fi
 	@codesign --verify --verbose "$(MODDED_APP)" 2>&1
 	@echo "=== Deployed successfully ==="
