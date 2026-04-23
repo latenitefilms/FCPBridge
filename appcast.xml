@@ -6,6 +6,22 @@
     <description>SpliceKit Patcher release updates</description>
     <language>en</language>
     <item>
+      <title>SpliceKit v3.3.5</title>
+      <sparkle:version>3.3.5</sparkle:version>
+      <sparkle:shortVersionString>3.3.5</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <pubDate>Thu, 23 Apr 2026 23:26:25 +0000</pubDate>
+      <description><![CDATA[
+        <h2>What's New in 3.3.5</h2>
+        <p>Adds the Siri-style command palette with voice dictation, polished liquid-glass layout and single-selection handling, immersive BRAW preview support, and patcher diagnostics/Sentry runtime hardening.</p>
+      ]]></description>
+      <enclosure
+        url="https://github.com/elliotttate/SpliceKit/releases/download/v3.3.5/SpliceKit-v3.3.5.dmg"
+        sparkle:edSignature="BxnzA1LUcPj+dp7SdiW0u5hJx2SKg9tfVk9A6zd7PBUh8kajdi3oOji75Dr6bxY287vPodh0RTQh4o/NbhURCg=="
+        length="19931068"
+        type="application/octet-stream" />
+    </item>
+    <item>
       <title>SpliceKit v3.3.4</title>
       <sparkle:version>3.3.4</sparkle:version>
       <sparkle:shortVersionString>3.3.4</sparkle:shortVersionString>
