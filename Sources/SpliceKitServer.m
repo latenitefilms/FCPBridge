@@ -842,6 +842,26 @@ static BOOL SpliceKit_isKnownUnsafeNilErrorSelector(NSString *selectorName, NSAr
     return YES;
 }
 
+static BOOL SpliceKit_signatureExpectsObject(const char *sigType) {
+    return sigType && sigType[0] == '@';
+}
+
+static BOOL SpliceKit_rejectScalarForObjectArgument(const char *sigType,
+                                                    NSString *selectorName,
+                                                    NSUInteger argIdx,
+                                                    NSString *type,
+                                                    NSDictionary **result) {
+    if (!SpliceKit_signatureExpectsObject(sigType)) return NO;
+    if (result) {
+        *result = @{@"error": [NSString stringWithFormat:
+            @"Refusing %@ argument %lu: caller supplied scalar type '%@' but selector expects an object",
+            selectorName ?: @"selector",
+            (unsigned long)(argIdx - 2),
+            type ?: @"unknown"]};
+    }
+    return YES;
+}
+
 static NSDictionary *SpliceKit_handleCallMethodWithArgs(NSDictionary *params) {
     NSString *targetName = params[@"target"] ?: params[@"className"];
     NSString *selectorName = params[@"selector"];
@@ -899,19 +919,23 @@ static NSDictionary *SpliceKit_handleCallMethodWithArgs(NSDictionary *params) {
                     NSString *val = [arg[@"value"] description];
                     [inv setArgument:&val atIndex:argIdx];
                 } else if ([type isEqualToString:@"int"]) {
+                    if (SpliceKit_rejectScalarForObjectArgument(sigType, selectorName, argIdx, type, &result)) return;
                     long long val = [arg[@"value"] longLongValue];
                     if (sigType[0] == 'i') { int v = (int)val; [inv setArgument:&v atIndex:argIdx]; }
                     else if (sigType[0] == 'q') { [inv setArgument:&val atIndex:argIdx]; }
                     else if (sigType[0] == 'Q') { unsigned long long v = (unsigned long long)val; [inv setArgument:&v atIndex:argIdx]; }
                     else { [inv setArgument:&val atIndex:argIdx]; }
                 } else if ([type isEqualToString:@"double"]) {
+                    if (SpliceKit_rejectScalarForObjectArgument(sigType, selectorName, argIdx, type, &result)) return;
                     double val = [arg[@"value"] doubleValue];
                     if (sigType[0] == 'f') { float v = (float)val; [inv setArgument:&v atIndex:argIdx]; }
                     else { [inv setArgument:&val atIndex:argIdx]; }
                 } else if ([type isEqualToString:@"float"]) {
+                    if (SpliceKit_rejectScalarForObjectArgument(sigType, selectorName, argIdx, type, &result)) return;
                     float val = [arg[@"value"] floatValue];
                     [inv setArgument:&val atIndex:argIdx];
                 } else if ([type isEqualToString:@"bool"]) {
+                    if (SpliceKit_rejectScalarForObjectArgument(sigType, selectorName, argIdx, type, &result)) return;
                     BOOL val = [arg[@"value"] boolValue];
                     [inv setArgument:&val atIndex:argIdx];
                 } else if ([type isEqualToString:@"nil"] || [type isEqualToString:@"sender"]) {
