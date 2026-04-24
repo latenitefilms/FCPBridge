@@ -6,6 +6,22 @@
     <description>SpliceKit Patcher release updates</description>
     <language>en</language>
     <item>
+      <title>SpliceKit v3.3.7</title>
+      <sparkle:version>3.3.7</sparkle:version>
+      <sparkle:shortVersionString>3.3.7</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <pubDate>Fri, 24 Apr 2026 22:01:10 +0000</pubDate>
+      <description><![CDATA[
+        <h2>What's New in 3.3.7</h2>
+        <p>Continues the Apple Immersive/BRAW work-in-progress with safer immersive preview decoding, reduced-resolution playback handling, fisheye/equirect preview improvements, native viewer state hardening, and crash fixes for affected users.</p>
+      ]]></description>
+      <enclosure
+        url="https://github.com/elliotttate/SpliceKit/releases/download/v3.3.7/SpliceKit-v3.3.7.dmg"
+        sparkle:edSignature="WJnn1VFPkPNW0lvXdSSR4wh6PjkrSdcSUdIT0jIAhLjBgSYqnelogPlzQi9BYE0MfpX8tuzGNo3nBismHRyyDA=="
+        length="21672185"
+        type="application/octet-stream" />
+    </item>
+    <item>
       <title>SpliceKit v3.3.6</title>
       <sparkle:version>3.3.6</sparkle:version>
       <sparkle:shortVersionString>3.3.6</sparkle:shortVersionString>
