@@ -32,6 +32,37 @@ func printError(_ message: String) {
     progressLock.unlock()
 }
 
+func floatValue(_ value: Any?) -> Float? {
+    if let value = value as? Float { return value }
+    if let value = value as? Double { return Float(value) }
+    if let value = value as? NSNumber { return value.floatValue }
+    if let value = value as? String { return Float(value) }
+    return nil
+}
+
+func normalizedWordTimings(_ words: [[String: Any]], minimumDuration: Float = 1.0 / 30.0) -> [[String: Any]] {
+    var normalized = words.sorted {
+        (floatValue($0["startTime"]) ?? 0) < (floatValue($1["startTime"]) ?? 0)
+    }
+
+    var previousEnd: Float = 0
+    for index in normalized.indices {
+        var start = floatValue(normalized[index]["startTime"]) ?? previousEnd
+        var end = floatValue(normalized[index]["endTime"]) ?? (start + minimumDuration)
+
+        if !start.isFinite { start = previousEnd }
+        if !end.isFinite { end = start + minimumDuration }
+        if start < previousEnd { start = previousEnd }
+        if end <= start { end = start + minimumDuration }
+
+        normalized[index]["startTime"] = start
+        normalized[index]["endTime"] = end
+        previousEnd = end
+    }
+
+    return normalized
+}
+
 /// Extract word list from an ASR result, optionally assigning speakers from diarization segments
 func extractWords(from result: ASRResult, speakerSegments: [TimedSpeakerSegment] = []) -> [[String: Any]] {
     var words: [[String: Any]] = []
@@ -45,15 +76,31 @@ func extractWords(from result: ASRResult, speakerSegments: [TimedSpeakerSegment]
             var startTime: Float?
             var endTime: Float = 0
             var minConfidence: Float = 1.0
+            var previousTokenEnd: Float?
 
             while tokenIndex < tokenTimings.count {
                 let timing = tokenTimings[tokenIndex]
-                let token = timing.token.trimmingCharacters(in: .whitespacesAndNewlines)
+                let rawToken = timing.token
+                let token = rawToken.trimmingCharacters(in: .whitespacesAndNewlines)
                 tokenIndex += 1
                 if token.isEmpty { continue }
 
-                if startTime == nil { startTime = Float(timing.startTime) }
-                endTime = Float(timing.endTime)
+                var tokenStart = Float(timing.startTime)
+                var tokenEnd = Float(timing.endTime)
+                let firstScalar = rawToken.unicodeScalars.first
+                let startsWithWhitespace = firstScalar.map { CharacterSet.whitespacesAndNewlines.contains($0) } ?? false
+                if !accumulated.isEmpty,
+                   !startsWithWhitespace,
+                   let previousTokenEnd,
+                   tokenStart - previousTokenEnd >= 1.0 {
+                    let tokenDuration = max(tokenEnd - tokenStart, 1.0 / 30.0)
+                    tokenStart = previousTokenEnd
+                    tokenEnd = tokenStart + tokenDuration
+                }
+
+                if startTime == nil { startTime = tokenStart }
+                endTime = tokenEnd
+                previousTokenEnd = tokenEnd
                 minConfidence = min(minConfidence, timing.confidence)
                 accumulated += token
 
@@ -92,7 +139,7 @@ func extractWords(from result: ASRResult, speakerSegments: [TimedSpeakerSegment]
         ])
     }
 
-    return words
+    return normalizedWordTimings(words)
 }
 
 let args = CommandLine.arguments

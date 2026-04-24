@@ -178,6 +178,20 @@ else
     echo "  Skipped: parakeet-transcriber package not found (pre-built binary will be used if available)"
 fi
 
+echo "[3b/15] Building whisper-transcriber..."
+WHISPER_PKG_DIR="patcher/SpliceKitPatcher.app/Contents/Resources/tools/whisper-transcriber"
+WHISPER_BIN="${WHISPER_PKG_DIR}/.build/release/whisper-transcriber"
+if [ -d "${WHISPER_PKG_DIR}" ]; then
+    cd "${WHISPER_PKG_DIR}" && swift build -c release 2>&1 | tail -3 && cd "${REPO_ROOT}"
+    if [ -f "$WHISPER_BIN" ]; then
+        echo "  Built: $(du -h "$WHISPER_BIN" | cut -f1)"
+    else
+        echo "  WARNING: whisper-transcriber build failed — release will not include it"
+    fi
+else
+    echo "  Skipped: whisper-transcriber package not found (pre-built binary will be used if available)"
+fi
+
 echo "[4/15] Building SpliceKit app via Xcode..."
 xcodebuild -project "${XCODE_PROJECT}" \
     -scheme SpliceKit \
@@ -189,6 +203,25 @@ xcodebuild -project "${XCODE_PROJECT}" \
 resolve_built_app
 PATCHER_DSYM="$(find "${BUILD_DIR}/Build/Products/Release" -maxdepth 1 -name "*.app.dSYM" | head -n 1)"
 echo "  Using app bundle: ${BUILT_APP}"
+
+echo "[4b/15] Building insert_dylib helper..."
+INSERT_DYLIB_BUILD_DIR="${BUILD_DIR}/insert_dylib-src"
+INSERT_DYLIB_BIN="${BUILD_DIR}/insert_dylib"
+rm -rf "${INSERT_DYLIB_BUILD_DIR}"
+mkdir -p "${INSERT_DYLIB_BUILD_DIR}"
+curl -fLsS https://github.com/tyilo/insert_dylib/archive/refs/heads/master.zip \
+    -o "${INSERT_DYLIB_BUILD_DIR}/insert_dylib.zip"
+unzip -qo "${INSERT_DYLIB_BUILD_DIR}/insert_dylib.zip" -d "${INSERT_DYLIB_BUILD_DIR}"
+clang -arch arm64 -arch x86_64 -mmacosx-version-min=14.0 \
+    -o "${INSERT_DYLIB_BIN}" \
+    "${INSERT_DYLIB_BUILD_DIR}/insert_dylib-master/insert_dylib/main.c" \
+    -framework Foundation
+rm -rf "${INSERT_DYLIB_BUILD_DIR}"
+if [ ! -x "${INSERT_DYLIB_BIN}" ]; then
+    echo "ERROR: insert_dylib helper was not built at ${INSERT_DYLIB_BIN}" >&2
+    exit 1
+fi
+echo "  Built: $(lipo -info "${INSERT_DYLIB_BIN}")"
 
 echo "[5/15] Syncing bundled resources into app..."
 APP_RES="${BUILT_APP}/Contents/Resources"
@@ -208,6 +241,14 @@ if [ -f "$PARAKEET_BIN" ]; then
     cp "$PARAKEET_BIN" "${APP_RES}/tools/parakeet-transcriber"
     echo "  Bundled parakeet-transcriber binary"
 fi
+# Bundle pre-built whisper binary (no source build needed on user's machine)
+if [ -f "$WHISPER_BIN" ]; then
+    cp "$WHISPER_BIN" "${APP_RES}/tools/whisper-transcriber"
+    echo "  Bundled whisper-transcriber binary"
+fi
+cp "${INSERT_DYLIB_BIN}" "${APP_RES}/tools/insert_dylib"
+chmod +x "${APP_RES}/tools/insert_dylib"
+echo "  Bundled insert_dylib helper"
 
 echo "[6/15] Uploading Sentry symbols..."
 maybe_upload_sentry_symbols

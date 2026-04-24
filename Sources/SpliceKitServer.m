@@ -6742,15 +6742,21 @@ static NSDictionary *SpliceKit_handleTranscriptSetSilenceThreshold(NSDictionary 
 
 static NSDictionary *SpliceKit_handleTranscriptSetEngine(NSDictionary *params) {
     NSString *engineName = params[@"engine"];
-    if (!engineName) return @{@"error": @"engine is required ('fcpNative' or 'appleSpeech')"};
+    if (!engineName) return @{@"error": @"engine is required ('fcpNative', 'appleSpeech', 'parakeetV3', 'parakeetV2', 'whisperLargeV3Turbo', 'whisperLargeV3')"};
 
     SpliceKitTranscriptPanel *panel = [SpliceKitTranscriptPanel sharedPanel];
     if ([engineName isEqualToString:@"fcpNative"]) {
         panel.engine = SpliceKitTranscriptEngineFCPNative;
     } else if ([engineName isEqualToString:@"appleSpeech"]) {
         panel.engine = SpliceKitTranscriptEngineAppleSpeech;
+    } else if ([engineName isEqualToString:@"parakeetV3"] || [engineName isEqualToString:@"parakeet"]) {
+        panel.engine = SpliceKitTranscriptEngineParakeet;
+        panel.parakeetModelVersion = @"v3";
+    } else if ([engineName isEqualToString:@"parakeetV2"]) {
+        panel.engine = SpliceKitTranscriptEngineParakeet;
+        panel.parakeetModelVersion = @"v2";
     } else {
-        return @{@"error": @"Unknown engine. Use 'fcpNative' or 'appleSpeech'"};
+        return @{@"error": @"Unknown engine. Use 'fcpNative', 'appleSpeech', 'parakeetV3', 'parakeetV2', 'whisperLargeV3Turbo', or 'whisperLargeV3'"};
     }
     return @{@"status": @"ok", @"engine": engineName};
 }

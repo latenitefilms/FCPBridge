@@ -278,6 +278,102 @@ class PatcherModel: ObservableObject {
         }
     }
 
+    private nonisolated func ensureInsertDylibTool(repoDir: String) async throws -> String {
+        let bundledTool = repoDir + "/tools/insert_dylib"
+        if FileManager.default.isExecutableFile(atPath: bundledTool) {
+            await logAsync("Using bundled insert_dylib tool")
+            return bundledTool
+        }
+
+        let cachedTool = "/tmp/splicekit_insert_dylib"
+        if FileManager.default.isExecutableFile(atPath: cachedTool) {
+            await logAsync("Using cached insert_dylib tool")
+            return cachedTool
+        }
+
+        await logAsync("Bundled insert_dylib tool missing; building fallback...")
+        let clangCheck = shellResult("xcrun clang --version 2>&1")
+        guard clangCheck.status == 0 else {
+            if clangCheck.output.localizedCaseInsensitiveContains("license") {
+                throw PatchError.msg("""
+                Xcode's license has not been accepted, and this patcher build is missing its bundled insert_dylib helper.
+
+                Please run this once in Terminal, then retry:
+                sudo xcodebuild -license
+                """)
+            }
+            throw PatchError.msg("Unable to run clang to build insert_dylib:\n\(clangCheck.output)")
+        }
+
+        await logAsync("Building insert_dylib fallback tool...")
+        let buildResult = shellResult("""
+            cd /tmp && rm -rf _insert_dylib_build && mkdir _insert_dylib_build && cd _insert_dylib_build && \
+            curl -fLsS https://github.com/tyilo/insert_dylib/archive/refs/heads/master.zip -o insert_dylib.zip && \
+            unzip -qo insert_dylib.zip && \
+            clang -o \(shellQuote(cachedTool)) insert_dylib-master/insert_dylib/main.c -framework Foundation && \
+            cd /tmp && rm -rf _insert_dylib_build
+            """)
+        guard buildResult.status == 0, FileManager.default.isExecutableFile(atPath: cachedTool) else {
+            throw PatchError.msg("Failed to build insert_dylib:\n\(buildResult.output)")
+        }
+        return cachedTool
+    }
+
+    private nonisolated func verifyCommandLineToolsReady(repoDir: String) async throws {
+        let selectedPath = shell("xcode-select -p 2>/dev/null")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !selectedPath.isEmpty else {
+            await logAsync("Xcode Command Line Tools not found. Installing...")
+            shell("xcode-select --install 2>/dev/null")
+            throw PatchError.msg("""
+            Xcode Command Line Tools are required.
+
+            An installer window should have appeared. Please complete the installation, then click Retry.
+            """)
+        }
+
+        let otoolCheck = shellResult("xcrun --find otool 2>&1")
+        guard otoolCheck.status == 0 else {
+            let output = otoolCheck.output.trimmingCharacters(in: .whitespacesAndNewlines)
+            if output.localizedCaseInsensitiveContains("license") {
+                throw PatchError.msg("""
+                Xcode Command Line Tools are installed, but the Xcode license has not been accepted.
+
+                Please run this once in Terminal, then retry:
+                sudo xcodebuild -license
+                """)
+            }
+            shell("xcode-select --install 2>/dev/null")
+            throw PatchError.msg("""
+            Xcode Command Line Tools are installed, but required developer tools are not available.
+
+            Please complete or repair the Command Line Tools installation, then click Retry.
+
+            \(output)
+            """)
+        }
+
+        let bundledInsertDylib = repoDir + "/tools/insert_dylib"
+        let cachedInsertDylib = "/tmp/splicekit_insert_dylib"
+        if !FileManager.default.isExecutableFile(atPath: bundledInsertDylib) &&
+            !FileManager.default.isExecutableFile(atPath: cachedInsertDylib) {
+            let clangCheck = shellResult("xcrun clang --version 2>&1")
+            guard clangCheck.status == 0 else {
+                if clangCheck.output.localizedCaseInsensitiveContains("license") {
+                    throw PatchError.msg("""
+                    Xcode Command Line Tools are installed, but the Xcode license has not been accepted.
+
+                    Please run this once in Terminal, then retry:
+                    sudo xcodebuild -license
+                    """)
+                }
+                throw PatchError.msg("Unable to run clang to build insert_dylib:\n\(clangCheck.output)")
+            }
+        }
+
+        await logAsync("Xcode tools: OK")
+    }
+
     /// Evaluate install state: is SpliceKit injected? Is it the current build? Is FCP up to date?
     func checkStatus() {
         defer { syncModdedFCPRunningState() }
@@ -718,18 +814,14 @@ class PatcherModel: ObservableObject {
     private nonisolated func runPatch() async throws {
         // Step 1: Prerequisites
         await setStepAsync(.checkPrereqs)
-        if shell("xcode-select -p 2>/dev/null").isEmpty {
-            await logAsync("Xcode Command Line Tools not found. Installing...")
-            shell("xcode-select --install 2>/dev/null")
-            throw PatchError.msg("Xcode Command Line Tools are required.\n\nAn installer window should have appeared. Please complete the installation, then click \"Continue\" again.")
-        }
-        await logAsync("Xcode tools: OK")
 
         let sourceApp = await MainActor.run { self.sourceApp }
         let fcpVersion = await MainActor.run { self.fcpVersion }
         let repoDir = await MainActor.run { self.repoDir }
         let destDir = await MainActor.run { self.destDir }
         let moddedApp = await MainActor.run { self.moddedApp }
+
+        try await verifyCommandLineToolsReady(repoDir: repoDir)
 
         guard FileManager.default.fileExists(atPath: sourceApp) else {
             throw PatchError.msg("Final Cut Pro not found at \(sourceApp)")
@@ -851,21 +943,8 @@ class PatcherModel: ObservableObject {
         let binary = moddedApp + "/Contents/MacOS/Final Cut Pro"
         let alreadyInjected = shell("otool -L '\(binary)' 2>/dev/null | grep '@rpath/SpliceKit'")
         if alreadyInjected.isEmpty {
-            let insertDylib = "/tmp/splicekit_insert_dylib"
-            if !FileManager.default.isExecutableFile(atPath: insertDylib) {
-                await logAsync("Building insert_dylib tool...")
-                let buildResult = shellResult("""
-                    cd /tmp && rm -rf _insert_dylib_build && mkdir _insert_dylib_build && cd _insert_dylib_build && \
-                    curl -fLsS https://github.com/tyilo/insert_dylib/archive/refs/heads/master.zip -o insert_dylib.zip && \
-                    unzip -qo insert_dylib.zip && \
-                    clang -o '\(insertDylib)' insert_dylib-master/insert_dylib/main.c -framework Foundation && \
-                    cd /tmp && rm -rf _insert_dylib_build
-                    """)
-                guard buildResult.status == 0, FileManager.default.isExecutableFile(atPath: insertDylib) else {
-                    throw PatchError.msg("Failed to build insert_dylib:\n\(buildResult.output)")
-                }
-            }
-            let injectResult = shellResult("'\(insertDylib)' --inplace --all-yes '@rpath/SpliceKit.framework/Versions/A/SpliceKit' '\(binary)' 2>&1")
+            let insertDylib = try await ensureInsertDylibTool(repoDir: repoDir)
+            let injectResult = shellResult("\(shellQuote(insertDylib)) --inplace --all-yes '@rpath/SpliceKit.framework/Versions/A/SpliceKit' '\(binary)' 2>&1")
             guard injectResult.status == 0 else {
                 throw PatchError.msg("insert_dylib failed:\n\(injectResult.output)")
             }

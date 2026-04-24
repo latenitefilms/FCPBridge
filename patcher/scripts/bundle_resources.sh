@@ -39,6 +39,15 @@ for tool in silence-detector structure-analyzer SpliceKitMixer; do
         echo "Bundled $tool"
     fi
 done
+if [ -f "$PREBUILT/insert_dylib" ]; then
+    cp "$PREBUILT/insert_dylib" "$APP_RESOURCES/tools/insert_dylib"
+    chmod +x "$APP_RESOURCES/tools/insert_dylib"
+    echo "Bundled insert_dylib"
+elif [ -f "$REPO_DIR/build/insert_dylib" ]; then
+    cp "$REPO_DIR/build/insert_dylib" "$APP_RESOURCES/tools/insert_dylib"
+    chmod +x "$APP_RESOURCES/tools/insert_dylib"
+    echo "Bundled insert_dylib"
+fi
 if [ -f "$REPO_DIR/tools/silence-detector.swift" ]; then
     cp "$REPO_DIR/tools/silence-detector.swift" "$APP_RESOURCES/tools/silence-detector.swift"
 fi
@@ -59,6 +68,24 @@ elif [ -d "$PARAKEET_SRC" ]; then
         --exclude '.build' --exclude '.swiftpm' \
         "$PARAKEET_SRC/" "$APP_RESOURCES/tools/parakeet-transcriber/"
     echo "Bundled parakeet-transcriber sources (will build on first use)"
+fi
+
+# Copy whisper-transcriber: prefer pre-built binary, fall back to sources
+WHISPER_SRC="$REPO_DIR/patcher/SpliceKitPatcher.app/Contents/Resources/tools/whisper-transcriber"
+WHISPER_RELEASE_BIN="$WHISPER_SRC/.build/release/whisper-transcriber"
+WHISPER_DEBUG_BIN="$WHISPER_SRC/.build/debug/whisper-transcriber"
+if [ -f "$WHISPER_RELEASE_BIN" ]; then
+    cp "$WHISPER_RELEASE_BIN" "$APP_RESOURCES/tools/whisper-transcriber"
+    echo "Bundled whisper-transcriber binary (pre-built)"
+elif [ -f "$WHISPER_DEBUG_BIN" ]; then
+    cp "$WHISPER_DEBUG_BIN" "$APP_RESOURCES/tools/whisper-transcriber"
+    echo "Bundled whisper-transcriber binary (debug build)"
+elif [ -d "$WHISPER_SRC" ]; then
+    mkdir -p "$APP_RESOURCES/tools/whisper-transcriber"
+    rsync -a --delete \
+        --exclude '.build' --exclude '.swiftpm' \
+        "$WHISPER_SRC/" "$APP_RESOURCES/tools/whisper-transcriber/"
+    echo "Bundled whisper-transcriber sources (will build on first use)"
 fi
 
 # Bundle BRAW plugin bundles (VT decoder + FormatReader). PatcherModel copies

@@ -19,6 +19,7 @@
 #import <objc/runtime.h>
 #import <objc/message.h>
 #import <float.h>
+#import <math.h>
 #import <QuartzCore/QuartzCore.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 #import <dlfcn.h>
@@ -580,6 +581,7 @@ static SpliceKitCaptionAnimation SpliceKitCaption_animationFromName(NSString *na
 
 // UI
 @property (nonatomic, strong) NSPopUpButton *presetPopup;
+@property (nonatomic, strong) NSPopUpButton *enginePopup;
 @property (nonatomic, strong) NSPopUpButton *fontPopup;
 @property (nonatomic, strong) NSTextField *fontSizeField;
 @property (nonatomic, strong) NSSlider *fontSizeSlider;
@@ -616,6 +618,9 @@ static SpliceKitCaptionAnimation SpliceKitCaption_animationFromName(NSString *na
 @property (nonatomic, copy) NSString *lastHealedSequenceKey;
 @property (nonatomic, strong) id automaticRestoreObserver;
 @property (nonatomic) NSUInteger automaticRestoreGeneration;
+- (double)captionFrameDurationSeconds;
+- (NSArray<SpliceKitTranscriptWord *> *)normalizedCaptionWordsFromWords:(NSArray<SpliceKitTranscriptWord *> *)words
+                                                                 context:(NSString *)context;
 @end
 
 // Swizzle LKTileView's draggingEntered: to log what FCP receives during drags
@@ -823,6 +828,37 @@ static void SpliceKit_installDragSpy(void) {
         [self.presetPopup.trailingAnchor constraintEqualToAnchor:docView.trailingAnchor constant:-pad],
     ]];
     prev = presetLabel;
+
+    // === TRANSCRIPTION ENGINE ===
+    NSTextField *engineLabel = [self makeLabel:@"Engine"];
+    [docView addSubview:engineLabel];
+
+    self.enginePopup = [[NSPopUpButton alloc] init];
+    self.enginePopup.translatesAutoresizingMaskIntoConstraints = NO;
+    self.enginePopup.controlSize = NSControlSizeRegular;
+    [self.enginePopup addItemWithTitle:@"Parakeet v3 (Fast, ~475 MB)"];
+    self.enginePopup.lastItem.representedObject = @"parakeetV3";
+    [self.enginePopup addItemWithTitle:@"Whisper large-v3-turbo (~800 MB)"];
+    self.enginePopup.lastItem.representedObject = @"whisperLargeV3Turbo";
+    [self.enginePopup addItemWithTitle:@"Whisper large-v3 (Highest quality, ~1.5 GB)"];
+    self.enginePopup.lastItem.representedObject = @"whisperLargeV3";
+    NSString *savedEngine = [[NSUserDefaults standardUserDefaults] stringForKey:@"SpliceKitCaptionEngine"] ?: @"whisperLargeV3";
+    for (NSMenuItem *item in self.enginePopup.itemArray) {
+        if ([item.representedObject isEqual:savedEngine]) { [self.enginePopup selectItem:item]; break; }
+    }
+    self.enginePopup.target = self;
+    self.enginePopup.action = @selector(engineChanged:);
+    [docView addSubview:self.enginePopup];
+
+    [NSLayoutConstraint activateConstraints:@[
+        [engineLabel.topAnchor constraintEqualToAnchor:prev.bottomAnchor constant:8],
+        [engineLabel.leadingAnchor constraintEqualToAnchor:docView.leadingAnchor constant:pad],
+        [engineLabel.widthAnchor constraintEqualToConstant:80],
+        [self.enginePopup.centerYAnchor constraintEqualToAnchor:engineLabel.centerYAnchor],
+        [self.enginePopup.leadingAnchor constraintEqualToAnchor:engineLabel.trailingAnchor constant:4],
+        [self.enginePopup.trailingAnchor constraintEqualToAnchor:docView.trailingAnchor constant:-pad],
+    ]];
+    prev = engineLabel;
 
     // === PREVIEW ===
     self.previewView = [[NSView alloc] init];
@@ -1291,6 +1327,18 @@ static void SpliceKit_installDragSpy(void) {
     }
 }
 
+- (void)engineChanged:(id)sender {
+    NSString *engineID = [self currentEngineID];
+    [[NSUserDefaults standardUserDefaults] setObject:engineID forKey:@"SpliceKitCaptionEngine"];
+    SpliceKit_log(@"[Captions] Transcription engine switched to: %@", engineID);
+}
+
+- (NSString *)currentEngineID {
+    id obj = self.enginePopup.selectedItem.representedObject;
+    if ([obj isKindOfClass:[NSString class]]) return (NSString *)obj;
+    return [[NSUserDefaults standardUserDefaults] stringForKey:@"SpliceKitCaptionEngine"] ?: @"whisperLargeV3";
+}
+
 - (void)fontChanged:(id)sender { self.style.font = self.fontPopup.titleOfSelectedItem; [self updatePreview]; [self persistCaptionDraftStateForCurrentSequence]; }
 - (void)fontSizeChanged:(id)sender {
     self.style.fontSize = self.fontSizeSlider.doubleValue;
@@ -1483,7 +1531,11 @@ static void SpliceKit_installDragSpy(void) {
                 SpliceKitTranscriptWord *word = seg.words[wordIndex];
                 double titleStart = word.startTime;
                 double titleEnd = (wordIndex + 1 < seg.words.count) ? seg.words[wordIndex + 1].startTime : seg.endTime;
-                double titleDuration = MAX(titleEnd - titleStart, (double)MAX(self.fdNum, 1) / MAX(self.fdDen, 1));
+                double frameDuration = [self captionFrameDurationSeconds];
+                if (!isfinite(titleEnd) || titleEnd <= titleStart) {
+                    titleEnd = titleStart + frameDuration;
+                }
+                double titleDuration = MAX(titleEnd - titleStart, frameDuration);
                 [runtimeEntries addObject:@{
                     @"segmentIndex": @(segIndex),
                     @"activeWordIndex": @(wordIndex),
@@ -1636,19 +1688,176 @@ static void SpliceKit_installDragSpy(void) {
     });
 }
 
+- (double)captionFrameDurationSeconds {
+    double frameDuration = 0;
+    if (self.fdNum > 0 && self.fdDen > 0) {
+        frameDuration = (double)self.fdNum / (double)self.fdDen;
+    }
+    if ((!isfinite(frameDuration) || frameDuration <= 0) &&
+        self.frameRate > 0 && isfinite(self.frameRate)) {
+        frameDuration = 1.0 / self.frameRate;
+    }
+    if (!isfinite(frameDuration) || frameDuration <= 0) {
+        frameDuration = 1.0 / 30.0;
+    }
+    return frameDuration;
+}
+
+- (NSArray<SpliceKitTranscriptWord *> *)normalizedCaptionWordsFromWords:(NSArray<SpliceKitTranscriptWord *> *)words
+                                                                 context:(NSString *)context {
+    if (words.count == 0) return @[];
+
+    double minDuration = MAX([self captionFrameDurationSeconds], 0.001);
+    NSCharacterSet *trimSet = [NSCharacterSet whitespaceAndNewlineCharacterSet];
+    NSMutableArray<SpliceKitTranscriptWord *> *validWords = [NSMutableArray arrayWithCapacity:words.count];
+
+    NSUInteger droppedWords = 0;
+    NSUInteger clampedStarts = 0;
+    NSUInteger repairedDurations = 0;
+    NSUInteger trimmedOverlaps = 0;
+    NSUInteger cappedToNextStart = 0;
+
+    for (SpliceKitTranscriptWord *word in words) {
+        if (![word isKindOfClass:[SpliceKitTranscriptWord class]]) {
+            droppedWords++;
+            continue;
+        }
+
+        NSString *trimmedText = [word.text ?: @"" stringByTrimmingCharactersInSet:trimSet];
+        if (trimmedText.length == 0) {
+            droppedWords++;
+            continue;
+        }
+
+        double start = word.startTime;
+        double end = word.endTime;
+        double duration = word.duration;
+        if (!isfinite(start)) {
+            droppedWords++;
+            continue;
+        }
+
+        if (start < 0) {
+            double usableDuration = (isfinite(end) && end > start) ? (end - start)
+                : ((isfinite(duration) && duration > 0) ? duration : minDuration);
+            start = 0;
+            end = start + usableDuration;
+            clampedStarts++;
+        }
+
+        if (!isfinite(end) || end <= start) {
+            if (isfinite(duration) && duration > 0) {
+                end = start + duration;
+            } else {
+                end = start + minDuration;
+            }
+            repairedDurations++;
+        }
+
+        if (!isfinite(end) || end <= start) {
+            droppedWords++;
+            continue;
+        }
+
+        word.text = trimmedText;
+        word.startTime = start;
+        word.endTime = end;
+        word.duration = end - start;
+        [validWords addObject:word];
+    }
+
+    [validWords sortUsingComparator:^NSComparisonResult(SpliceKitTranscriptWord *a, SpliceKitTranscriptWord *b) {
+        if (a.startTime < b.startTime) return NSOrderedAscending;
+        if (a.startTime > b.startTime) return NSOrderedDescending;
+        if (a.endTime < b.endTime) return NSOrderedAscending;
+        if (a.endTime > b.endTime) return NSOrderedDescending;
+        return [(a.text ?: @"") compare:(b.text ?: @"") options:NSCaseInsensitiveSearch];
+    }];
+
+    for (NSUInteger i = 0; i < validWords.count; i++) {
+        SpliceKitTranscriptWord *word = validWords[i];
+        double start = word.startTime;
+        double end = word.endTime;
+
+        if (i + 1 < validWords.count) {
+            SpliceKitTranscriptWord *next = validWords[i + 1];
+            if (isfinite(next.startTime) && next.startTime > start && end > next.startTime) {
+                end = next.startTime;
+                cappedToNextStart++;
+            }
+        }
+
+        if (i > 0) {
+            SpliceKitTranscriptWord *previous = validWords[i - 1];
+            if (start < previous.endTime) {
+                double boundary = start + ((previous.endTime - start) * 0.5);
+                double minPreviousEnd = previous.startTime + minDuration;
+                double maxPreviousEnd = end - minDuration;
+                if (maxPreviousEnd >= minPreviousEnd) {
+                    boundary = MIN(MAX(boundary, minPreviousEnd), maxPreviousEnd);
+                    previous.endTime = boundary;
+                    previous.duration = previous.endTime - previous.startTime;
+                    start = boundary;
+                } else {
+                    start = previous.endTime;
+                }
+                trimmedOverlaps++;
+            }
+        }
+
+        if (end <= start) {
+            end = start + minDuration;
+            repairedDurations++;
+        }
+
+        word.startTime = start;
+        word.endTime = end;
+        word.duration = end - start;
+    }
+
+    for (NSUInteger i = 1; i < validWords.count; i++) {
+        SpliceKitTranscriptWord *previous = validWords[i - 1];
+        SpliceKitTranscriptWord *word = validWords[i];
+        if (word.startTime < previous.endTime) {
+            word.startTime = previous.endTime;
+            if (word.endTime <= word.startTime) {
+                word.endTime = word.startTime + minDuration;
+                repairedDurations++;
+            }
+            word.duration = word.endTime - word.startTime;
+            trimmedOverlaps++;
+        }
+    }
+
+    for (NSUInteger i = 0; i < validWords.count; i++) {
+        validWords[i].wordIndex = i;
+    }
+
+    if (droppedWords > 0 || clampedStarts > 0 || repairedDurations > 0 ||
+        trimmedOverlaps > 0 || cappedToNextStart > 0) {
+        SpliceKit_log(@"[Captions][Timing] %@ normalized %lu words: dropped=%lu clampedStarts=%lu repairedDurations=%lu overlapRepairs=%lu cappedToNext=%lu",
+                      context ?: @"caption words",
+                      (unsigned long)validWords.count,
+                      (unsigned long)droppedWords,
+                      (unsigned long)clampedStarts,
+                      (unsigned long)repairedDurations,
+                      (unsigned long)trimmedOverlaps,
+                      (unsigned long)cappedToNextStart);
+    } else {
+        SpliceKit_log(@"[Captions][Timing] %@ normalized %lu words with no repairs",
+                      context ?: @"caption words",
+                      (unsigned long)validWords.count);
+    }
+
+    return [validWords copy];
+}
+
 - (void)transcriptionFinishedWithWords:(NSArray<SpliceKitTranscriptWord *> *)words {
+    NSArray<SpliceKitTranscriptWord *> *normalizedWords =
+        [self normalizedCaptionWordsFromWords:words context:@"Transcriber output"];
     @synchronized (self.mutableWords) {
         [self.mutableWords removeAllObjects];
-        [self.mutableWords addObjectsFromArray:words ?: @[]];
-        // Sort by start time and assign indices
-        [self.mutableWords sortUsingComparator:^NSComparisonResult(SpliceKitTranscriptWord *a, SpliceKitTranscriptWord *b) {
-            if (a.startTime < b.startTime) return NSOrderedAscending;
-            if (a.startTime > b.startTime) return NSOrderedDescending;
-            return NSOrderedSame;
-        }];
-        for (NSUInteger i = 0; i < self.mutableWords.count; i++) {
-            self.mutableWords[i].wordIndex = i;
-        }
+        [self.mutableWords addObjectsFromArray:normalizedWords ?: @[]];
     }
 
     self.status = SpliceKitCaptionStatusReady;
@@ -1687,20 +1896,29 @@ static void SpliceKit_installDragSpy(void) {
 #pragma mark - Parakeet Transcription Engine
 
 - (NSString *)parakeetTranscriberPath {
+    return [self transcriberBinaryPathForName:@"parakeet-transcriber"];
+}
+
+- (NSString *)whisperTranscriberPath {
+    return [self transcriberBinaryPathForName:@"whisper-transcriber"];
+}
+
+- (NSString *)transcriberBinaryPathForName:(NSString *)name {
     NSFileManager *fm = [NSFileManager defaultManager];
 
     // 1. Inside the FCP framework bundle (deployed by patcher)
     NSString *buildDir = [[[NSBundle mainBundle] bundlePath]
         stringByAppendingPathComponent:@"Contents/Frameworks/SpliceKit.framework/Versions/A/Resources"];
-    NSString *builtPath = [buildDir stringByAppendingPathComponent:@"parakeet-transcriber"];
+    NSString *builtPath = [buildDir stringByAppendingPathComponent:name];
     if ([fm fileExistsAtPath:builtPath]) return builtPath;
 
     // 2. Standard tool locations
     NSString *home = NSHomeDirectory();
     NSArray *searchPaths = @[
-        [home stringByAppendingPathComponent:@"Applications/SpliceKit/tools/parakeet-transcriber"],
-        [home stringByAppendingPathComponent:@"Library/Application Support/SpliceKit/tools/parakeet-transcriber"],
-        [home stringByAppendingPathComponent:@"Library/Caches/SpliceKit/tools/parakeet-transcriber/.build/release/parakeet-transcriber"],
+        [home stringByAppendingPathComponent:[@"Applications/SpliceKit/tools/" stringByAppendingString:name]],
+        [home stringByAppendingPathComponent:[@"Library/Application Support/SpliceKit/tools/" stringByAppendingString:name]],
+        [home stringByAppendingPathComponent:
+            [NSString stringWithFormat:@"Library/Caches/SpliceKit/tools/%@/.build/release/%@", name, name]],
     ];
     for (NSString *path in searchPaths) {
         if ([fm fileExistsAtPath:path]) return path;
@@ -2045,20 +2263,45 @@ static void SpliceKit_installDragSpy(void) {
 }
 
 - (void)performCaptionTranscription {
-    SpliceKit_log(@"[Captions] Starting built-in Parakeet transcription");
+    NSString *engineID = [self currentEngineID];
 
-    // Find the parakeet-transcriber binary
-    NSString *binaryPath = [self parakeetTranscriberPath];
+    // Engine-specific resolution: binary path, model arg, user-facing label.
+    NSString *binaryPath = nil;
+    NSString *modelArg = nil;
+    NSString *engineLabel = nil;
+    NSString *binaryName = nil;
+    if ([engineID isEqualToString:@"whisperLargeV3"]) {
+        binaryPath = [self whisperTranscriberPath];
+        modelArg = @"large-v3";
+        engineLabel = @"Whisper large-v3";
+        binaryName = @"whisper-transcriber";
+    } else if ([engineID isEqualToString:@"whisperLargeV3Turbo"]) {
+        binaryPath = [self whisperTranscriberPath];
+        modelArg = @"large-v3-turbo";
+        engineLabel = @"Whisper large-v3-turbo";
+        binaryName = @"whisper-transcriber";
+    } else {
+        binaryPath = [self parakeetTranscriberPath];
+        modelArg = @"v3";
+        engineLabel = @"Parakeet v3";
+        binaryName = @"parakeet-transcriber";
+    }
+
+    SpliceKit_log(@"[Captions] Starting transcription with engine: %@", engineLabel);
+
     if (!binaryPath) {
-        [self transcriptionFailedWithError:@"Parakeet transcriber not found. Re-run the SpliceKit patcher or switch to Transcript Editor."];
+        [self transcriptionFailedWithError:
+            [NSString stringWithFormat:@"%@ transcriber not found. Re-run the SpliceKit patcher, or pick a different engine.", engineLabel]];
         return;
     }
     if (![[NSFileManager defaultManager] isExecutableFileAtPath:binaryPath]) {
-        [self transcriptionFailedWithError:@"Parakeet binary is not executable. Try: chmod +x ~/Applications/SpliceKit/tools/parakeet-transcriber"];
+        [self transcriptionFailedWithError:
+            [NSString stringWithFormat:@"%@ binary is not executable. Try: chmod +x ~/Applications/SpliceKit/tools/%@", engineLabel, binaryName]];
         return;
     }
 
-    SpliceKit_log(@"[Captions] Using parakeet-transcriber at: %@", binaryPath);
+    SpliceKit_log(@"[Captions] Using %@ at: %@", binaryName, binaryPath);
+    SpliceKitTranscriptDiag_logBinaryInfo(binaryPath);
 
     // Collect clips from the active timeline
     __block NSArray *clips = nil;
@@ -2110,6 +2353,7 @@ static void SpliceKit_installDragSpy(void) {
     }
 
     SpliceKit_log(@"[Captions] Found %lu items on timeline", (unsigned long)clips.count);
+    SpliceKitTranscriptDiag_logClipInfos(clips, engineLabel);
 
     // Filter to clips with media URLs
     NSMutableArray *transcribableClips = [NSMutableArray array];
@@ -2126,8 +2370,8 @@ static void SpliceKit_installDragSpy(void) {
     }
 
     dispatch_async(dispatch_get_main_queue(), ^{
-        self.statusLabel.stringValue = [NSString stringWithFormat:@"Transcribing %lu clips with Parakeet...",
-            (unsigned long)transcribableClips.count];
+        self.statusLabel.stringValue = [NSString stringWithFormat:@"Transcribing %lu clips with %@...",
+            (unsigned long)transcribableClips.count, engineLabel];
         if (self.progressBar) {
             self.progressBar.hidden = NO;
             self.progressBar.indeterminate = NO;
@@ -2148,12 +2392,13 @@ static void SpliceKit_installDragSpy(void) {
     }
     NSData *manifestData = [NSJSONSerialization dataWithJSONObject:manifestEntries options:0 error:nil];
     [manifestData writeToFile:manifestPath atomically:YES];
+    SpliceKitTranscriptDiag_logBatchManifest(manifestEntries);
 
-    SpliceKit_log(@"[Captions] Parakeet batch: %lu clips, %lu unique source files",
-        (unsigned long)transcribableClips.count, (unsigned long)uniqueFiles.count);
+    SpliceKit_log(@"[Captions] %@ batch: %lu clips, %lu unique source files",
+        engineLabel, (unsigned long)transcribableClips.count, (unsigned long)uniqueFiles.count);
 
-    // Run parakeet-transcriber
-    NSMutableArray *taskArgs = [NSMutableArray arrayWithObjects:@"--batch", manifestPath, @"--progress", @"--model", @"v3", nil];
+    // Run transcriber binary
+    NSMutableArray *taskArgs = [NSMutableArray arrayWithObjects:@"--batch", manifestPath, @"--progress", @"--model", modelArg, nil];
 
     NSTask *task = [[NSTask alloc] init];
     task.launchPath = binaryPath;
@@ -2165,6 +2410,7 @@ static void SpliceKit_installDragSpy(void) {
     task.standardError = stderrPipe;
 
     __block NSMutableData *stdoutAccum = [NSMutableData data];
+    __block NSMutableData *stderrAccum = [NSMutableData data];
     stdoutPipe.fileHandleForReading.readabilityHandler = ^(NSFileHandle *handle) {
         NSData *data = handle.availableData;
         if (data.length > 0) {
@@ -2178,6 +2424,9 @@ static void SpliceKit_installDragSpy(void) {
     stderrPipe.fileHandleForReading.readabilityHandler = ^(NSFileHandle *handle) {
         NSData *data = handle.availableData;
         if (data.length == 0) return;
+        @synchronized (stderrAccum) {
+            [stderrAccum appendData:data];
+        }
         NSString *text = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
         if (!text) return;
         for (NSString *line in [text componentsSeparatedByString:@"\n"]) {
@@ -2192,21 +2441,23 @@ static void SpliceKit_installDragSpy(void) {
                             self.progressBar.indeterminate = NO;
                             self.progressBar.doubleValue = frac;
                         }
-                        self.statusLabel.stringValue = [NSString stringWithFormat:@"Parakeet: %@", msg];
+                        self.statusLabel.stringValue = [NSString stringWithFormat:@"%@: %@", engineLabel, msg];
                     });
                 }
             }
         }
     };
 
+    NSTimeInterval taskStart = [NSDate timeIntervalSinceReferenceDate];
+    SpliceKitTranscriptDiag_logProcessLaunch(binaryPath, taskArgs);
     @try {
         [task launch];
-        SpliceKit_log(@"[Captions] Parakeet process started (PID %d)", task.processIdentifier);
+        SpliceKit_log(@"[Captions] %@ process started (PID %d)", engineLabel, task.processIdentifier);
         [task waitUntilExit];
     } @catch (NSException *e) {
         stdoutPipe.fileHandleForReading.readabilityHandler = nil;
         stderrPipe.fileHandleForReading.readabilityHandler = nil;
-        [self transcriptionFailedWithError:[NSString stringWithFormat:@"Could not launch Parakeet: %@", e.reason]];
+        [self transcriptionFailedWithError:[NSString stringWithFormat:@"Could not launch %@: %@", engineLabel, e.reason]];
         return;
     }
 
@@ -2219,25 +2470,40 @@ static void SpliceKit_installDragSpy(void) {
             [stdoutAccum appendData:remaining];
         }
     }
+    NSData *remainingStderr = [stderrPipe.fileHandleForReading readDataToEndOfFile];
+    if (remainingStderr.length > 0) {
+        @synchronized (stderrAccum) {
+            [stderrAccum appendData:remainingStderr];
+        }
+    }
+    NSTimeInterval taskElapsed = [NSDate timeIntervalSinceReferenceDate] - taskStart;
 
     [[NSFileManager defaultManager] removeItemAtPath:manifestPath error:nil];
 
+    NSData *stdoutData;
+    NSData *stderrData;
+    @synchronized (stdoutAccum) {
+        stdoutData = [stdoutAccum copy];
+    }
+    @synchronized (stderrAccum) {
+        stderrData = [stderrAccum copy];
+    }
+    SpliceKitTranscriptDiag_logProcessExit(task.terminationStatus, stdoutData, stderrData, taskElapsed);
+
     if (task.terminationStatus != 0) {
-        SpliceKit_log(@"[Captions] Parakeet failed (exit code %d)", task.terminationStatus);
-        [self transcriptionFailedWithError:[NSString stringWithFormat:@"Parakeet transcription failed (exit code %d). Check log for details.", task.terminationStatus]];
+        SpliceKit_log(@"[Captions] %@ failed (exit code %d)", engineLabel, task.terminationStatus);
+        [self transcriptionFailedWithError:[NSString stringWithFormat:@"%@ transcription failed (exit code %d). Check log for details.", engineLabel, task.terminationStatus]];
         return;
     }
 
     // Parse JSON output
-    NSData *jsonData;
-    @synchronized (stdoutAccum) {
-        jsonData = [stdoutAccum copy];
-    }
+    NSData *jsonData = stdoutData;
 
     if (jsonData.length == 0) {
-        [self transcriptionFailedWithError:@"Parakeet produced no output. The audio may be silent or too short."];
+        [self transcriptionFailedWithError:[NSString stringWithFormat:@"%@ produced no output. The audio may be silent or too short.", engineLabel]];
         return;
     }
+    SpliceKitTranscriptDiag_inspectRawOutput(jsonData);
 
     // CoreML's E5RT runtime can print error messages to stdout before the JSON.
     // Detect and strip any non-JSON prefix so parsing succeeds.
@@ -2255,7 +2521,7 @@ static void SpliceKit_installDragSpy(void) {
     NSError *jsonError = nil;
     NSArray *batchResults = [NSJSONSerialization JSONObjectWithData:jsonData options:0 error:&jsonError];
     if (![batchResults isKindOfClass:[NSArray class]]) {
-        [self transcriptionFailedWithError:@"Parakeet returned unexpected output. Check the log for details."];
+        [self transcriptionFailedWithError:[NSString stringWithFormat:@"%@ returned unexpected output. Check the log for details.", engineLabel]];
         return;
     }
 
@@ -2281,10 +2547,15 @@ static void SpliceKit_installDragSpy(void) {
         NSString *clipHandle = clipInfo[@"handle"];
 
         NSArray *wordDicts = resultsByFile[mediaURL.path];
-        if (!wordDicts) continue;
+        if (!wordDicts) {
+            SpliceKitTranscriptDiag_logWordFiltering(mediaURL.lastPathComponent,
+                @[], trimStart, mediaOrigin, clipDuration, 0);
+            continue;
+        }
 
         // Convert trimStart from FCP's timecode coordinate space to file-relative
         double fileRelativeTrimStart = trimStart - mediaOrigin;
+        NSUInteger wordsAddedForClip = 0;
 
         for (NSDictionary *wd in wordDicts) {
             NSString *text = wd[@"word"];
@@ -2305,28 +2576,48 @@ static void SpliceKit_installDragSpy(void) {
                 word.sourceMediaTime = startTime + mediaOrigin;
                 word.sourceMediaPath = mediaURL.path;
                 [allWords addObject:word];
+                wordsAddedForClip++;
             }
         }
+        SpliceKitTranscriptDiag_logWordFiltering(mediaURL.lastPathComponent,
+            wordDicts, trimStart, mediaOrigin, clipDuration, wordsAddedForClip);
     }
 
-    SpliceKit_log(@"[Captions] Parakeet transcription complete: %lu words", (unsigned long)allWords.count);
+    SpliceKit_log(@"[Captions] %@ transcription complete: %lu words", engineLabel, (unsigned long)allWords.count);
     [self transcriptionFinishedWithWords:allWords];
 }
 
 - (void)setWordsManually:(NSArray<NSDictionary *> *)wordDicts {
+    NSMutableArray<SpliceKitTranscriptWord *> *words = [NSMutableArray arrayWithCapacity:wordDicts.count];
+    for (NSUInteger i = 0; i < wordDicts.count; i++) {
+        NSDictionary *d = wordDicts[i];
+        if (![d isKindOfClass:[NSDictionary class]]) continue;
+        SpliceKitTranscriptWord *w = [[SpliceKitTranscriptWord alloc] init];
+        w.text = d[@"text"] ?: d[@"word"] ?: @"";
+        w.startTime = [d[@"startTime"] doubleValue];
+        double explicitEnd = d[@"endTime"] ? [d[@"endTime"] doubleValue] : NAN;
+        double duration = [d[@"duration"] doubleValue];
+        if ((!isfinite(duration) || duration <= 0) && isfinite(explicitEnd) && explicitEnd > w.startTime) {
+            duration = explicitEnd - w.startTime;
+        }
+        w.duration = duration;
+        w.endTime = isfinite(explicitEnd) && explicitEnd > w.startTime ? explicitEnd : (w.startTime + duration);
+        w.confidence = d[@"confidence"] ? [d[@"confidence"] doubleValue] : 1.0;
+        w.wordIndex = i;
+        w.speaker = d[@"speaker"] ?: @"Unknown";
+        w.clipHandle = d[@"clipHandle"];
+        w.clipTimelineStart = [d[@"clipTimelineStart"] doubleValue];
+        w.sourceMediaOffset = [d[@"sourceMediaOffset"] doubleValue];
+        w.sourceMediaTime = [d[@"sourceMediaTime"] doubleValue];
+        w.sourceMediaPath = d[@"sourceMediaPath"];
+        [words addObject:w];
+    }
+
+    NSArray<SpliceKitTranscriptWord *> *normalizedWords =
+        [self normalizedCaptionWordsFromWords:words context:@"Manual caption words"];
     @synchronized (self.mutableWords) {
         [self.mutableWords removeAllObjects];
-        for (NSUInteger i = 0; i < wordDicts.count; i++) {
-            NSDictionary *d = wordDicts[i];
-            SpliceKitTranscriptWord *w = [[SpliceKitTranscriptWord alloc] init];
-            w.text = d[@"text"] ?: @"";
-            w.startTime = [d[@"startTime"] doubleValue];
-            w.duration = [d[@"duration"] doubleValue];
-            w.endTime = w.startTime + w.duration;
-            w.confidence = 1.0;
-            w.wordIndex = i;
-            [self.mutableWords addObject:w];
-        }
+        [self.mutableWords addObjectsFromArray:normalizedWords];
     }
     self.status = SpliceKitCaptionStatusReady;
     [self regroupSegments];
@@ -2503,6 +2794,11 @@ static NSString *SpliceKitCaption_durRational(double seconds, int fdNum, int fdD
     long long frames = (long long)round(seconds * fdDen / fdNum);
     if (frames <= 0) frames = 1;
     return [NSString stringWithFormat:@"%lld/%ds", frames * fdNum, fdDen];
+}
+
+static NSString *SpliceKitCaption_frameRational(long long frames, int fdNum, int fdDen) {
+    if (frames <= 0) return @"0s";
+    return [NSString stringWithFormat:@"%lld/%ds", frames * MAX(fdNum, 1), MAX(fdDen, 1)];
 }
 
 static NSString *SpliceKitCaption_previewText(NSString *text, NSUInteger maxLength) {
@@ -3811,24 +4107,41 @@ static BOOL SpliceKitCaption_pollMainThread(BOOL (^condition)(void), double time
                     continue;
                 }
 
-                long long startFrames = SpliceKitCaption_frameCountForSeconds(entryStart, fdN, fdD, YES);
-                if (startFrames < cursorFrames) startFrames = cursorFrames;
+                double frameDuration = (double)MAX(fdN, 1) / (double)MAX(fdD, 1);
+                double resolvedEnd = entryEnd;
+                if (!isfinite(resolvedEnd) || resolvedEnd <= entryStart) {
+                    double fallbackDuration = (isfinite(entryDuration) && entryDuration > 0) ? entryDuration : frameDuration;
+                    resolvedEnd = entryStart + fallbackDuration;
+                }
 
-                double rawDuration = entryDuration;
-                if (rawDuration <= 0) rawDuration = (double)MAX(fdN, 1) / MAX(fdD, 1);
-                long long durationFrames = SpliceKitCaption_frameCountForSeconds(rawDuration, fdN, fdD, NO);
-                if (durationFrames <= 0) durationFrames = 1;
+                long long startFrames = SpliceKitCaption_frameCountForSeconds(entryStart, fdN, fdD, YES);
+                long long endFrames = SpliceKitCaption_frameCountForSeconds(resolvedEnd, fdN, fdD, NO);
+                if (endFrames <= startFrames) {
+                    endFrames = startFrames + 1;
+                }
+                if (startFrames < cursorFrames) {
+                    long long unclampedStartFrames = startFrames;
+                    startFrames = cursorFrames;
+                    if (endFrames <= startFrames) {
+                        endFrames = startFrames + 1;
+                    }
+                    segInfo[@"unclampedStartFrames"] = @(unclampedStartFrames);
+                }
+
+                long long durationFrames = MAX(endFrames - startFrames, 1);
+                double rawDuration = resolvedEnd - entryStart;
                 long long gapFrames = MAX(startFrames - cursorFrames, 0);
                 segInfo[@"startFrames"] = @(startFrames);
+                segInfo[@"endFrames"] = @(endFrames);
                 segInfo[@"durationFrames"] = @(durationFrames);
                 segInfo[@"gapFrames"] = @(gapFrames);
                 segInfo[@"cursorFramesBefore"] = @(cursorFrames);
                 segInfo[@"status"] = @"building";
-                SpliceKit_log(@"[Captions][Native] Runtime entry segment=%lu word=%@ start=%.3f end=%.3f rawDur=%.3f startFrames=%lld gapFrames=%lld durationFrames=%lld text=\"%@\"",
+                SpliceKit_log(@"[Captions][Native] Runtime entry segment=%lu word=%@ start=%.3f end=%.3f rawDur=%.3f startFrames=%lld endFrames=%lld gapFrames=%lld durationFrames=%lld text=\"%@\"",
                               (unsigned long)(seg ? seg.segmentIndex : segIndex),
                               [activeWordIndex isKindOfClass:[NSNumber class]] ? [activeWordIndex stringValue] : @"-",
                               entryStart, entryEnd, rawDuration,
-                              startFrames, gapFrames, durationFrames,
+                              startFrames, endFrames, gapFrames, durationFrames,
                               SpliceKitCaption_previewText(trimmed, 100));
 
                 if (startFrames > cursorFrames) {
@@ -4586,10 +4899,16 @@ static BOOL SpliceKitCaption_pollMainThread(BOOL (^condition)(void), double time
         // Title starts when this word starts, ends when next word starts (or segment ends)
         double titleStart = word.startTime;
         double titleEnd = (i + 1 < words.count) ? words[i + 1].startTime : seg.endTime;
-        double titleDur = MAX(titleEnd - titleStart, (double)fdN / fdD); // at least 1 frame
+        if (!isfinite(titleEnd) || titleEnd <= titleStart) {
+            titleEnd = titleStart + ((double)MAX(fdN, 1) / (double)MAX(fdD, 1));
+        }
+        long long startFrames = SpliceKitCaption_frameCountForSeconds(titleStart, fdN, fdD, YES);
+        long long endFrames = SpliceKitCaption_frameCountForSeconds(titleEnd, fdN, fdD, NO);
+        if (endFrames <= startFrames) endFrames = startFrames + 1;
+        long long durationFrames = MAX(endFrames - startFrames, 1);
 
-        NSString *offsetStr = SpliceKitCaption_durRational(titleStart, fdN, fdD);
-        NSString *durStr = SpliceKitCaption_durRational(titleDur, fdN, fdD);
+        NSString *offsetStr = SpliceKitCaption_frameRational(startFrames, fdN, fdD);
+        NSString *durStr = SpliceKitCaption_frameRational(durationFrames, fdN, fdD);
 
         int tsBase = (*tsCounter);
         NSString *tsH = [NSString stringWithFormat:@"ts%d", tsBase];
@@ -5334,20 +5653,16 @@ static BOOL SpliceKitCaption_pollMainThread(BOOL (^condition)(void), double time
 
     NSArray *wordDicts = [transcript[@"words"] isKindOfClass:[NSArray class]] ? transcript[@"words"] : nil;
     if (wordDicts.count > 0) {
+        NSMutableArray<SpliceKitTranscriptWord *> *restoredWords = [NSMutableArray arrayWithCapacity:wordDicts.count];
+        for (NSDictionary *wordDict in wordDicts) {
+            SpliceKitTranscriptWord *word = SpliceKitCaption_transcriptWordFromDictionary(wordDict);
+            if (word) [restoredWords addObject:word];
+        }
+        NSArray<SpliceKitTranscriptWord *> *normalizedWords =
+            [self normalizedCaptionWordsFromWords:restoredWords context:@"Restored caption words"];
         @synchronized (self.mutableWords) {
             [self.mutableWords removeAllObjects];
-            for (NSDictionary *wordDict in wordDicts) {
-                SpliceKitTranscriptWord *word = SpliceKitCaption_transcriptWordFromDictionary(wordDict);
-                if (word) [self.mutableWords addObject:word];
-            }
-            [self.mutableWords sortUsingComparator:^NSComparisonResult(SpliceKitTranscriptWord *a, SpliceKitTranscriptWord *b) {
-                if (a.startTime < b.startTime) return NSOrderedAscending;
-                if (a.startTime > b.startTime) return NSOrderedDescending;
-                return NSOrderedSame;
-            }];
-            for (NSUInteger i = 0; i < self.mutableWords.count; i++) {
-                self.mutableWords[i].wordIndex = i;
-            }
+            [self.mutableWords addObjectsFromArray:normalizedWords];
         }
         self.status = SpliceKitCaptionStatusReady;
         self.errorMessage = nil;

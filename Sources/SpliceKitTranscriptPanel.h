@@ -84,6 +84,7 @@ typedef NS_ENUM(NSInteger, SpliceKitTranscriptEngine) {
 
 // Engine selection
 @property (nonatomic) SpliceKitTranscriptEngine engine; // default: SpliceKitTranscriptEngineFCPNative
+@property (nonatomic, copy) NSString *parakeetModelVersion; // @"v3" (multilingual) or @"v2" (English)
 
 // Silence operations
 @property (nonatomic) double silenceThreshold;  // seconds, default 0.3

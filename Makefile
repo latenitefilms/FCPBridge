@@ -54,6 +54,9 @@ TOOLS_DIR = $(HOME)/Applications/SpliceKit/tools
 PARAKEET_PKG_DIR = patcher/SpliceKitPatcher.app/Contents/Resources/tools/parakeet-transcriber
 PARAKEET_RELEASE_BIN = $(PARAKEET_PKG_DIR)/.build/release/parakeet-transcriber
 PARAKEET_DEBUG_BIN = $(PARAKEET_PKG_DIR)/.build/debug/parakeet-transcriber
+WHISPER_PKG_DIR = patcher/SpliceKitPatcher.app/Contents/Resources/tools/whisper-transcriber
+WHISPER_RELEASE_BIN = $(WHISPER_PKG_DIR)/.build/release/whisper-transcriber
+WHISPER_DEBUG_BIN = $(WHISPER_PKG_DIR)/.build/debug/whisper-transcriber
 
 BRAW_SOURCE_DIR = Plugins/BRAW/Sources
 BRAW_PRIVATE_DIR = $(BRAW_SOURCE_DIR)/Private
@@ -416,6 +419,13 @@ deploy: $(OUTPUT) $(SILENCE_DETECTOR) $(STRUCTURE_ANALYZER) $(MIXER_APP) braw-pr
 	elif [ -f "$(PARAKEET_DEBUG_BIN)" ]; then \
 		cp "$(PARAKEET_DEBUG_BIN)" "$(TOOLS_DIR)/parakeet-transcriber"; \
 		cp "$(PARAKEET_DEBUG_BIN)" "$(FW_DIR)/Versions/A/Resources/parakeet-transcriber"; \
+	fi
+	@if [ -f "$(WHISPER_RELEASE_BIN)" ]; then \
+		cp "$(WHISPER_RELEASE_BIN)" "$(TOOLS_DIR)/whisper-transcriber"; \
+		cp "$(WHISPER_RELEASE_BIN)" "$(FW_DIR)/Versions/A/Resources/whisper-transcriber"; \
+	elif [ -f "$(WHISPER_DEBUG_BIN)" ]; then \
+		cp "$(WHISPER_DEBUG_BIN)" "$(TOOLS_DIR)/whisper-transcriber"; \
+		cp "$(WHISPER_DEBUG_BIN)" "$(FW_DIR)/Versions/A/Resources/whisper-transcriber"; \
 	fi
 	@# Create plugins directory
 	@mkdir -p "$(HOME)/Library/Application Support/SpliceKit/plugins"
