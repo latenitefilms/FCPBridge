@@ -184,23 +184,28 @@ note_items = [
     for line in re.split(r"\r?\n+", notes)
     if line.strip()
 ]
-items_html = "\n".join(f"<li>{escape(item)}</li>" for item in note_items)
-section = f"""<h1>SpliceKit {escape(version)}</h1>
-<h2>🎉 Released</h2>
-<ul>
-<li>{escape(released)}</li>
-</ul>
-<h2>🔨 Improvements</h2>
-<ul>
+items_html = "\n".join(f"\t\t\t\t<li>{escape(item)}</li>" for item in note_items)
+section = f"""\t\t\t<h1>SpliceKit {escape(version)}</h1>
+
+\t\t\t<h2>🎉 Released</h2>
+
+\t\t\t<ul>
+\t\t\t\t<li>{escape(released)}</li>
+\t\t\t</ul>
+
+\t\t\t<h2>🔨 Improvements</h2>
+
+\t\t\t<ul>
 {items_html}
-</ul>
-<hr />
+\t\t\t</ul>
+
+\t\t\t<hr />
 """
 
-marker = "<h1>SpliceKit Release Notes</h1>"
+marker = '<div class="content">'
 idx = text.find(marker)
 if idx == -1:
-    raise SystemExit(f"ERROR: could not find release notes marker in {path}")
+    raise SystemExit(f"ERROR: could not find release notes content container in {path}")
 insert_pos = idx + len(marker)
 updated = text[:insert_pos] + "\n" + section + text[insert_pos:].lstrip("\n")
 path.write_text(updated, encoding="utf-8")
